@@ -8,14 +8,14 @@ export default defineConfig({
     workers: process.env.CI ? 1 : undefined,
     reporter: 'html',
     use: {
-        baseURL: 'http://localhost:3000',
+        baseURL: 'http://localhost:2500',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
     },
     projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
     webServer: {
         command: 'npm run dev',
-        port: 3000,
+        port: 2500,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
     },

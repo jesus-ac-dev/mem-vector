@@ -13,9 +13,9 @@ O `~/src/crmcredito` é a referência da casa (clean architecture, PT-PT, RHF+Zo
 ## Comandos
 
 ```bash
-npm run dev          # Dev server (porta 3000)
+npm run dev          # Dev server (porta 2500)
 npm run build        # Build de produção
-npm run lint         # ESLint (inclui boundaries de clean architecture)
+npm run lint         # ESLint
 npm run format       # Prettier
 npm run typecheck    # tsc --noEmit
 npm run test:run     # Vitest (unit)
@@ -32,7 +32,7 @@ Antes de alterar código, em modo `Plan`, entrevista-me: que problema resolve, o
 - **Idioma:** PT-PT em UI, labels, mensagens, comentários. **Nunca PT-BR.** Termos técnicos em inglês quando não há tradução aceite (`useState`, `props`).
 - **Imports:** alias `@/` (`@/components/...`, `@/lib/utils`). Agrupar: React → Next.js → libs → locais → tipos → estilos.
 - **UI:** **Tailwind + shadcn/ui** (`src/components/ui/`). Componentes shadcn via `npx shadcn@latest add <nome>`. Forms = **RHF + Zod** (nunca estado manual). `'use client'` só quando necessário.
-- **Clean Architecture (boundaries em ESLint):** cadeia `app → hooks → actions → use-cases → repositories → domain`. Páginas consomem hooks, não actions diretamente. `domain` é puro (zero dependências externas). Apresentação (formatação PT-PT) fica na UI/hooks — repositories/use-cases devolvem dados crus.
+- **Arquitetura por FEATURE** (ver `.claude/skills/arquitetura-por-feature.md`): cada feature numa pasta `src/modules/<feature>/` (`schema` + `service` + `actions` [+ `hooks`]). 3 conceitos: `ecrã → action (valida Zod) → serviço (dados+regras) → DB`. **Não** se organiza por tipo (sem pastas globais `domain/`, `use-cases/`, `repositories/`). Crescer = rebentar o serviço **dentro** do módulo, só quando dói. Partilhado vive em `src/lib` e `src/components/ui`.
 - **Tipos:** DTOs e server actions são `interface` nomeadas — nunca `Record<string, any>`, nunca `any` em mapeamentos, nunca `as unknown as`.
 - **Pontas soltas resolvem-se na mesma sessão.** Legado/duplicação/refactor adjacente exposto por uma tarefa → fazer no mesmo branch, não criar TODOs.
 - **TDD:** RED → GREEN → REFACTOR para features e bugfixes.
@@ -48,20 +48,15 @@ Antes de alterar código, em modo `Plan`, entrevista-me: que problema resolve, o
 
 ```text
 src/
-├── app/           # Pages + actions + api (App Router)
-├── domain/        # Entidades, rules, ports (puro)
-├── use-cases/     # Casos de uso
-├── repositories/  # Acesso a dados (Supabase)
-├── services/      # Serviços de infraestrutura (RAG, embeddings, email)
-├── hooks/         # Ponte UI → server actions
-├── components/    # UI (ui/ = shadcn)
-├── schemas/       # Zod (.schema.ts)
-├── context/       # React context
-├── constants/     # Constantes
-├── types/         # Tipos partilhados
-├── lib/           # Utilitários, cliente Supabase
-└── tests/         # Setup de testes
+├── app/            # Rotas (App Router). Páginas finas que importam dos módulos.
+├── modules/        # Uma pasta por FEATURE — schema + service + actions [+ hooks]
+│   └── tarefas/    # exemplo vivo
+├── components/ui/  # Componentes shadcn partilhados
+├── lib/            # Utilitários + (futuro) cliente Supabase
+└── tests/          # Setup de testes
 ```
+
+Detalhe e regra de "quando crescer": `.claude/skills/arquitetura-por-feature.md`.
 
 ## Ordem de construção (do vault: agentic-os-brief §8c)
 
