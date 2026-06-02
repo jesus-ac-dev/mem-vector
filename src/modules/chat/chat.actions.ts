@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { respond, type ChatResult } from './chat.service';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { embedPassage } from '@/lib/embeddings';
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),
@@ -29,6 +30,13 @@ export async function ask(
 
     // Bruto guardado sempre (guardrail): mensagem do utilizador antes de gerar.
     await db.from('messages').insert({ conversation_id: convId, role: 'user', content: question });
+
+    // Indexa o que foi dito em `chunks`, para voltar a aparecer no RAG depois.
+    // v1 ingénuo (indexa tudo); o "agente julgar o que vale a pena" é o próximo degrau.
+    const said = await embedPassage(question);
+    await db
+        .from('chunks')
+        .insert({ content: question, embedding: JSON.stringify(said), source: 'chat' });
 
     const result = await respond(question);
 
