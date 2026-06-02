@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+    // @xenova/transformers (ONNX/WASM) não deve ser bundled pelo Next — carrega de node_modules em runtime.
+    serverExternalPackages: ['@xenova/transformers'],
     images: {
         remotePatterns: [
             // Supabase Storage (produção)
