@@ -8,9 +8,9 @@
 
 ## Âmbito desta slice
 
-**Dentro:** auth email+password (**login + utilizador no seed**, sem signup público), RLS real por-utilizador (**só `privado`**), esqueleto do app-shell (header + rail de ícones + área de conteúdo), tabela `profiles`.
+**Dentro:** auth email+password (**login + utilizador no seed**, sem signup público), RLS real por-utilizador (**só `privado`**), esqueleto do app-shell (header + rail de ícones + área de conteúdo), **toggle dark/light** (barato — light+dark já existem no `globals.css`), tabela `profiles`.
 
-**Fora (próximas slices):** signup público · grupos + `protected` · `público` (URL anónimo) · workspace multi-pane · switcher de tema · billing.
+**Fora (próximas slices):** signup público · grupos + `protected` · `público` (URL anónimo) · workspace multi-pane · **temas nomeados + densidade** · billing.
 
 ## Modelo (fundação, decidida no brainstorm)
 
@@ -24,7 +24,7 @@
 
 ## Esquema e RLS (migração; greenfield → `db reset` + seed)
 
-- **`profiles`** (1 linha por user): `id uuid PK → auth.users(id) on delete cascade`, `display_name text`, `theme text null` (gancho de tema), `onboarded_at timestamptz null` (gancho de onboarding — `null` = primeiro login), `created_at`.
+- **`profiles`** (1 linha por user): `id uuid PK → auth.users(id) on delete cascade`, `display_name text`, `theme text null` (gancho de tema), `onboarded_at timestamptz null` (gancho de onboarding — `null` = primeiro login), `created_at`, `last_login_at`.
   - RLS: cada user lê/edita **o seu** (`id = auth.uid()`).
   - **Trigger** `on auth.users insert → insert into profiles(id)` (padrão Supabase): todo o novo user ganha profile automático.
 - **Visibilidade:** o enum `owner_scope` (`pessoal`/`comum`) passa a **`visibility` (`privado`/`protected`/`público`)** em `conversations` e `chunks` (`messages` herdam via conversa). `owner_id` fica **not null**. Adiciona-se já `group_id uuid null` (dorme até à slice 2).
@@ -41,8 +41,8 @@
 
 ## Shell (UI) — esqueleto que cresce para panes
 
-- **Header (app, autenticado):** `logo+nome` (esq) · **search** ao meio (slot **reservado**, ligado quando houver conteúdo) · **profile dropdown** (dir) → menu de perfil + logout.
-- **Header (público, não-logado):** `logo+nome` (esq) · nav à direita (Home · Serviços · Price · **Login**) — só o Login é real nesta slice; o resto enche quando a landing crescer.
+- **Header (app, autenticado):** `logo+nome` (esq) · **search** ao meio (slot **reservado**, ligado quando houver conteúdo) · dark/light · **profile dropdown** (dir) → menu de perfil + logout.
+- **Header (público, não-logado):** `logo+nome` (esq) · nav à direita (Home · Serviços · Price · **Login** · dark/light) — só o Login é real nesta slice; o resto enche quando a landing crescer.
 - **Rail de ícones** fino à esquerda: troca a view ativa. Slice 1 = só **Chat** e **Tasks**; File Explorer & cª ficam **slots**.
 - **Área de conteúdo:** a view ativa. É o **futuro host dos panes** (ver [VISAO-UX.md](./VISAO-UX.md)) — desenhada para crescer, não construída como motor de panes agora.
 - **Template:** `src/app/(app)/layout.tsx` (route group) = o shell partilhado; `chat/` e `tarefas/` movem para dentro e herdam-no.
@@ -54,7 +54,7 @@
 - **`signIn(email, password)`** (server action): `supabase.auth.signInWithPassword` → cookies → redirect para a app. Credenciais erradas → erro no form (`FormMessage`).
 - **`signOut`** (server action): limpa sessão → redirect `/login`.
 - **Middleware:** sem sessão numa rota `(app)` → redirect `/login`; com sessão em `/login` → redirect para a app; `/` pública fica aberta.
-- **Profile:** criado pelo trigger; o header lê `display_name`. `onboarded_at` null = primeiro login (gancho; slice 1 ignora).
+- **Profile:** criado pelo trigger; o header lê `display_name`. O `signIn` carimba `last_login_at`. `onboarded_at` null = primeiro login (gancho; slice 1 ignora).
 - **Erros:** credenciais inválidas → erro no form; Supabase em baixo → mensagem amigável; rota protegida sem sessão → redirect (não erro).
 
 ## Testes (TDD)
@@ -64,9 +64,11 @@
 - **Actions:** chat/tarefas passam a exigir sessão (sem sessão → redirect/deny).
 - **Nota cycle gate:** o gate está ativo no mem-vector → o push desta slice exige trailer `Audit:` + tocar nesta doc. Dogfood na própria feature.
 
-## Theming (registado — slice futura)
+## Theming
 
-Abordagem: **design tokens como CSS variables** (não ficheiros SCSS); troca de tema = `data-theme` no `<html>`, runtime, sem reload. Cores + radius já feitos; **font-family** é o próximo ganho fácil; spacing/font-size themáveis exigem mapear as escalas do Tailwind para `var()` → adiado até haver necessidade (modos de densidade). O **gancho `profiles.theme` é criado já nesta slice**. Detalhe em [VISAO-UX.md](./VISAO-UX.md).
+**Nesta slice:** **toggle dark/light** nos dois headers, via `next-themes` (a classe `.dark` troca o conjunto de CSS vars que já existe no `globals.css`). A preferência por-utilizador persiste no gancho **`profiles.theme`** (esta slice cria a coluna; `next-themes` trata do localStorage/cookie entretanto).
+
+**Diferido** (temas nomeados + densidade): abordagem = **design tokens como CSS variables** (não ficheiros SCSS); troca = `data-theme` no `<html>`, runtime. Cores + radius já feitos; **font-family** é o próximo ganho fácil; spacing/font-size themáveis exigem mapear as escalas do Tailwind para `var()`. Detalhe em [VISAO-UX.md](./VISAO-UX.md).
 
 ## Decisões (porquê)
 
