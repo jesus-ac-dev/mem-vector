@@ -39,16 +39,31 @@ language sql security definer stable
 set search_path = ''
 as $$ select email from auth.users where id = auth.uid(); $$;
 
+-- Criar grupo + entrar como membro, atómico (o criador ainda não é membro no
+-- instante do insert → o RETURNING bateria na policy de select). SECURITY DEFINER.
+create function criar_grupo(p_nome text, p_descricao text default null)
+returns grupos
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  g public.grupos;
+begin
+  insert into public.grupos (nome, descricao) values (p_nome, p_descricao) returning * into g;
+  insert into public.grupo_membros (grupo_id, user_id) values (g.id, auth.uid());
+  return g;
+end;
+$$;
+
 -- ── RLS das tabelas de grupos ─────────────────────────────────────
 alter table grupos enable row level security;
 alter table grupo_membros enable row level security;
 alter table grupo_convites enable row level security;
 
--- grupos: vês os teus; qualquer autenticado cria (fica membro via action).
+-- grupos: vês os teus; criação é via a função atómica criar_grupo() (sem insert
+-- direto do browser).
 create policy "grupos: dos meus" on grupos for select to authenticated
   using (id in (select meus_grupos()));
-create policy "grupos: criar" on grupos for insert to authenticated
-  with check (true);
 
 -- membros: vês os dos teus grupos; só te adicionas/removes a ti.
 create policy "membros: dos meus grupos" on grupo_membros for select to authenticated
