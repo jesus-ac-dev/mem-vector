@@ -1,21 +1,17 @@
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { criarTarefa } from '@/modules/tarefas/tarefas.actions';
+import { NovaTarefaForm } from '@/modules/tarefas/nova-tarefa-form';
 import { listarTarefas } from '@/modules/tarefas/tarefas.service';
+import { listarMeusGrupos } from '@/modules/grupos/grupos.service';
 
-// Ecrã: Server Component. Lê direto do serviço; escreve via Server Action.
-// Sem hook porque não há estado de cliente (ainda).
+// Ecrã: Server Component. Lê direto dos serviços; escreve via Server Action.
+// A lista já inclui (via RLS) as próprias + as protected dos meus grupos.
 export default async function TarefasPage() {
-    const tarefas = await listarTarefas();
+    const [tarefas, grupos] = await Promise.all([listarTarefas(), listarMeusGrupos()]);
 
     return (
         <div className="mx-auto h-full max-w-2xl overflow-y-auto p-6">
             <h1 className="mb-6 text-2xl font-semibold tracking-tight">Tarefas</h1>
 
-            <form action={criarTarefa} className="mb-6 flex gap-2">
-                <Input name="titulo" placeholder="Nova tarefa…" className="flex-1" />
-                <Button type="submit">Adicionar</Button>
-            </form>
+            <NovaTarefaForm grupos={grupos.map((g) => ({ id: g.id, nome: g.nome }))} />
 
             <ul className="space-y-2">
                 {tarefas.map((t) => (

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ListTodo, MessageSquare } from 'lucide-react';
+import { ListTodo, MessageSquare, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Rail fino estilo Obsidian: troca a view ativa. Só os ícones que já existem;
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 const items = [
     { href: '/chat', label: 'Chat', icon: MessageSquare },
     { href: '/tarefas', label: 'Tarefas', icon: ListTodo },
+    { href: '/grupos', label: 'Grupos', icon: Users },
 ];
 
 export function IconRail() {
