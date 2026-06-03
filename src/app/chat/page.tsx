@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { ask } from '@/modules/chat/chat.actions';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -39,14 +41,14 @@ export default function ChatPage() {
         <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
             <header>
                 <h1 className="text-xl font-semibold">mem-vector — chat (ping-pong)</h1>
-                <p className="text-sm text-neutral-500">
+                <p className="text-sm text-muted-foreground">
                     RAG local: e5-small (CPU) + Supabase + claude CLI.
                 </p>
             </header>
 
-            <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border border-neutral-200 p-4">
+            <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border p-4">
                 {messages.length === 0 && (
-                    <p className="text-sm text-neutral-400">
+                    <p className="text-sm text-muted-foreground">
                         Faz uma pergunta sobre o mem-vector...
                     </p>
                 )}
@@ -56,24 +58,26 @@ export default function ChatPage() {
                             className={
                                 'inline-block whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ' +
                                 (m.role === 'user'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-neutral-100 text-neutral-900')
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted text-foreground')
                             }
                         >
                             {m.content}
                         </span>
                     </div>
                 ))}
-                {pending && <p className="text-sm text-neutral-400">a pensar...</p>}
+                {pending && <p className="text-sm text-muted-foreground">a pensar...</p>}
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             {lastCost !== null && (
-                <p className="text-xs text-neutral-400">último custo: ${lastCost.toFixed(4)}</p>
+                <p className="text-xs text-muted-foreground">
+                    último custo: ${lastCost.toFixed(4)}
+                </p>
             )}
 
             <div className="flex gap-2">
-                <textarea
+                <Textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -81,15 +85,11 @@ export default function ChatPage() {
                     }}
                     placeholder="Escreve aqui... (Ctrl/Cmd+Enter envia)"
                     rows={3}
-                    className="flex-1 resize-none rounded-lg border border-neutral-300 p-2 text-sm"
+                    className="flex-1 resize-none"
                 />
-                <button
-                    onClick={() => void handleSend()}
-                    disabled={pending}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                >
+                <Button onClick={() => void handleSend()} disabled={pending} className="self-end">
                     Enviar
-                </button>
+                </Button>
             </div>
         </main>
     );

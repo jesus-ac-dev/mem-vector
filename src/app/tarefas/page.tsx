@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { criarTarefa } from '@/modules/tarefas/tarefas.actions';
 import { listarTarefas } from '@/modules/tarefas/tarefas.service';
 
@@ -12,11 +13,7 @@ export default async function TarefasPage() {
             <h1 className="mb-6 text-2xl font-semibold tracking-tight">Tarefas</h1>
 
             <form action={criarTarefa} className="mb-6 flex gap-2">
-                <input
-                    name="titulo"
-                    placeholder="Nova tarefa…"
-                    className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
+                <Input name="titulo" placeholder="Nova tarefa…" className="flex-1" />
                 <Button type="submit">Adicionar</Button>
             </form>
 
