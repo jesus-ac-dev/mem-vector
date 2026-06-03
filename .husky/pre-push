@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# cycle gate da casa — recusa a fatia até as fases obrigatórias deixarem
+# evidência no repo (Audit + Docs no incremento 1). Fonte e testes no vault:
+# MythosEngine/projects/MythosEngine/cycle. Contrato em ~/.claude/cycle/README.md.
+# Escape: 'Cycle-skip: <fase> — razão' num commit, ou 'git push --no-verify'.
+exec "$HOME/.claude/cycle/pre-push.sh" "$@"
