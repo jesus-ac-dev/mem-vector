@@ -9,7 +9,7 @@ export default async function TarefasPage() {
     const tarefas = await listarTarefas();
 
     return (
-        <main className="mx-auto max-w-2xl p-6">
+        <div className="mx-auto h-full max-w-2xl overflow-y-auto p-6">
             <h1 className="mb-6 text-2xl font-semibold tracking-tight">Tarefas</h1>
 
             <form action={criarTarefa} className="mb-6 flex gap-2">
@@ -24,6 +24,6 @@ export default async function TarefasPage() {
                     </li>
                 ))}
             </ul>
-        </main>
+        </div>
     );
 }
