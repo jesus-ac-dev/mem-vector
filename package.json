@@ -17,6 +17,7 @@
         "test:e2e": "playwright test",
         "test:e2e:ui": "playwright test --ui",
         "ingest": "tsx scripts/ingest.ts",
+        "seed:user": "tsx scripts/seed-user.ts",
         "pingpong": "tsx scripts/ping-pong.ts",
         "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:run",
         "prepare": "husky"

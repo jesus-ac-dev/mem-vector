@@ -40,6 +40,12 @@ const docs: { content: string; source: string }[] = [
 async function main(): Promise<void> {
   const db = getSupabaseAdmin();
 
+  // Os chunks-semente pertencem ao utilizador de dev (privado).
+  const { data: list, error: listErr } = await db.auth.admin.listUsers();
+  if (listErr) throw new Error(`listUsers falhou: ${listErr.message}`);
+  const owner = list.users.find((u) => u.email === 'dev@mem-vector.local');
+  if (!owner) throw new Error('utilizador de dev não existe — corre `npm run seed:user` primeiro.');
+
   // Idempotente: limpa o seed anterior antes de reindexar.
   await db.from('chunks').delete().eq('source', 'seed');
 
@@ -49,13 +55,14 @@ async function main(): Promise<void> {
       content: doc.content,
       embedding: JSON.stringify(embedding),
       source: doc.source,
+      owner_id: owner.id,
     });
     if (error) throw new Error(`insert falhou: ${error.message}`);
     console.log('indexado:', doc.content.slice(0, 50), '...');
   }
 
   const { count } = await db.from('chunks').select('*', { count: 'exact', head: true });
-  console.log(`\n✅ ${count} chunks na base de dados.`);
+  console.log(`\n✅ ${count} chunks na base de dados (owner: ${owner.email}).`);
 }
 
 main().catch((e: unknown) => {

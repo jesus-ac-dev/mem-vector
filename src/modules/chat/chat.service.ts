@@ -1,6 +1,6 @@
 import { embedQuery } from '@/lib/embeddings';
 import { generate } from '@/lib/claude';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@/lib/supabase/server';
 
 export interface Source {
     content: string;
@@ -16,7 +16,7 @@ export interface ChatResult {
 
 // Pipeline do ping-pong: embed(query) → match_chunks → prompt → claude.
 export async function respond(question: string): Promise<ChatResult> {
-    const db = getSupabaseAdmin();
+    const db = await createClient();
     const queryEmbedding = await embedQuery(question);
 
     const { data, error } = await db.rpc('match_chunks', {
