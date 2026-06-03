@@ -34,26 +34,31 @@ export async function ask(
     })();
 
     // Bruto guardado sempre (guardrail): mensagem do utilizador antes de gerar.
-    await db.from('messages').insert({ conversation_id: convId, role: 'user', content: question });
+    const userMsg = await db
+        .from('messages')
+        .insert({ conversation_id: convId, role: 'user', content: question });
+    if (userMsg.error) throw new Error(`guardar mensagem falhou: ${userMsg.error.message}`);
 
     // Indexa o que foi dito em `chunks`, para voltar a aparecer no RAG depois.
     // v1 ingénuo (indexa tudo); o "agente julgar o que vale a pena" é o próximo degrau.
     const said = await embedPassage(question);
-    await db.from('chunks').insert({
+    const chunkIns = await db.from('chunks').insert({
         content: question,
         embedding: JSON.stringify(said),
         source: 'chat',
         owner_id: user.id,
     });
+    if (chunkIns.error) throw new Error(`indexar chunk falhou: ${chunkIns.error.message}`);
 
     const result = await respond(question);
 
-    await db.from('messages').insert({
+    const asstMsg = await db.from('messages').insert({
         conversation_id: convId,
         role: 'assistant',
         content: result.answer,
         cost_usd: result.costUsd,
     });
+    if (asstMsg.error) throw new Error(`guardar resposta falhou: ${asstMsg.error.message}`);
 
     return { ...result, conversationId: convId };
 }
