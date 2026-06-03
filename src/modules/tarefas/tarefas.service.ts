@@ -34,7 +34,12 @@ export async function criarTarefa(input: NovaTarefa): Promise<Tarefa> {
 
     const { data, error } = await db
         .from('tarefas')
-        .insert({ titulo: input.titulo, owner_id: user.id })
+        .insert({
+            titulo: input.titulo,
+            owner_id: user.id,
+            visibility: input.visibility,
+            group_id: input.visibility === 'protected' ? input.groupId : null,
+        })
         .select('id, titulo, feita, created_at')
         .single();
     if (error || !data) throw new Error(`criar tarefa falhou: ${error?.message ?? 'sem dados'}`);
