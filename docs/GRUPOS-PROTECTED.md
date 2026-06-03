@@ -4,7 +4,9 @@
 > visibilidade **`protected`** (workspace de equipa colaborativo). Desenhado no
 > brainstorm de 2026-06-03. Fundação: [AUTH-E-SHELL.md](./AUTH-E-SHELL.md).
 >
-> **Estado:** desenhado, por implementar (`feat/grupos`, em cima de `feat/app-shell`).
+> **Estado:** **implementado** 2026-06-03 (`feat/grupos`) — migração (grupos/membros/convites + `criar_grupo`/`meus_grupos`/`meu_email` SECURITY DEFINER + RLS protected colaborativa por-comando), módulo `grupos/`, página `/grupos`, seletor de visibilidade nas tarefas. **13 testes** (RLS colaborativa + fluxo de convites). Build verde.
+>
+> **Limitação conhecida (flat-trust, v1):** a RLS colaborativa permite a um membro, num UPDATE direto, reivindicar `owner_id` ou mover o `group_id` para outro grupo seu. Baixa severidade no modelo de equipa de confiança; não há UI que o exponha. Endurecer (trigger/action a fixar `owner_id`/`group_id` no edit) quando crescer para multi-equipa.
 
 ## Âmbito desta slice
 
