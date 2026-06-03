@@ -83,11 +83,30 @@ Duas reviews independentes (2026-06-03), com filtro **"isto serve um utilizador 
 
 **Veredito:** a visão é lúcida; o perigo não é falta dela — é transpor a *textura do markdown* achando que é a magia. A magia são os 7 comportamentos. Antes de qualquer slice de ficheiros: **resolver a auditabilidade do que o agente escreve** (o git-diff-equivalente), senão construímos um risco de confiança bonito.
 
-## Primeira slice proposta
+## Primeira slice (refinada com o Carlos, 2026-06-03)
 
-**Motor agente-autor v1 — o agente cria uma task a partir da conversa** (ponto 4):
-dizes "cria uma tarefa para X" no `/chat` e o agente **escreve-a** (reusa a tabela
-`tarefas`), em vez de seres tu no form. É a coisa mais pequena que **prova o fosso**
-e é o mecanismo que tudo o resto reusa (recaps, ficheiros). A seguir: recap
-automático na daily (ponto 5) → tipos de ficheiro (B) → RAG-preferred (ponto 1) →
-embeddings editáveis. Liga a [VISAO-UX.md](./VISAO-UX.md) (a casca onde isto vive).
+> "Criar uma task útil" é território não-resolvido (até no Obsidian) → começar por
+> aí é construir em cima de um problema aberto. O Carlos prefere começar pelo
+> **ambiente** que condiciona o agente — o file explorer + os ficheiros "system".
+
+**A ideia:** transpilar um **`CLAUDE.md`-equivalente** (instruções de operação) +
+um **índice/catálogo**, que hoje não existem como estado na BD. **Cada novo
+utilizador recebe um ambiente replicado** (ficheiros system + estrutura de pastas)
+— provisionado no signup.
+
+**3 perguntas em aberto (do debate — decidir antes de cortar):**
+1. **Mostrar vs esconder os ficheiros system?** Esconder o `CLAUDE.md`-equiv mata a
+   feature do ponto 3 (o user moldar o agente, "escreve no meu tom"). Tese: o
+   **ficheiro de instruções é editável pelo user**; o risco de o partir resolve-se
+   com **versão/undo** (o git-diff-equivalente), não escondendo.
+2. **O `index` provavelmente NÃO é um ficheiro.** Numa BD o catálogo é um `SELECT`
+   sobre as linhas tipadas — guardar um "index file" recria o "index em prosa não
+   escala". Logo: **`CLAUDE.md`-equiv = ficheiro real editável; index = vista
+   derivada dos dados**.
+3. **Replicar o ambiente a partir de quê?** Um **template** — fixo (todos iguais)
+   ou **tailored pelo onboarding** ("em que trabalhas?" semeia pastas/instruções)?
+   Tailored = o fosso acumula desde o minuto zero.
+
+**Pré-requisito que atravessa tudo:** a **auditabilidade do que o agente escreve**
+(undo / histórico visível) — sem ela, "agente-autor" é risco de confiança. Ver o
+veredito da review acima. Liga a [VISAO-UX.md](./VISAO-UX.md) (a casca).
