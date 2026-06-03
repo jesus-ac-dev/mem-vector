@@ -4,7 +4,7 @@
 > esqueleto do app-shell. Desenhado no brainstorm de 2026-06-03. Visão UX-alvo
 > (workspace multi-pane, theming) em [VISAO-UX.md](./VISAO-UX.md).
 >
-> **Estado:** desenhado, por implementar.
+> **Estado:** **Plano A (auth + DB) implementado** 2026-06-03 (`feat/auth`) — Supabase Auth email+password, RLS `privado` real, `profiles` + trigger, `tarefas` passou a tabela real, chat/tarefas autenticados. 8 testes verdes (RLS auditada ao vivo, sem furos críticos). **Plano B (app-shell: headers/rail/route-group/dark-light) por fazer.** Plano: `docs/plans/2026-06-03-auth-db-foundation.md`.
 
 ## Âmbito desta slice
 
