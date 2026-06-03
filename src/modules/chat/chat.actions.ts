@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { respond, type ChatResult } from './chat.service';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
 
 const askSchema = z.object({
@@ -14,14 +14,19 @@ export async function ask(
     input: z.infer<typeof askSchema>,
 ): Promise<ChatResult & { conversationId: string }> {
     const { question, conversationId } = askSchema.parse(input);
-    const db = getSupabaseAdmin();
+    const db = await createClient();
+
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
 
     // Garante uma conversa (cria uma se a UI ainda não tem id).
     const convId: string = await (async () => {
         if (conversationId) return conversationId;
         const { data, error } = await db
             .from('conversations')
-            .insert({ title: 'ping-pong' })
+            .insert({ title: 'ping-pong', owner_id: user.id })
             .select('id')
             .single();
         if (error || !data) throw new Error(`criar conversa falhou: ${error?.message ?? 'sem id'}`);
@@ -34,9 +39,12 @@ export async function ask(
     // Indexa o que foi dito em `chunks`, para voltar a aparecer no RAG depois.
     // v1 ingénuo (indexa tudo); o "agente julgar o que vale a pena" é o próximo degrau.
     const said = await embedPassage(question);
-    await db
-        .from('chunks')
-        .insert({ content: question, embedding: JSON.stringify(said), source: 'chat' });
+    await db.from('chunks').insert({
+        content: question,
+        embedding: JSON.stringify(said),
+        source: 'chat',
+        owner_id: user.id,
+    });
 
     const result = await respond(question);
 
