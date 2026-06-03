@@ -62,6 +62,27 @@ salto.
 > a resposta. (E o Carlos inventaria o que possa estar a esquecer da pasta
 > MythosEngine.)
 
+## Review crítica (advogado do diabo) — vault + agentic-kanban
+
+Duas reviews independentes (2026-06-03), com filtro **"isto serve um utilizador normal de um workspace agêntico, ou só o Carlos/um agente num terminal?"** — o ICP do mem-vector é a audiência do *workspace* (produtividade pessoal/equipa), **não** o do crmcredito (mediadoras de crédito); esse é outro projeto.
+
+**Essência a transpor (7 comportamentos, não a textura):** agente-autor (o user só fala) · catálogo lido primeiro (index→drill, a porta do RAG) · recap automático por sessão · conhecimento que engorda e se liga (o fosso) · cada troca deixa rasto num objeto · **decisões append-only (o "porquê")** · bruto-sempre + síntese-julgada.
+
+**A CORTAR (andaime de quem constrói com um agente em terminal):** sintaxe de IDs/`⛔`/estados Kanban (manter o *conceito*, largar a sintaxe) · regra no-orphan/grafo-sem-órfãos (os FKs já ligam) · **mirror de memória** (morto numa só DB — confirma o teu ponto 6) · `/lint`+`/audit` como rituais do user (constraints da DB resolvem 80%) · recap *manual* + raiz-limpa · frontmatter YAML + headers grep-áveis · **os 3Ms / `/level-up`** (metodologia do operador, não feature do cliente).
+
+**Tensões/riscos (onde a transposição engana):**
+1. **O maior buraco — falta o equivalente ao `git diff`.** No vault, "o agente edita tudo" só funciona porque o `git diff` é a tua rede de revisão. O cliente não lê diffs. Sem **undo / histórico visível / read-mostly ("isto foi gerado, corrige por chat")**, "agente-autor" = risco de confiança, não feature. **Resolver isto antes do slice 1.**
+2. **RAG-preferred mas o "index em prosa" não escala.** O catálogo é um *padrão de recuperação*, não uma feature a copiar literal — a milhares de objetos, o catálogo-texto não chega e o vetorial mal-ancorado mente. (O teu ponto 1 está certo; a implementação é que não é "copiar o index".)
+3. **Lock-in honesto.** Fechar os ficheiros em DB É o fosso — e é fricção de venda. Chamar-lhe portabilidade seria mentira.
+4. **Bruto-sempre num SaaS multi-tenant** = custo de storage + privacidade (retenção + RLS por user). No vault pessoal é grátis; em produção não transpõe sem política de retenção.
+5. **Recursão como armadilha de validação:** N=1 e esse 1 é o autor do sistema. Fluído para ti ≠ o que uma mediadora espera.
+
+**Do agentic-kanban:** herda a **forma plataforma** (núcleo + módulos; o relay é *módulo*, não dia 1) e o **modelo de dados** (linha relacional tipada ↔ conteúdo vetorial, `id`+`edges`, pgvector, RLS). Mas honestidade brutal: o relay-por-comentários **nunca foi construído** (547 linhas, 1 teste; o glossário de 28 termos é vocabulário sem código). **Risco gémeo nos dois:** *vocabulário a galopar à frente do código* — documentar uma plataforma antes de provar o loop. E **o fosso (acumulação de contexto) é uma hipótese ainda não exercitada fim-a-fim uma única vez.**
+
+**"Coisa gira" que vende:** estilo de comunicação configurável (de `references/voice.md`) — "o agente escreve no *meu* tom" é vendável a quem escreve a clientes. Nice-to-have forte, não core.
+
+**Veredito:** a visão é lúcida; o perigo não é falta dela — é transpor a *textura do markdown* achando que é a magia. A magia são os 7 comportamentos. Antes de qualquer slice de ficheiros: **resolver a auditabilidade do que o agente escreve** (o git-diff-equivalente), senão construímos um risco de confiança bonito.
+
 ## Primeira slice proposta
 
 **Motor agente-autor v1 — o agente cria uma task a partir da conversa** (ponto 4):
