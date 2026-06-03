@@ -82,3 +82,52 @@ describe('RLS protected colaborativo (grupos)', () => {
         expect(data?.length).toBe(0);
     });
 });
+
+describe('fluxo de convites (o que os actions fazem)', () => {
+    it('convidar → aceitar → membro → acesso ao protected', async () => {
+        const alice = await userClient('alice-conv@test.local', 'pw-a-123');
+        const dave = await userClient('dave-conv@test.local', 'pw-d-123');
+        const aliceId = await uid(alice);
+        const daveId = await uid(dave);
+
+        // Alice cria grupo + tarefa protected.
+        const grupo = await alice.rpc('criar_grupo', { p_nome: 'projeto' });
+        const grupoId = (grupo.data as { id: string }).id;
+        await alice.from('tarefas').insert({
+            titulo: 'doc do projeto',
+            owner_id: aliceId,
+            visibility: 'protected',
+            group_id: grupoId,
+        });
+
+        // Antes de aceitar, Dave NÃO vê.
+        const antes = await dave.from('tarefas').select('id').eq('group_id', grupoId);
+        expect(antes.data?.length ?? 0).toBe(0);
+
+        // Alice convida o email do Dave.
+        const conv = await alice
+            .from('grupo_convites')
+            .insert({ grupo_id: grupoId, email: 'dave-conv@test.local', convidado_por: aliceId })
+            .select('id')
+            .single();
+        expect(conv.error).toBeNull();
+
+        // Dave vê o convite (RLS: para o meu email).
+        const visto = await dave
+            .from('grupo_convites')
+            .select('id, grupo_id')
+            .eq('id', conv.data!.id)
+            .single();
+        expect(visto.data?.grupo_id).toBe(grupoId);
+
+        // Dave aceita (entra como membro).
+        const entrada = await dave
+            .from('grupo_membros')
+            .insert({ grupo_id: grupoId, user_id: daveId });
+        expect(entrada.error).toBeNull();
+
+        // Agora Dave VÊ a tarefa protected.
+        const depois = await dave.from('tarefas').select('titulo').eq('group_id', grupoId);
+        expect(depois.data?.length).toBe(1);
+    });
+});
