@@ -38,7 +38,7 @@ export default function ChatPage() {
     }
 
     return (
-        <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-6">
+        <div className="mx-auto flex h-full max-w-2xl flex-col gap-4 p-6">
             <header>
                 <h1 className="text-xl font-semibold">mem-vector — chat (ping-pong)</h1>
                 <p className="text-sm text-muted-foreground">
@@ -91,6 +91,6 @@ export default function ChatPage() {
                     Enviar
                 </Button>
             </div>
-        </main>
+        </div>
     );
 }
