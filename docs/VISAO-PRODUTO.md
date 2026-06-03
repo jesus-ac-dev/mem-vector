@@ -71,6 +71,7 @@ Duas reviews independentes (2026-06-03), com filtro **"isto serve um utilizador 
 **A CORTAR (andaime de quem constrói com um agente em terminal):** sintaxe de IDs/`⛔`/estados Kanban (manter o *conceito*, largar a sintaxe) · regra no-orphan/grafo-sem-órfãos (os FKs já ligam) · **mirror de memória** (morto numa só DB — confirma o teu ponto 6) · `/lint`+`/audit` como rituais do user (constraints da DB resolvem 80%) · recap *manual* + raiz-limpa · frontmatter YAML + headers grep-áveis · **os 3Ms / `/level-up`** (metodologia do operador, não feature do cliente).
 
 **Tensões/riscos (onde a transposição engana):**
+
 1. **O maior buraco — falta o equivalente ao `git diff`.** No vault, "o agente edita tudo" só funciona porque o `git diff` é a tua rede de revisão. O cliente não lê diffs. Sem **undo / histórico visível / read-mostly ("isto foi gerado, corrige por chat")**, "agente-autor" = risco de confiança, não feature. **Resolver isto antes do slice 1.**
 2. **RAG-preferred mas o "index em prosa" não escala.** O catálogo é um *padrão de recuperação*, não uma feature a copiar literal — a milhares de objetos, o catálogo-texto não chega e o vetorial mal-ancorado mente. (O teu ponto 1 está certo; a implementação é que não é "copiar o index".)
 3. **Lock-in honesto.** Fechar os ficheiros em DB É o fosso — e é fricção de venda. Chamar-lhe portabilidade seria mentira.
@@ -95,6 +96,7 @@ utilizador recebe um ambiente replicado** (ficheiros system + estrutura de pasta
 — provisionado no signup.
 
 **3 perguntas em aberto (do debate — decidir antes de cortar):**
+
 1. **Mostrar vs esconder os ficheiros system?** Esconder o `CLAUDE.md`-equiv mata a
    feature do ponto 3 (o user moldar o agente, "escreve no meu tom"). Tese: o
    **ficheiro de instruções é editável pelo user**; o risco de o partir resolve-se
