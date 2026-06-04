@@ -1,12 +1,9 @@
 import { embedQuery } from '@/lib/embeddings';
 import { generate } from '@/lib/claude';
 import { createClient } from '@/lib/supabase/server';
+import { buildPrompt, type Source } from './chat.prompt';
 
-export interface Source {
-    content: string;
-    source: string | null;
-    similarity: number;
-}
+export type { Source };
 
 export interface ChatResult {
     answer: string;
@@ -26,15 +23,6 @@ export async function respond(question: string): Promise<ChatResult> {
     if (error) throw new Error(`match_chunks falhou: ${error.message}`);
 
     const sources = (data ?? []) as Source[];
-    const context = sources.length
-        ? sources.map((s, i) => `[${i + 1}] ${s.content}`).join('\n\n')
-        : '(sem contexto)';
-
-    const prompt =
-        `Contexto recuperado da base de conhecimento:\n\n${context}\n\n` +
-        `Pergunta: ${question}\n\n` +
-        `Responde usando só o contexto acima.`;
-
-    const { text, costUsd } = await generate(prompt);
+    const { text, costUsd } = await generate(buildPrompt(question, sources));
     return { answer: text, sources, costUsd };
 }
