@@ -4,7 +4,7 @@ import { IconRail } from '@/components/layout/icon-rail';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
 // Header em cima, rail de ícones à esquerda, conteúdo (futuro host dos panes)
-// à direita. O middleware já garante que só chega aqui quem tem sessão.
+// à direita. O proxy já garante que só chega aqui quem tem sessão.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
     const supabase = await createClient();
     const {

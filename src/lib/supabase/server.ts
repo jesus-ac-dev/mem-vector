@@ -20,7 +20,7 @@ export async function createClient() {
                         );
                     } catch {
                         // Chamado de um Server Component (cookies read-only).
-                        // O middleware refresca a sessão, por isso é seguro ignorar.
+                        // O proxy refresca a sessão, por isso é seguro ignorar.
                     }
                 },
             },
