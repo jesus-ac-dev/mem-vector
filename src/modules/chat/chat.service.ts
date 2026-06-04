@@ -1,7 +1,7 @@
 import { embedQuery } from '@/lib/embeddings';
 import { generate } from '@/lib/claude';
 import { createClient } from '@/lib/supabase/server';
-import { buildPrompt, type Source } from './chat.prompt';
+import { buildPrompt, relevantSources, type Source } from './chat.prompt';
 
 export type { Source };
 
@@ -22,7 +22,9 @@ export async function respond(question: string): Promise<ChatResult> {
     });
     if (error) throw new Error(`match_chunks falhou: ${error.message}`);
 
-    const sources = (data ?? []) as Source[];
+    // Filtra o lixo de fundo: só fontes relevantes vão ao prompt e ao resultado
+    // (sources honesto). Abaixo do corte → (sem contexto) → fallback limpo.
+    const sources = relevantSources((data ?? []) as Source[]);
     const { text, costUsd } = await generate(buildPrompt(question, sources));
     return { answer: text, sources, costUsd };
 }

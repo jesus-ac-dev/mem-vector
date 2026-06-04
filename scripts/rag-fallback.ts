@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { embedPassage, embedQuery } from '../src/lib/embeddings';
 import { generate } from '../src/lib/claude';
-import { buildPrompt, type Source } from '../src/modules/chat/chat.prompt';
+import { buildPrompt, relevantSources, type Source } from '../src/modules/chat/chat.prompt';
 import { getSupabaseAdmin } from '../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
@@ -53,9 +53,9 @@ async function ask(db: SupabaseClient, pergunta: string) {
     match_count: 5,
   });
   if (error) throw new Error(`match_chunks: ${error.message}`);
-  const sources = (data ?? []) as Source[];
+  const sources = relevantSources((data ?? []) as Source[]);
   const { text, costUsd } = await generate(buildPrompt(pergunta, sources));
-  return { text, costUsd };
+  return { text, costUsd, nFontes: sources.length };
 }
 
 function check(nome: string, ok: boolean, resposta: string): boolean {
@@ -73,6 +73,12 @@ async function main(): Promise<void> {
   const geral = await ask(db, 'Qual é a capital de Portugal?');
   custo += geral.costUsd;
   ok = check('conhecimento geral responde (não fica refém do RAG)', /lisboa/i.test(geral.text), geral.text) && ok;
+  ok =
+    check(
+      'threshold corta o lixo de fundo (0 fontes relevantes p/ query fora do vault)',
+      geral.nFontes === 0,
+      `fontes relevantes = ${geral.nFontes}`,
+    ) && ok;
 
   // Eixo 2 — facto do workspace (dono = dev): recuperado quando existe, recusado quando não.
   const segredo = 'O código de acesso ao cofre do mem-vector é GIRAFA-4471-LISBOA.';
