@@ -39,8 +39,11 @@ export async function ask(
         .insert({ conversation_id: convId, role: 'user', content: question });
     if (userMsg.error) throw new Error(`guardar mensagem falhou: ${userMsg.error.message}`);
 
-    // Indexa o que foi dito em `chunks`, para voltar a aparecer no RAG depois.
-    // v1 ingénuo (indexa tudo); o "agente julgar o que vale a pena" é o próximo degrau.
+    const result = await respond(question);
+
+    // Indexa a pergunta DEPOIS de recuperar — senão ela contamina o próprio
+    // retrieval (similaridade ~1.0 consigo mesma) e apareceria como "fonte" da
+    // sua resposta. v1 ingénuo (indexa tudo); julgar o que vale a pena é o próximo degrau.
     const said = await embedPassage(question);
     const chunkIns = await db.from('chunks').insert({
         content: question,
@@ -49,8 +52,6 @@ export async function ask(
         owner_id: user.id,
     });
     if (chunkIns.error) throw new Error(`indexar chunk falhou: ${chunkIns.error.message}`);
-
-    const result = await respond(question);
 
     const asstMsg = await db.from('messages').insert({
         conversation_id: convId,

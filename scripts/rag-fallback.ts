@@ -58,6 +58,17 @@ async function ask(db: SupabaseClient, pergunta: string) {
   return { text, costUsd, nFontes: sources.length };
 }
 
+// Só retrieval + filtro (sem geração) — conta fontes relevantes a custo zero.
+async function fontesPara(db: SupabaseClient, pergunta: string): Promise<number> {
+  const q = await embedQuery(pergunta);
+  const { data, error } = await db.rpc('match_chunks', {
+    query_embedding: JSON.stringify(q),
+    match_count: 5,
+  });
+  if (error) throw new Error(`match_chunks: ${error.message}`);
+  return relevantSources((data ?? []) as Source[]).length;
+}
+
 function check(nome: string, ok: boolean, resposta: string): boolean {
   console.log(`${ok ? '✅' : '❌'} ${nome}`);
   console.log(`   "${resposta.slice(0, 140).replace(/\n/g, ' ')}"\n`);
@@ -101,6 +112,29 @@ async function main(): Promise<void> {
   const sem = await ask(db, pergunta);
   custo += sem.costUsd;
   ok = check('facto do workspace ausente NÃO é inventado', !/girafa-4471/i.test(sem.text), sem.text) && ok;
+
+  // Eixo 3 — auto-contaminação: indexar a pergunta antes de recuperar fá-la aparecer
+  // como "fonte" de si própria (sim ~1.0). O fix vive na ordem de chat.actions.ts
+  // (indexar DEPOIS de respond); aqui demonstra-se o mecanismo, sem custo de LLM.
+  const auto = 'Qual é a capital de Portugal?';
+  await db.from('chunks').delete().eq('source', 'chat-proof');
+  const insAuto = await db.from('chunks').insert({
+    content: auto,
+    embedding: JSON.stringify(await embedPassage(auto)),
+    source: 'chat-proof',
+    owner_id: userId,
+  });
+  if (insAuto.error) throw new Error(`insert chat-proof falhou: ${insAuto.error.message}`);
+  const indexadaAntes = await fontesPara(db, auto);
+  await db.from('chunks').delete().eq('source', 'chat-proof');
+  const semIndexar = await fontesPara(db, auto);
+  ok = check('indexar a pergunta ANTES mete-a nas próprias fontes (o bug)', indexadaAntes >= 1, `fontes = ${indexadaAntes}`) && ok;
+  ok =
+    check(
+      'indexar DEPOIS (ordem de chat.actions corrigida) → sem auto-fonte',
+      semIndexar === 0,
+      `fontes = ${semIndexar}`,
+    ) && ok;
 
   console.log(`Custo total ~$${custo.toFixed(4)}`);
   if (!ok) {
