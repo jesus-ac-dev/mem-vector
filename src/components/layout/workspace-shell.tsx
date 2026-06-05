@@ -12,6 +12,13 @@ import {
     MessagesSquare,
     ChevronLeft,
     ChevronRight,
+    Network,
+    PanelRight,
+    List,
+    CornerDownLeft,
+    CornerUpRight,
+    Share2,
+    Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -127,9 +134,21 @@ function LeftSidebar({
         <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r">
             {/* Header with collapse button */}
             <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {activePanel === 'explorer' ? 'Explorador' : 'Conversas'}
-                </span>
+                {activePanel === 'explorer' ? (
+                    <span title="Explorador">
+                        <FolderTree
+                            className="h-4 w-4 text-muted-foreground"
+                            aria-label="Explorador"
+                        />
+                    </span>
+                ) : (
+                    <span title="Conversas">
+                        <MessagesSquare
+                            className="h-4 w-4 text-muted-foreground"
+                            aria-label="Conversas"
+                        />
+                    </span>
+                )}
                 <Button
                     variant="ghost"
                     size="icon"
@@ -153,14 +172,14 @@ function LeftSidebar({
             </div>
 
             {/* Footer — Grafo placeholder */}
-            <div className="flex h-40 shrink-0 flex-col border-t">
+            <div className="flex h-48 shrink-0 flex-col border-t">
                 <div className="border-b px-3 py-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Grafo
+                    <span title="Grafo">
+                        <Network className="h-4 w-4 text-muted-foreground" aria-label="Grafo" />
                     </span>
                 </div>
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    🕸 Grafo 2D/3D — em breve
+                    Grafo 2D/3D — em breve
                 </div>
             </div>
         </aside>
@@ -170,7 +189,12 @@ function LeftSidebar({
 // ──────────────────────────────────────────────
 // Right sidebar
 // ──────────────────────────────────────────────
-const rightSections = ['Outline', 'Backlinks', 'Forward links', 'Partilhas'] as const;
+const rightSections: { label: string; Icon: React.ElementType }[] = [
+    { label: 'Outline', Icon: List },
+    { label: 'Backlinks', Icon: CornerDownLeft },
+    { label: 'Forward links', Icon: CornerUpRight },
+    { label: 'Partilhas', Icon: Share2 },
+];
 
 function RightSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
     if (collapsed) {
@@ -193,8 +217,11 @@ function RightSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
         <aside className="flex w-64 shrink-0 flex-col overflow-hidden border-l">
             {/* Header with collapse button */}
             <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Propriedades
+                <span title="Propriedades">
+                    <PanelRight
+                        className="h-4 w-4 text-muted-foreground"
+                        aria-label="Propriedades"
+                    />
                 </span>
                 <Button
                     variant="ghost"
@@ -209,25 +236,31 @@ function RightSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
 
             {/* File-property sections */}
             <div className="min-h-0 flex-1 overflow-y-auto py-1">
-                {rightSections.map((section) => (
-                    <div key={section} className="px-3 py-2">
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            {section}
-                        </p>
+                {rightSections.map(({ label, Icon }) => (
+                    <div key={label} className="px-3 py-2">
+                        <span title={label}>
+                            <Icon
+                                className="mb-1 h-4 w-4 text-muted-foreground"
+                                aria-label={label}
+                            />
+                        </span>
                         <p className="text-xs text-muted-foreground">Selecciona um ficheiro</p>
                     </div>
                 ))}
             </div>
 
             {/* Footer — Calendar placeholder */}
-            <div className="flex h-56 shrink-0 flex-col border-t">
+            <div className="flex h-48 shrink-0 flex-col border-t">
                 <div className="border-b px-3 py-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Calendário
+                    <span title="Calendário">
+                        <Calendar
+                            className="h-4 w-4 text-muted-foreground"
+                            aria-label="Calendário"
+                        />
                     </span>
                 </div>
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    📅 Calendário — em breve
+                    Calendário — em breve
                 </div>
             </div>
         </aside>
