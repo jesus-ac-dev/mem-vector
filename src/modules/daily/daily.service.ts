@@ -28,7 +28,7 @@ export interface Versao {
 }
 
 function hoje(): string {
-    return new Date().toISOString().slice(0, 10);
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Lisbon' }).format(new Date());
 }
 
 export async function acrescentarAoDailyCom(
