@@ -1,28 +1,28 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { History, FileText } from 'lucide-react';
-import { getNota, listarVersoes } from '@/modules/knowledge/knowledge.service';
+import { getDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { NoteContent } from '@/modules/knowledge/note-content';
 import { VersionPicker } from '@/modules/knowledge/version-picker';
 
-export default async function NotaPage({
+export default async function DailyPage({
     params,
     searchParams,
 }: {
-    params: Promise<{ slug: string }>;
+    params: Promise<{ dia: string }>;
     searchParams: Promise<{ base?: string; view?: string }>;
 }) {
-    const { slug } = await params;
+    const { dia } = await params;
     const { base: baseId, view } = await searchParams;
 
     const isHistoryView = view === 'history';
 
-    const nota = await getNota(slug);
-    if (!nota) notFound();
+    const daily = await getDaily(dia);
+    if (!daily) notFound();
 
-    const versoes = await listarVersoes(nota.id);
+    const versoes = await listarVersoesDaily(daily.id);
 
     // Current = newest version; base = version selected via ?base=<id> or the previous one.
     const current = versoes[0] ?? null;
@@ -40,11 +40,11 @@ export default async function NotaPage({
         <main className="space-y-6 p-6">
             {/* Shared header: title + toggle icon */}
             <div className="flex items-start justify-between gap-2">
-                <h1 className="text-xl font-semibold text-foreground">{nota.title}</h1>
+                <h1 className="text-xl font-semibold text-foreground">{dia}</h1>
 
                 {isHistoryView ? (
                     <Link
-                        href={`/knowledge/${slug}`}
+                        href={`/daily/${dia}`}
                         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                         title="Voltar ao conteúdo"
                         aria-label="Voltar ao conteúdo"
@@ -53,7 +53,7 @@ export default async function NotaPage({
                     </Link>
                 ) : (
                     <Link
-                        href={`/knowledge/${slug}?view=history`}
+                        href={`/daily/${dia}?view=history`}
                         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                         title="Histórico"
                         aria-label="Histórico"
@@ -74,7 +74,7 @@ export default async function NotaPage({
                         <>
                             <VersionPicker
                                 versions={compareVersions}
-                                basePath={`/knowledge/${slug}`}
+                                basePath={`/daily/${dia}`}
                                 currentBase={baseId}
                                 keepView
                             />
@@ -83,9 +83,9 @@ export default async function NotaPage({
                     )}
                 </section>
             ) : (
-                /* Content mode: note body only */
+                /* Content mode: daily body only */
                 <section>
-                    <NoteContent content={nota.contentMd} />
+                    <NoteContent content={daily.contentMd} />
                 </section>
             )}
         </main>

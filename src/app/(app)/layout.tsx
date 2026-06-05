@@ -3,6 +3,7 @@ import { AppHeader } from '@/components/layout/app-header';
 import { IconRail } from '@/components/layout/icon-rail';
 import { FileExplorer, knowledgeToFolder } from '@/components/layout/file-explorer';
 import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
+import { listarDailies } from '@/modules/daily/daily.service';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
 // Header em cima, depois: icon rail | file explorer | conteúdo (flex-1).
@@ -24,7 +25,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
 
     const notas = await listarKnowledge();
-    const folders = [knowledgeToFolder(notas)];
+    const dailies = await listarDailies();
+
+    const folders = [
+        knowledgeToFolder(notas),
+        {
+            label: 'Daily Notes',
+            basePath: '/daily',
+            items: dailies.map((d) => ({ id: d.id, slug: d.dia, title: d.dia })),
+        },
+    ];
 
     return (
         <div className="flex h-dvh flex-col">

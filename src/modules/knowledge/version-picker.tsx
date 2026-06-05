@@ -17,14 +17,26 @@ interface Version {
 
 interface VersionPickerProps {
     versions: Version[];
-    slug: string;
+    /** Full base path for the item, e.g. `/knowledge/my-slug` or `/daily/2026-06-05`. */
+    basePath: string;
     currentBase?: string;
     /** When true, keeps ?view=history in the URL while changing the base version. */
     keepView?: boolean;
+    /** @deprecated Use basePath instead. */
+    slug?: string;
 }
 
-export function VersionPicker({ versions, slug, currentBase, keepView }: VersionPickerProps) {
+export function VersionPicker({
+    versions,
+    basePath,
+    slug,
+    currentBase,
+    keepView,
+}: VersionPickerProps) {
     const router = useRouter();
+
+    // Support legacy `slug` prop for backwards compat (knowledge page callers not yet updated)
+    const resolvedPath = basePath ?? `/knowledge/${slug}`;
 
     // Default: compare with the previous version (index 1 in the sorted list)
     const defaultBase = versions[0]?.id ?? '';
@@ -34,7 +46,7 @@ export function VersionPicker({ versions, slug, currentBase, keepView }: Version
         const params = new URLSearchParams();
         if (keepView) params.set('view', 'history');
         params.set('base', id);
-        router.push(`/knowledge/${slug}?${params.toString()}`);
+        router.push(`${resolvedPath}?${params.toString()}`);
     }
 
     return (

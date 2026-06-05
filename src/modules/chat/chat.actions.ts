@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { respond, aplicarDestilacao, type ChatResult, type NotaEscrita } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
+import { acrescentarAoDaily } from '@/modules/daily/daily.service';
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),
@@ -73,7 +74,16 @@ export async function destilarTurno(question: string, answer: string): Promise<N
     if (!user) return null;
 
     try {
-        return await aplicarDestilacao(question, answer);
+        const escrita = await aplicarDestilacao(question, answer);
+        if (escrita) {
+            try {
+                const acao = escrita.criada ? 'Nota criada' : 'Nota atualizada';
+                await acrescentarAoDaily(`- ${acao}: [[${escrita.slug}]]`);
+            } catch (e) {
+                console.error('append daily falhou:', e);
+            }
+        }
+        return escrita;
     } catch (e) {
         console.error('destilarTurno falhou:', e);
         return null;
