@@ -40,11 +40,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         },
     ];
 
+    const diasComDaily = dailies.map((d) => d.dia);
+
     return (
         <div className="flex h-dvh flex-col">
             <AppHeader displayName={displayName} />
             {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
-            <WorkspaceShell folders={folders}>{children}</WorkspaceShell>
+            <WorkspaceShell folders={folders} diasComDaily={diasComDaily}>
+                {children}
+            </WorkspaceShell>
         </div>
     );
 }

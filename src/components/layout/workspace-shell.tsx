@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
     BookText,
     ListTodo,
@@ -18,10 +18,11 @@ import {
     CornerDownLeft,
     CornerUpRight,
     Share2,
-    Calendar,
+    Calendar as CalendarIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { ExplorerFolder } from '@/components/layout/file-explorer';
 
@@ -172,7 +173,7 @@ function LeftSidebar({
             </div>
 
             {/* Footer — Grafo placeholder */}
-            <div className="flex h-48 shrink-0 flex-col border-t">
+            <div className="flex h-72 shrink-0 flex-col border-t">
                 <div className="border-b px-3 py-2">
                     <span title="Grafo">
                         <Network className="h-4 w-4 text-muted-foreground" aria-label="Grafo" />
@@ -187,6 +188,39 @@ function LeftSidebar({
 }
 
 // ──────────────────────────────────────────────
+// Daily calendar (compact, highlights days with a daily note)
+// ──────────────────────────────────────────────
+function DailyCalendar({
+    diasComDaily,
+    onDayClick,
+}: {
+    diasComDaily: string[];
+    onDayClick: (day: Date) => void;
+}) {
+    // Parse 'YYYY-MM-DD' strings to local Date objects (avoid UTC drift from new Date(str))
+    const highlightedDates = diasComDaily.map((s) => {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    });
+
+    return (
+        <Calendar
+            mode="single"
+            modifiers={{ comDaily: highlightedDates }}
+            modifiersClassNames={{
+                comDaily: 'bg-accent text-accent-foreground rounded-full',
+            }}
+            onDayClick={onDayClick}
+            className="p-2 text-xs [--cell-size:1.75rem]"
+            classNames={{
+                caption_label: 'text-xs font-medium',
+                weekday: 'text-[0.7rem]',
+            }}
+        />
+    );
+}
+
+// ──────────────────────────────────────────────
 // Right sidebar
 // ──────────────────────────────────────────────
 const rightSections: { label: string; Icon: React.ElementType }[] = [
@@ -196,7 +230,23 @@ const rightSections: { label: string; Icon: React.ElementType }[] = [
     { label: 'Partilhas', Icon: Share2 },
 ];
 
-function RightSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+function formatYMD(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function RightSidebar({
+    collapsed,
+    onToggle,
+    diasComDaily,
+}: {
+    collapsed: boolean;
+    onToggle: () => void;
+    diasComDaily: string[];
+}) {
+    const router = useRouter();
     if (collapsed) {
         return (
             <div className="flex w-8 shrink-0 flex-col items-center border-l pt-2">
@@ -249,18 +299,21 @@ function RightSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
                 ))}
             </div>
 
-            {/* Footer — Calendar placeholder */}
-            <div className="flex h-48 shrink-0 flex-col border-t">
+            {/* Footer — Calendar */}
+            <div className="flex h-72 shrink-0 flex-col border-t">
                 <div className="border-b px-3 py-2">
                     <span title="Calendário">
-                        <Calendar
+                        <CalendarIcon
                             className="h-4 w-4 text-muted-foreground"
                             aria-label="Calendário"
                         />
                     </span>
                 </div>
-                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Calendário — em breve
+                <div className="flex flex-1 items-center justify-center overflow-hidden">
+                    <DailyCalendar
+                        diasComDaily={diasComDaily}
+                        onDayClick={(day) => router.push('/daily/' + formatYMD(day))}
+                    />
                 </div>
             </div>
         </aside>
@@ -272,10 +325,11 @@ function RightSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
 // ──────────────────────────────────────────────
 export interface WorkspaceShellProps {
     folders: ExplorerFolder[];
+    diasComDaily: string[];
     children: React.ReactNode;
 }
 
-export function WorkspaceShell({ folders, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShellProps) {
     const [activePanel, setActivePanel] = useState<LeftPanel>('explorer');
     const [leftCollapsed, setLeftCollapsed] = useState(false);
     const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -300,6 +354,7 @@ export function WorkspaceShell({ folders, children }: WorkspaceShellProps) {
             <RightSidebar
                 collapsed={rightCollapsed}
                 onToggle={() => setRightCollapsed((v) => !v)}
+                diasComDaily={diasComDaily}
             />
         </div>
     );
