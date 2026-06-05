@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { AppHeader } from '@/components/layout/app-header';
 import { IconRail } from '@/components/layout/icon-rail';
-import { FileExplorer, knowledgeToFolder } from '@/components/layout/file-explorer';
+import { FileExplorer } from '@/components/layout/file-explorer';
 import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 import { listarDailies } from '@/modules/daily/daily.service';
 
@@ -28,7 +28,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const dailies = await listarDailies();
 
     const folders = [
-        knowledgeToFolder(notas),
+        {
+            label: 'Knowledge',
+            basePath: '/knowledge',
+            items: notas.map((n) => ({ id: n.id, slug: n.slug, title: n.title })),
+        },
         {
             label: 'Daily Notes',
             basePath: '/daily',

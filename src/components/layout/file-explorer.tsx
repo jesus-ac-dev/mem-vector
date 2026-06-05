@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 interface ExplorerFolder {
     label: string;
@@ -81,13 +80,4 @@ export function FileExplorer({ folders }: FileExplorerProps) {
             </div>
         </nav>
     );
-}
-
-// Convenience converter so the server layout doesn't need to re-shape data.
-export function knowledgeToFolder(notas: NotaKnowledge[]): ExplorerFolder {
-    return {
-        label: 'Knowledge',
-        basePath: '/knowledge',
-        items: notas.map((n) => ({ id: n.id, slug: n.slug, title: n.title })),
-    };
 }
