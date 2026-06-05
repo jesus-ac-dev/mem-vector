@@ -20,6 +20,22 @@ describe('escreverNota (integração RLS)', () => {
     let alice: Awaited<ReturnType<typeof userClient>>;
     beforeAll(async () => {
         alice = await userClient('alice-kn@test.local', 'pw-alice-123');
+        // Limpar estado de runs anteriores: apagar a nota 'e5' e dados dependentes.
+        const admin = getSupabaseAdmin();
+        const aliceUser = (await alice.auth.getUser()).data.user!;
+        const existing = await admin
+            .from('knowledge')
+            .select('id')
+            .eq('owner_id', aliceUser.id)
+            .eq('slug', 'e5')
+            .maybeSingle();
+        if (existing.data?.id) {
+            const noteId = existing.data.id;
+            await admin.from('file_versions').delete().eq('entity_id', noteId);
+            await admin.from('chunks').delete().eq('metadata->>entity_id', noteId);
+            await admin.from('edges').delete().eq('from_id', noteId);
+            await admin.from('knowledge').delete().eq('id', noteId);
+        }
     });
 
     it('cria nota + versão + chunk; 2ª escrita gera 2ª versão e diff', async () => {
@@ -38,6 +54,9 @@ describe('escreverNota (integração RLS)', () => {
         const edges = await alice.from('edges').select('to_slug').eq('from_id', r1.id);
         expect(edges.data?.map((e) => e.to_slug)).toContain('tdd');
 
+        const chunks1 = await alice.from('chunks').select('id').eq('metadata->>entity_id', r1.id);
+        expect(chunks1.data?.length).toBe(1);
+
         const r2 = await escreverNotaCom(alice, {
             title: 'E5',
             content_md: 'v2 [[tdd]]',
@@ -48,5 +67,8 @@ describe('escreverNota (integração RLS)', () => {
         const versoes2 = await alice.from('file_versions').select('id').eq('entity_id', r1.id);
         expect(versoes2.data?.length).toBe(2);
         expect(r2.diff?.some((d) => d.op === 'add' && d.text.includes('v2'))).toBe(true);
+
+        const chunks2 = await alice.from('chunks').select('id').eq('metadata->>entity_id', r1.id);
+        expect(chunks2.data?.length).toBe(1);
     }, 120_000);
 });

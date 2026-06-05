@@ -59,7 +59,7 @@ export async function escreverNotaCom(
     const nota = up.data;
 
     // Versão imutável do conteúdo desta escrita.
-    await db.from('file_versions').insert({
+    const { error: vErr } = await db.from('file_versions').insert({
         owner_id: user.id,
         entity_type: 'knowledge',
         entity_id: nota.id,
@@ -67,29 +67,37 @@ export async function escreverNotaCom(
         frontmatter,
         author: 'agent',
     });
+    if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
     // Regenerar chunks: apagar os antigos, inserir um novo com o embedding actual.
     // Nota: filtramos por metadata->>'entity_id' (operador ->> devolve texto).
-    await db.from('chunks').delete().eq('owner_id', user.id).eq('metadata->>entity_id', nota.id);
+    const { error: dChErr } = await db
+        .from('chunks')
+        .delete()
+        .eq('owner_id', user.id)
+        .eq('metadata->>entity_id', nota.id);
+    if (dChErr) throw new Error(`apagar chunks: ${dChErr.message}`);
 
     const embedding = await embedPassage(dados.content_md);
-    await db.from('chunks').insert({
+    const { error: iChErr } = await db.from('chunks').insert({
         content: dados.content_md,
         embedding: JSON.stringify(embedding),
         source: 'knowledge',
         owner_id: user.id,
         metadata: { entity_type: 'knowledge', entity_id: nota.id },
     });
+    if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
 
     // Regenerar edges (wikilinks): apagar e reinserir.
-    await db
+    const { error: dEdErr } = await db
         .from('edges')
         .delete()
         .eq('owner_id', user.id)
         .eq('from_type', 'knowledge')
         .eq('from_id', nota.id);
+    if (dEdErr) throw new Error(`apagar edges: ${dEdErr.message}`);
 
-    const alvos = parseWikilinks(dados.content_md);
+    const alvos = [...new Set([...parseWikilinks(dados.content_md), ...dados.links.map(slugify)])];
     if (alvos.length) {
         const alvosExistentes = await db
             .from('knowledge')
@@ -98,7 +106,7 @@ export async function escreverNotaCom(
             .in('slug', alvos);
         const idPorSlug = new Map((alvosExistentes.data ?? []).map((r) => [r.slug, r.id]));
 
-        await db.from('edges').insert(
+        const { error: iEdErr } = await db.from('edges').insert(
             alvos.map((to_slug) => ({
                 owner_id: user.id,
                 from_type: 'knowledge',
@@ -109,6 +117,7 @@ export async function escreverNotaCom(
                 kind: 'wikilink',
             })),
         );
+        if (iEdErr) throw new Error(`inserir edges: ${iEdErr.message}`);
     }
 
     return {
