@@ -19,9 +19,11 @@ interface VersionPickerProps {
     versions: Version[];
     slug: string;
     currentBase?: string;
+    /** When true, keeps ?view=history in the URL while changing the base version. */
+    keepView?: boolean;
 }
 
-export function VersionPicker({ versions, slug, currentBase }: VersionPickerProps) {
+export function VersionPicker({ versions, slug, currentBase, keepView }: VersionPickerProps) {
     const router = useRouter();
 
     // Default: compare with the previous version (index 1 in the sorted list)
@@ -29,7 +31,10 @@ export function VersionPicker({ versions, slug, currentBase }: VersionPickerProp
     const value = currentBase ?? defaultBase;
 
     function handleChange(id: string) {
-        router.push(`/knowledge/${slug}?base=${id}`);
+        const params = new URLSearchParams();
+        if (keepView) params.set('view', 'history');
+        params.set('base', id);
+        router.push(`/knowledge/${slug}?${params.toString()}`);
     }
 
     return (

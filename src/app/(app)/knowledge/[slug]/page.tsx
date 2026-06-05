@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { History, FileText } from 'lucide-react';
 import { getNota, listarVersoes } from '@/modules/knowledge/knowledge.service';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import { DiffView } from '@/modules/knowledge/diff-view';
@@ -10,10 +12,12 @@ export default async function NotaPage({
     searchParams,
 }: {
     params: Promise<{ slug: string }>;
-    searchParams: Promise<{ base?: string }>;
+    searchParams: Promise<{ base?: string; view?: string }>;
 }) {
     const { slug } = await params;
-    const { base: baseId } = await searchParams;
+    const { base: baseId, view } = await searchParams;
+
+    const isHistoryView = view === 'history';
 
     const nota = await getNota(slug);
     if (!nota) notFound();
@@ -34,36 +38,56 @@ export default async function NotaPage({
 
     return (
         <main className="space-y-6 p-6">
-            {/* Note content */}
-            <section>
+            {/* Shared header: title + toggle icon */}
+            <div className="flex items-start justify-between gap-2">
                 <h1 className="text-xl font-semibold text-foreground">{nota.title}</h1>
-                <NoteContent content={nota.contentMd} />
-            </section>
 
-            {/* Version history + diff */}
-            <section className="space-y-4">
-                <h2 className="text-sm font-medium text-muted-foreground">
-                    Histórico ({versoes.length})
-                </h2>
-
-                {versoes.length < 2 ? (
-                    <p className="text-sm italic text-muted-foreground">
-                        Versão única — sem histórico para comparar.
-                    </p>
+                {isHistoryView ? (
+                    <Link
+                        href={`/knowledge/${slug}`}
+                        className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                        title="Voltar ao conteúdo"
+                        aria-label="Voltar ao conteúdo"
+                    >
+                        <FileText className="h-4 w-4" />
+                    </Link>
                 ) : (
-                    <>
-                        {/* Version picker dropdown */}
-                        <VersionPicker
-                            versions={compareVersions}
-                            slug={slug}
-                            currentBase={baseId}
-                        />
-
-                        {/* Diff view */}
-                        <DiffView diff={diff} />
-                    </>
+                    <Link
+                        href={`/knowledge/${slug}?view=history`}
+                        className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                        title="Histórico"
+                        aria-label="Histórico"
+                    >
+                        <History className="h-4 w-4" />
+                    </Link>
                 )}
-            </section>
+            </div>
+
+            {isHistoryView ? (
+                /* History mode: comparator only */
+                <section className="space-y-4">
+                    {versoes.length < 2 ? (
+                        <p className="text-sm italic text-muted-foreground">
+                            Versão única — sem histórico para comparar.
+                        </p>
+                    ) : (
+                        <>
+                            <VersionPicker
+                                versions={compareVersions}
+                                slug={slug}
+                                currentBase={baseId}
+                                keepView
+                            />
+                            <DiffView diff={diff} />
+                        </>
+                    )}
+                </section>
+            ) : (
+                /* Content mode: note body only */
+                <section>
+                    <NoteContent content={nota.contentMd} />
+                </section>
+            )}
         </main>
     );
 }
