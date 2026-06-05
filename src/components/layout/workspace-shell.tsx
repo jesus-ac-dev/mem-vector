@@ -10,15 +10,18 @@ import {
     Users,
     FolderTree,
     MessagesSquare,
-    ChevronLeft,
-    ChevronRight,
+    PanelLeftClose,
+    PanelLeftOpen,
+    PanelRightClose,
+    PanelRightOpen,
     Network,
-    PanelRight,
     List,
     CornerDownLeft,
     CornerUpRight,
     Share2,
-    Calendar as CalendarIcon,
+    FilePlus,
+    FolderPlus,
+    Archive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -47,9 +50,13 @@ const navItems = [
 function Ribbon({
     activePanel,
     onPanelChange,
+    leftCollapsed,
+    onOpenLeft,
 }: {
     activePanel: LeftPanel;
     onPanelChange: (p: LeftPanel) => void;
+    leftCollapsed: boolean;
+    onOpenLeft: () => void;
 }) {
     const pathname = usePathname();
 
@@ -97,6 +104,23 @@ function Ribbon({
                     </Link>
                 );
             })}
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Re-open left sidebar button (only visible when collapsed) */}
+            {leftCollapsed && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onOpenLeft}
+                    title="Abrir explorador"
+                    aria-label="Abrir explorador"
+                    className="h-10 w-10 text-muted-foreground"
+                >
+                    <PanelLeftOpen className="h-5 w-5" />
+                </Button>
+            )}
         </nav>
     );
 }
@@ -116,48 +140,54 @@ function LeftSidebar({
     onToggle: () => void;
 }) {
     if (collapsed) {
-        return (
-            <div className="flex w-8 shrink-0 flex-col items-center border-r pt-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onToggle}
-                    title="Expandir sidebar"
-                    className="h-7 w-7 text-muted-foreground"
-                >
-                    <ChevronRight className="h-4 w-4" />
-                </Button>
-            </div>
-        );
+        return null;
     }
 
     return (
         <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r">
-            {/* Header with collapse button */}
-            <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
-                {activePanel === 'explorer' ? (
-                    <span title="Explorador">
-                        <FolderTree
-                            className="h-4 w-4 text-muted-foreground"
-                            aria-label="Explorador"
-                        />
-                    </span>
-                ) : (
-                    <span title="Conversas">
-                        <MessagesSquare
-                            className="h-4 w-4 text-muted-foreground"
-                            aria-label="Conversas"
-                        />
-                    </span>
-                )}
+            {/* Header — action icons row + collapse button */}
+            <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
+                <div className="flex items-center gap-0.5">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Novo ficheiro"
+                        aria-label="Novo ficheiro"
+                        onClick={() => {}}
+                        className="h-6 w-6 text-muted-foreground"
+                    >
+                        <FilePlus className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Nova pasta"
+                        aria-label="Nova pasta"
+                        onClick={() => {}}
+                        className="h-6 w-6 text-muted-foreground"
+                    >
+                        <FolderPlus className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Arquivar selecção"
+                        aria-label="Arquivar selecção"
+                        onClick={() => {}}
+                        className="h-6 w-6 text-muted-foreground"
+                    >
+                        <Archive className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={onToggle}
                     title="Colapsar sidebar"
+                    aria-label="Colapsar sidebar"
                     className="h-6 w-6 text-muted-foreground"
                 >
-                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <PanelLeftClose className="h-3.5 w-3.5" />
                 </Button>
             </div>
 
@@ -172,16 +202,10 @@ function LeftSidebar({
                 )}
             </div>
 
-            {/* Footer — Grafo placeholder */}
-            <div className="flex h-72 shrink-0 flex-col border-t">
-                <div className="border-b px-3 py-2">
-                    <span title="Grafo">
-                        <Network className="h-4 w-4 text-muted-foreground" aria-label="Grafo" />
-                    </span>
-                </div>
-                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Grafo 2D/3D — em breve
-                </div>
+            {/* Footer — Grafo placeholder (no title row) */}
+            <div className="flex h-80 shrink-0 flex-col items-center justify-center border-t">
+                <Network className="mb-2 h-4 w-4 text-muted-foreground" aria-hidden />
+                <span className="text-sm text-muted-foreground">Grafo 2D/3D — em breve</span>
             </div>
         </aside>
     );
@@ -223,11 +247,13 @@ function DailyCalendar({
 // ──────────────────────────────────────────────
 // Right sidebar
 // ──────────────────────────────────────────────
-const rightSections: { label: string; Icon: React.ElementType }[] = [
-    { label: 'Outline', Icon: List },
-    { label: 'Backlinks', Icon: CornerDownLeft },
-    { label: 'Forward links', Icon: CornerUpRight },
-    { label: 'Partilhas', Icon: Share2 },
+type RightTab = 'outline' | 'backlinks' | 'forward' | 'partilhas';
+
+const rightTabs: { id: RightTab; label: string; Icon: React.ElementType }[] = [
+    { id: 'outline', label: 'Outline', Icon: List },
+    { id: 'backlinks', label: 'Backlinks', Icon: CornerDownLeft },
+    { id: 'forward', label: 'Forward links', Icon: CornerUpRight },
+    { id: 'partilhas', label: 'Partilhas', Icon: Share2 },
 ];
 
 function formatYMD(date: Date): string {
@@ -247,68 +273,53 @@ function RightSidebar({
     diasComDaily: string[];
 }) {
     const router = useRouter();
+    const [activeTab, setActiveTab] = useState<RightTab>('outline');
+
     if (collapsed) {
-        return (
-            <div className="flex w-8 shrink-0 flex-col items-center border-l pt-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onToggle}
-                    title="Expandir sidebar direita"
-                    className="h-7 w-7 text-muted-foreground"
-                >
-                    <ChevronLeft className="h-4 w-4" />
-                </Button>
-            </div>
-        );
+        return null;
     }
 
     return (
         <aside className="flex w-64 shrink-0 flex-col overflow-hidden border-l">
-            {/* Header with collapse button */}
-            <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
-                <span title="Propriedades">
-                    <PanelRight
-                        className="h-4 w-4 text-muted-foreground"
-                        aria-label="Propriedades"
-                    />
-                </span>
+            {/* Header — icon tabs + collapse button */}
+            <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
+                <div className="flex items-center gap-0.5">
+                    {rightTabs.map(({ id, label, Icon }) => (
+                        <Button
+                            key={id}
+                            variant="ghost"
+                            size="icon"
+                            title={label}
+                            aria-label={label}
+                            onClick={() => setActiveTab(id)}
+                            className={cn(
+                                'h-6 w-6 text-muted-foreground',
+                                activeTab === id && 'bg-accent text-accent-foreground',
+                            )}
+                        >
+                            <Icon className="h-3.5 w-3.5" />
+                        </Button>
+                    ))}
+                </div>
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={onToggle}
                     title="Colapsar sidebar direita"
+                    aria-label="Colapsar sidebar direita"
                     className="h-6 w-6 text-muted-foreground"
                 >
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <PanelRightClose className="h-3.5 w-3.5" />
                 </Button>
             </div>
 
-            {/* File-property sections */}
-            <div className="min-h-0 flex-1 overflow-y-auto py-1">
-                {rightSections.map(({ label, Icon }) => (
-                    <div key={label} className="px-3 py-2">
-                        <span title={label}>
-                            <Icon
-                                className="mb-1 h-4 w-4 text-muted-foreground"
-                                aria-label={label}
-                            />
-                        </span>
-                        <p className="text-xs text-muted-foreground">Selecciona um ficheiro</p>
-                    </div>
-                ))}
+            {/* Active tab panel */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                <p className="text-xs text-muted-foreground">Selecciona um ficheiro</p>
             </div>
 
-            {/* Footer — Calendar */}
-            <div className="flex h-72 shrink-0 flex-col border-t">
-                <div className="border-b px-3 py-2">
-                    <span title="Calendário">
-                        <CalendarIcon
-                            className="h-4 w-4 text-muted-foreground"
-                            aria-label="Calendário"
-                        />
-                    </span>
-                </div>
+            {/* Footer — Calendar (no title row) */}
+            <div className="flex h-80 shrink-0 flex-col border-t">
                 <div className="flex flex-1 items-center justify-center overflow-hidden">
                     <DailyCalendar
                         diasComDaily={diasComDaily}
@@ -337,9 +348,14 @@ export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShe
     return (
         <div className="flex flex-1 overflow-hidden">
             {/* Ribbon */}
-            <Ribbon activePanel={activePanel} onPanelChange={setActivePanel} />
+            <Ribbon
+                activePanel={activePanel}
+                onPanelChange={setActivePanel}
+                leftCollapsed={leftCollapsed}
+                onOpenLeft={() => setLeftCollapsed(false)}
+            />
 
-            {/* Left sidebar */}
+            {/* Left sidebar (zero width when collapsed) */}
             <LeftSidebar
                 folders={folders}
                 activePanel={activePanel}
@@ -348,9 +364,24 @@ export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShe
             />
 
             {/* Main content area */}
-            <main className="flex-1 overflow-y-auto">{children}</main>
+            <main className="relative flex-1 overflow-y-auto">
+                {/* Re-open right sidebar button (top-right corner, only when collapsed) */}
+                {rightCollapsed && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setRightCollapsed(false)}
+                        title="Abrir painel de propriedades"
+                        aria-label="Abrir painel de propriedades"
+                        className="absolute right-2 top-2 z-10 h-7 w-7 text-muted-foreground"
+                    >
+                        <PanelRightOpen className="h-4 w-4" />
+                    </Button>
+                )}
+                {children}
+            </main>
 
-            {/* Right sidebar */}
+            {/* Right sidebar (zero width when collapsed) */}
             <RightSidebar
                 collapsed={rightCollapsed}
                 onToggle={() => setRightCollapsed((v) => !v)}
