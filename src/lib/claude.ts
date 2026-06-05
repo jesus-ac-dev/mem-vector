@@ -6,7 +6,7 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN ?? 'claude';
 // Persona apenas. A regra RAG-preferred + fallback vive no prompt (ver
 // chat.prompt.ts), para a primitiva do CLI ficar reutilizável.
 const SYSTEM_PROMPT =
-    'És o assistente do MythosEngine. Respondes em português de Portugal, conciso e direto. ' +
+    'És o assistente deste workspace. Respondes em português de Portugal, conciso e direto. ' +
     'Segues as instruções de cada pedido.';
 
 const DISALLOWED_TOOLS = [
