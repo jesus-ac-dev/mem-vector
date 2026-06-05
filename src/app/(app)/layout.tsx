@@ -1,10 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { AppHeader } from '@/components/layout/app-header';
-import { IconRail } from '@/components/layout/icon-rail';
+import { WorkspaceShell } from '@/components/layout/workspace-shell';
+import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
+import { listarDailies } from '@/modules/daily/daily.service';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
-// Header em cima, rail de ícones à esquerda, conteúdo (futuro host dos panes)
-// à direita. O proxy já garante que só chega aqui quem tem sessão.
+// Header em cima + WorkspaceShell (client) com as 4 zonas Obsidian:
+//   ribbon | sidebar esq. (colapsável) | main (rotas) | sidebar dir. (colapsável)
+// O proxy já garante que só chega aqui quem tem sessão.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
     const supabase = await createClient();
     const {
@@ -21,13 +24,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         displayName = data?.display_name ?? user.email ?? '';
     }
 
+    const notas = await listarKnowledge();
+    const dailies = await listarDailies();
+
+    const folders = [
+        {
+            label: 'Knowledge',
+            basePath: '/knowledge',
+            items: notas.map((n) => ({ id: n.id, slug: n.slug, title: n.title })),
+        },
+        {
+            label: 'Daily Notes',
+            basePath: '/daily',
+            items: dailies.map((d) => ({ id: d.id, slug: d.dia, title: d.dia })),
+        },
+    ];
+
+    const diasComDaily = dailies.map((d) => d.dia);
+
     return (
         <div className="flex h-dvh flex-col">
             <AppHeader displayName={displayName} />
-            <div className="flex flex-1 overflow-hidden">
-                <IconRail />
-                <main className="flex-1 overflow-y-auto">{children}</main>
-            </div>
+            {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
+            <WorkspaceShell folders={folders} diasComDaily={diasComDaily}>
+                {children}
+            </WorkspaceShell>
         </div>
     );
 }

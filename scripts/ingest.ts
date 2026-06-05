@@ -7,7 +7,7 @@ process.loadEnvFile('.env.local');
 const docs: { content: string; source: string }[] = [
   {
     content:
-      'No MythosEngine, os agentes são os autores do conhecimento: o humano fala e o agente escreve as tarefas, decisões e notas.',
+      'Neste workspace, os agentes são os autores do conhecimento: o humano fala e o agente escreve as tarefas, decisões e notas.',
     source: 'seed',
   },
   {
@@ -27,7 +27,7 @@ const docs: { content: string; source: string }[] = [
   },
   {
     content:
-      'O produto-base do MythosEngine é chat, mais agentes-autores, mais RAG, mais tarefas, mais daily notes.',
+      'O produto-base do mem-vector é chat, mais agentes-autores, mais RAG, mais tarefas, mais daily notes.',
     source: 'seed',
   },
   {

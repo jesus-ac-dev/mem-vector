@@ -1,9 +1,10 @@
 'use server';
 
 import { z } from 'zod';
-import { respond, type ChatResult } from './chat.service';
+import { respond, aplicarDestilacao, type ChatResult, type NotaEscrita } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
+import { acrescentarAoDaily } from '@/modules/daily/daily.service';
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),
@@ -62,4 +63,29 @@ export async function ask(
     if (asstMsg.error) throw new Error(`guardar resposta falhou: ${asstMsg.error.message}`);
 
     return { ...result, conversationId: convId };
+}
+
+export async function destilarTurno(question: string, answer: string): Promise<NotaEscrita | null> {
+    // Autentica antes de destilar — garante que a sessão existe.
+    const db = await createClient();
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) return null;
+
+    try {
+        const escrita = await aplicarDestilacao(question, answer);
+        if (escrita) {
+            try {
+                const acao = escrita.criada ? 'Nota criada' : 'Nota atualizada';
+                await acrescentarAoDaily(`- ${acao}: [[${escrita.slug}]]`);
+            } catch (e) {
+                console.error('append daily falhou:', e);
+            }
+        }
+        return escrita;
+    } catch (e) {
+        console.error('destilarTurno falhou:', e);
+        return null;
+    }
 }

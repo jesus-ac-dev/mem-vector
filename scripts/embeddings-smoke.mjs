@@ -14,7 +14,7 @@ const cos = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0); // normalize:true 
 
 // E5 exige prefixos: 'query:' na pergunta, 'passage:' no conteúdo indexado.
 const pergunta       = 'query: Quem escreve o conhecimento no produto?';
-const relacionada    = 'passage: No MythosEngine os agentes são os autores: o humano fala e o agente escreve as tarefas, decisões e notas.';
+const relacionada    = 'passage: Neste workspace os agentes são os autores: o humano fala e o agente escreve as tarefas, decisões e notas.';
 const naoRelacionada = 'passage: A migração de balcões liga a entidade bancária ao balcão físico e depois ao contacto.';
 
 const q = await embed(pergunta);

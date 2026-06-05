@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
     title: 'mem-vector',
-    description: 'Núcleo SaaS do MythosEngine — falas, os agentes escrevem.',
+    description: 'O teu workspace — falas, os agentes escrevem.',
 };
 
 export default function RootLayout({
