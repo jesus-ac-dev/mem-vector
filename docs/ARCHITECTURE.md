@@ -12,6 +12,23 @@ chat → o agente escreve estado tipado → fica pesquisável (RAG) → daily/no
 
 E a **rede de revisão**: cada escrita do agente grava uma versão → o utilizador vê o diff (o equivalente web ao `git diff`). É o que torna "o AI escreve os teus ficheiros" confiável.
 
+```mermaid
+flowchart TD
+    U([Humano fala]) --> CHAT[Chat respond]
+    CHAT --> CTX[RAG: match_chunks + threshold 0.78]
+    CTX --> LLM[claude CLI gera]
+    LLM --> R[Resposta imediata]
+    R --> U
+    CHAT -. async: destilarTurno .-> JUDGE{Facto durável?}
+    JUDGE -->|NADA| STOP([fim])
+    JUDGE -->|sim| WRITE[escreverNota versionada]
+    WRITE --> KNOW[(knowledge)]
+    WRITE --> VER[(file_versions = diff)]
+    WRITE --> CHK[(chunks = pesquisável)]
+    WRITE --> DLY[append ao daily de hoje]
+    CHK -. RAG .-> CTX
+```
+
 ## Stack
 
 - **Next.js 16** (App Router, Server Components, server actions) — UI + porta de servidor.
@@ -56,6 +73,57 @@ A decisão central ([decisions/log](../../MythosEngine/decisions/log.md) 2026-06
 
 > Tipado para o domínio, genérico para a auditoria/grafo/pesquisa. Foi só no *conteúdo de domínio* que o genérico era o erro.
 
+```mermaid
+erDiagram
+    USERS ||--o{ KNOWLEDGE : owner_id
+    USERS ||--o{ DAILIES : owner_id
+    USERS ||--o{ TAREFAS : owner_id
+    USERS ||--o{ CONVERSATIONS : owner_id
+    CONVERSATIONS ||--o{ MESSAGES : contem
+    GRUPOS ||--o{ GRUPO_MEMBROS : membros
+    USERS ||--o{ GRUPO_MEMBROS : pertence
+    KNOWLEDGE ||..o{ FILE_VERSIONS : "entity_id (genérica)"
+    DAILIES ||..o{ FILE_VERSIONS : "entity_id (genérica)"
+    KNOWLEDGE ||..o{ CHUNKS : "metadata (genérica)"
+    DAILIES ||..o{ CHUNKS : "metadata (genérica)"
+    KNOWLEDGE ||..o{ EDGES : "wikilinks (genérica)"
+    KNOWLEDGE {
+        uuid id PK
+        uuid owner_id FK
+        text slug UK
+        text content_md
+        enum visibility
+        uuid group_id FK
+    }
+    DAILIES {
+        uuid id PK
+        uuid owner_id FK
+        date dia UK
+        text content_md
+    }
+    FILE_VERSIONS {
+        uuid id PK
+        text entity_type
+        uuid entity_id
+        text content_md
+        text author
+    }
+    CHUNKS {
+        uuid id PK
+        vector embedding
+        jsonb metadata
+        enum visibility
+    }
+    EDGES {
+        uuid id PK
+        uuid from_id
+        text to_slug
+        uuid to_id
+    }
+```
+
+> Linhas tracejadas = relações **lógicas** das tabelas genéricas (via `entity_type`+`entity_id` / `metadata`), não FKs reais. Linhas sólidas = FK real (`owner_id`, etc.).
+
 ## RLS (segurança)
 
 Toda a tabela de domínio segue o mesmo padrão (de `auth`):
@@ -80,6 +148,37 @@ upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikili
 ```
 
 **RAG:** RAG-preferred + LLM-fallback; o threshold `0.78` é rede de segurança (o e5-small comprime os scores), não classificador.
+
+```mermaid
+sequenceDiagram
+    actor U as Humano
+    participant UI as Chat UI
+    participant S as respond
+    participant DB as Supabase RAG
+    participant CLI as claude CLI
+    participant D as destilarTurno
+    participant K as knowledge + daily
+    U->>UI: pergunta
+    UI->>S: ask(pergunta)
+    S->>DB: embedQuery + match_chunks
+    DB-->>S: fontes relevantes
+    S->>CLI: buildPrompt + generate
+    CLI-->>S: resposta
+    S-->>UI: resposta
+    UI-->>U: resposta + fontes (imediata)
+    Note over UI,D: async, não bloqueia a resposta
+    UI->>D: destilarTurno(pergunta, resposta)
+    D->>CLI: vale destilar?
+    CLI-->>D: nota JSON ou NADA
+    alt há nota durável
+        D->>K: escreverNota + append daily
+        K-->>D: slug, criada
+        D-->>UI: NotaEscrita
+        UI-->>U: chip 📝 nota
+    else NADA
+        D-->>UI: null
+    end
+```
 
 ## Estado / ordem de construção
 
