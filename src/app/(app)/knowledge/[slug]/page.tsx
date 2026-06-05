@@ -1,8 +1,9 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getNota, listarVersoes } from '@/modules/knowledge/knowledge.service';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import { DiffView } from '@/modules/knowledge/diff-view';
+import { NoteContent } from '@/modules/knowledge/note-content';
+import { VersionPicker } from '@/modules/knowledge/version-picker';
 
 export default async function NotaPage({
     params,
@@ -28,14 +29,15 @@ export default async function NotaPage({
     const hasDiff = current && baseVersion;
     const diff = hasDiff ? diffLines(baseVersion.contentMd, current.contentMd) : [];
 
+    // Versions available for comparison (all except the current/latest)
+    const compareVersions = versoes.slice(1);
+
     return (
         <main className="space-y-6 p-6">
             {/* Note content */}
             <section>
                 <h1 className="text-xl font-semibold text-foreground">{nota.title}</h1>
-                <pre className="mt-4 whitespace-pre-wrap text-sm text-foreground">
-                    {nota.contentMd}
-                </pre>
+                <NoteContent content={nota.contentMd} />
             </section>
 
             {/* Version history + diff */}
@@ -50,40 +52,12 @@ export default async function NotaPage({
                     </p>
                 ) : (
                     <>
-                        {/* Version picker */}
-                        <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground">
-                                Comparar a versão atual com:
-                            </p>
-                            <div className="flex flex-col gap-1">
-                                {versoes.slice(1).map((v) => {
-                                    const isActive =
-                                        baseId === v.id || (!baseId && v.id === versoes[1]?.id);
-                                    return (
-                                        <Link
-                                            key={v.id}
-                                            href={`/knowledge/${slug}?base=${v.id}`}
-                                            className={[
-                                                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors',
-                                                isActive
-                                                    ? 'bg-accent font-medium text-accent-foreground'
-                                                    : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
-                                            ].join(' ')}
-                                        >
-                                            <span className="font-mono">
-                                                {new Date(v.createdAt).toLocaleString('pt-PT', {
-                                                    dateStyle: 'short',
-                                                    timeStyle: 'short',
-                                                })}
-                                            </span>
-                                            <span className="text-muted-foreground">
-                                                {v.author}
-                                            </span>
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        {/* Version picker dropdown */}
+                        <VersionPicker
+                            versions={compareVersions}
+                            slug={slug}
+                            currentBase={baseId}
+                        />
 
                         {/* Diff view */}
                         <DiffView diff={diff} />

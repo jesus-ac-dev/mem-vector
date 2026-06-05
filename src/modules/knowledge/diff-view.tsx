@@ -1,10 +1,5 @@
 import type { DiffLine } from './knowledge.diff';
 
-// NOTE: shadcn's default token set has no dedicated "success/green" token.
-// For diff additions we use bg-primary/10 + text-primary (theme-consistent).
-// If a classic GitHub green look is needed later, add a `--color-success` CSS
-// variable to globals.css and expose it as a Tailwind semantic token.
-
 const gutterChar: Record<DiffLine['op'], string> = {
     add: '+',
     del: '-',
@@ -12,7 +7,7 @@ const gutterChar: Record<DiffLine['op'], string> = {
 };
 
 const rowClass: Record<DiffLine['op'], string> = {
-    add: 'bg-primary/10 text-primary',
+    add: 'bg-success/10 text-success',
     del: 'bg-destructive/10 text-destructive',
     same: 'text-muted-foreground',
 };
