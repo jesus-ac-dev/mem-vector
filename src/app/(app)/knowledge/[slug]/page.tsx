@@ -10,7 +10,7 @@ export default async function NotaPage({ params }: { params: Promise<{ slug: str
     const diff = versoes.length >= 2 ? diffLines(versoes[1].contentMd, versoes[0].contentMd) : [];
 
     return (
-        <main className="mx-auto max-w-2xl p-6">
+        <main className="p-6">
             <h1 className="text-xl font-semibold text-foreground">{nota.title}</h1>
             <pre className="mt-4 whitespace-pre-wrap text-sm text-foreground">{nota.contentMd}</pre>
             <h2 className="mt-6 text-sm font-medium text-muted-foreground">
