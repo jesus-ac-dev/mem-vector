@@ -21,7 +21,6 @@ export interface ChatResult {
     answer: string;
     sources: Source[];
     costUsd: number;
-    escrita?: NotaEscrita | null;
 }
 
 interface DestilDeps {
@@ -56,13 +55,5 @@ export async function respond(question: string): Promise<ChatResult> {
     const sources = relevantSources((data ?? []) as Source[]);
     const { text, costUsd } = await generate(buildPrompt(question, sources));
 
-    // Destilação proativa: best-effort — falha nunca bloqueia a resposta ao user.
-    let escrita: NotaEscrita | null | undefined;
-    try {
-        escrita = await aplicarDestilacao(question, text);
-    } catch (e) {
-        console.error('destilação falhou:', e);
-    }
-
-    return { answer: text, sources, costUsd, escrita };
+    return { answer: text, sources, costUsd };
 }

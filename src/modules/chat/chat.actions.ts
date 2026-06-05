@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { respond, type ChatResult } from './chat.service';
+import { respond, aplicarDestilacao, type ChatResult, type NotaEscrita } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
 
@@ -62,4 +62,20 @@ export async function ask(
     if (asstMsg.error) throw new Error(`guardar resposta falhou: ${asstMsg.error.message}`);
 
     return { ...result, conversationId: convId };
+}
+
+export async function destilarTurno(question: string, answer: string): Promise<NotaEscrita | null> {
+    // Autentica antes de destilar — garante que a sessão existe.
+    const db = await createClient();
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) return null;
+
+    try {
+        return await aplicarDestilacao(question, answer);
+    } catch (e) {
+        console.error('destilarTurno falhou:', e);
+        return null;
+    }
 }

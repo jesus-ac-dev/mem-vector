@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { ask } from '@/modules/chat/chat.actions';
+import { ask, destilarTurno } from '@/modules/chat/chat.actions';
 import { provenance } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { NotaEscrita } from '@/modules/chat/chat.service';
@@ -10,10 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Message {
+    id: number;
     role: 'user' | 'assistant';
     content: string;
     sources?: Source[];
     escrita?: NotaEscrita | null;
+    destilando?: boolean;
 }
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
@@ -57,30 +59,53 @@ export default function ChatPage() {
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastCost, setLastCost] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const nextIdRef = useRef(0);
 
     async function handleSend() {
         const question = input.trim();
         if (!question || pending) return;
         setError(null);
-        setMessages((prev) => [...prev, { role: 'user', content: question }]);
+        const userMsgId = nextIdRef.current++;
+        setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: question }]);
         setInput('');
         setPending(true);
+
+        let asstMsgId: number;
         try {
+            // Step 1: get the answer and render it immediately.
             const res = await ask({ question, conversationId });
             setConversationId(res.conversationId);
             setLastCost(res.costUsd);
+            asstMsgId = nextIdRef.current++;
             setMessages((prev) => [
                 ...prev,
                 {
+                    id: asstMsgId,
                     role: 'assistant',
                     content: res.answer,
                     sources: res.sources,
-                    escrita: res.escrita,
+                    destilando: true,
                 },
             ]);
+            setPending(false);
+
+            // Step 2: distil in the background; update the message when done.
+            destilarTurno(question, res.answer)
+                .then((escrita) => {
+                    setMessages((prev) =>
+                        prev.map((m) =>
+                            m.id === asstMsgId ? { ...m, destilando: false, escrita } : m,
+                        ),
+                    );
+                })
+                .catch(() => {
+                    // distillation failure is silent — just clear the hint
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === asstMsgId ? { ...m, destilando: false } : m)),
+                    );
+                });
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro desconhecido');
-        } finally {
             setPending(false);
         }
     }
@@ -100,8 +125,8 @@ export default function ChatPage() {
                         Faz uma pergunta sobre o mem-vector...
                     </p>
                 )}
-                {messages.map((m, i) => (
-                    <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
+                {messages.map((m) => (
+                    <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
                         <span
                             className={
                                 'inline-block whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ' +
@@ -114,6 +139,9 @@ export default function ChatPage() {
                         </span>
                         {m.role === 'assistant' && m.sources && (
                             <ProvenanceLine sources={m.sources} />
+                        )}
+                        {m.role === 'assistant' && m.destilando && (
+                            <p className="mt-1 text-xs text-muted-foreground">a destilar…</p>
                         )}
                         {m.role === 'assistant' && m.escrita && (
                             <div>
