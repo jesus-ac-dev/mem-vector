@@ -24,6 +24,8 @@
         "ingest": "tsx scripts/ingest.ts",
         "seed:user": "tsx scripts/seed-user.ts",
         "pingpong": "tsx scripts/ping-pong.ts",
+        "rag-fallback": "tsx scripts/rag-fallback.ts",
+        "sim-measure": "tsx scripts/sim-measure.ts",
         "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:run",
         "prepare": "husky"
     },

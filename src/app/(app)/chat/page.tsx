@@ -2,12 +2,38 @@
 
 import { useState } from 'react';
 import { ask } from '@/modules/chat/chat.actions';
+import { provenance } from '@/modules/chat/chat.provenance';
+import type { Source } from '@/modules/chat/chat.prompt';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    sources?: Source[];
+}
+
+// Proveniência honesta: de onde veio a resposta — fontes do workspace ou
+// conhecimento geral do modelo (quando o threshold cortou tudo).
+function ProvenanceLine({ sources }: { sources: Source[] }) {
+    const p = provenance(sources);
+    if (!p.fromWorkspace) {
+        return <p className="mt-1 text-xs text-muted-foreground">🌐 {p.label}</p>;
+    }
+    return (
+        <details className="mt-1 text-xs text-muted-foreground">
+            <summary className="cursor-pointer">📚 {p.label}</summary>
+            <ul className="mt-1 space-y-1 pl-4">
+                {sources.map((s, i) => (
+                    <li key={i}>
+                        <span className="font-medium">{s.source ?? 'workspace'}</span>
+                        {` · ${Math.round(s.similarity * 100)}%`}
+                        <span className="block truncate">{s.content}</span>
+                    </li>
+                ))}
+            </ul>
+        </details>
+    );
 }
 
 export default function ChatPage() {
@@ -29,7 +55,10 @@ export default function ChatPage() {
             const res = await ask({ question, conversationId });
             setConversationId(res.conversationId);
             setLastCost(res.costUsd);
-            setMessages((prev) => [...prev, { role: 'assistant', content: res.answer }]);
+            setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: res.answer, sources: res.sources },
+            ]);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro desconhecido');
         } finally {
@@ -64,6 +93,9 @@ export default function ChatPage() {
                         >
                             {m.content}
                         </span>
+                        {m.role === 'assistant' && m.sources && (
+                            <ProvenanceLine sources={m.sources} />
+                        )}
                     </div>
                 ))}
                 {pending && <p className="text-sm text-muted-foreground">a pensar...</p>}
