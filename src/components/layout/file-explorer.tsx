@@ -7,7 +7,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-interface ExplorerFolder {
+export interface ExplorerFolder {
     label: string;
     basePath: string;
     items: { id: string; slug: string; title: string }[];
@@ -68,11 +68,6 @@ function FolderSection({ folder }: { folder: ExplorerFolder }) {
 export function FileExplorer({ folders }: FileExplorerProps) {
     return (
         <nav className="flex h-full flex-col overflow-y-auto">
-            <div className="border-b px-3 py-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Explorador
-                </span>
-            </div>
             <div className="flex-1 overflow-y-auto py-1">
                 {folders.map((folder) => (
                     <FolderSection key={folder.basePath} folder={folder} />

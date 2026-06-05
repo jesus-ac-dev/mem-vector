@@ -1,12 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { AppHeader } from '@/components/layout/app-header';
-import { IconRail } from '@/components/layout/icon-rail';
-import { FileExplorer } from '@/components/layout/file-explorer';
+import { WorkspaceShell } from '@/components/layout/workspace-shell';
 import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 import { listarDailies } from '@/modules/daily/daily.service';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
-// Header em cima, depois: icon rail | file explorer | conteúdo (flex-1).
+// Header em cima + WorkspaceShell (client) com as 4 zonas Obsidian:
+//   ribbon | sidebar esq. (colapsável) | main (rotas) | sidebar dir. (colapsável)
 // O proxy já garante que só chega aqui quem tem sessão.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
     const supabase = await createClient();
@@ -43,14 +43,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     return (
         <div className="flex h-dvh flex-col">
             <AppHeader displayName={displayName} />
-            <div className="flex flex-1 overflow-hidden">
-                <IconRail />
-                {/* File explorer — fixed width, independent scroll */}
-                <aside className="w-60 shrink-0 overflow-hidden border-r">
-                    <FileExplorer folders={folders} />
-                </aside>
-                <main className="flex-1 overflow-y-auto">{children}</main>
-            </div>
+            {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
+            <WorkspaceShell folders={folders}>{children}</WorkspaceShell>
         </div>
     );
 }
