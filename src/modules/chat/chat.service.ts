@@ -11,10 +11,17 @@ import type { EscritaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 export type { Source };
 
+export interface NotaEscrita {
+    slug: string;
+    title: string;
+    criada: boolean;
+}
+
 export interface ChatResult {
     answer: string;
     sources: Source[];
     costUsd: number;
+    escrita?: NotaEscrita | null;
 }
 
 interface DestilDeps {
@@ -26,9 +33,11 @@ export async function aplicarDestilacao(
     question: string,
     answer: string,
     deps: DestilDeps = { destilar: destilarReal, escrever: escreverNotaReal },
-): Promise<void> {
+): Promise<NotaEscrita | null> {
     const nota = await deps.destilar(question, answer);
-    if (nota) await deps.escrever(nota);
+    if (!nota) return null;
+    const resultado = await deps.escrever(nota);
+    return { slug: resultado.slug, title: resultado.title, criada: resultado.diff === null };
 }
 
 // Pipeline do ping-pong: embed(query) → match_chunks → prompt → claude.
@@ -48,11 +57,12 @@ export async function respond(question: string): Promise<ChatResult> {
     const { text, costUsd } = await generate(buildPrompt(question, sources));
 
     // Destilação proativa: best-effort — falha nunca bloqueia a resposta ao user.
+    let escrita: NotaEscrita | null | undefined;
     try {
-        await aplicarDestilacao(question, text);
+        escrita = await aplicarDestilacao(question, text);
     } catch (e) {
         console.error('destilação falhou:', e);
     }
 
-    return { answer: text, sources, costUsd };
+    return { answer: text, sources, costUsd, escrita };
 }

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { ask } from '@/modules/chat/chat.actions';
 import { provenance } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
+import type { NotaEscrita } from '@/modules/chat/chat.service';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -11,6 +13,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     sources?: Source[];
+    escrita?: NotaEscrita | null;
 }
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
@@ -36,6 +39,17 @@ function ProvenanceLine({ sources }: { sources: Source[] }) {
     );
 }
 
+function NotaEscritaChip({ escrita }: { escrita: NotaEscrita }) {
+    return (
+        <Link
+            href={`/knowledge/${escrita.slug}`}
+            className="mt-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-primary hover:bg-accent"
+        >
+            📝 {escrita.criada ? 'Nota criada' : 'Nota atualizada'}: {escrita.title}
+        </Link>
+    );
+}
+
 export default function ChatPage() {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -57,7 +71,12 @@ export default function ChatPage() {
             setLastCost(res.costUsd);
             setMessages((prev) => [
                 ...prev,
-                { role: 'assistant', content: res.answer, sources: res.sources },
+                {
+                    role: 'assistant',
+                    content: res.answer,
+                    sources: res.sources,
+                    escrita: res.escrita,
+                },
             ]);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro desconhecido');
@@ -95,6 +114,11 @@ export default function ChatPage() {
                         </span>
                         {m.role === 'assistant' && m.sources && (
                             <ProvenanceLine sources={m.sources} />
+                        )}
+                        {m.role === 'assistant' && m.escrita && (
+                            <div>
+                                <NotaEscritaChip escrita={m.escrita} />
+                            </div>
                         )}
                     </div>
                 ))}
