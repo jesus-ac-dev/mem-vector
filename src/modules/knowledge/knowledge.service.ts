@@ -7,6 +7,7 @@ import {
     EscritaKnowledgeSchema,
     type EscritaKnowledge,
     type NotaKnowledge,
+    type Versao,
 } from './knowledge.schema';
 
 export interface ResultadoEscrita extends NotaKnowledge {
@@ -135,3 +136,56 @@ export async function escreverNota(input: EscritaKnowledge): Promise<ResultadoEs
     const db = await createClient();
     return escreverNotaCom(db, input);
 }
+
+export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
+    const { data, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md, updated_at')
+        .order('updated_at', { ascending: false });
+    if (error) throw new Error(`listar knowledge: ${error.message}`);
+    return (data ?? []).map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        title: r.title,
+        contentMd: r.content_md,
+        updatedAt: r.updated_at,
+    }));
+}
+export const listarKnowledge = async () => listarKnowledgeCom(await createClient());
+
+export async function getNotaCom(db: SupabaseClient, slug: string): Promise<NotaKnowledge | null> {
+    const { data, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md, updated_at')
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`get nota: ${error.message}`);
+    return data
+        ? {
+              id: data.id,
+              slug: data.slug,
+              title: data.title,
+              contentMd: data.content_md,
+              updatedAt: data.updated_at,
+          }
+        : null;
+}
+export const getNota = async (slug: string) => getNotaCom(await createClient(), slug);
+
+export async function listarVersoesCom(db: SupabaseClient, entityId: string): Promise<Versao[]> {
+    const { data, error } = await db
+        .from('file_versions')
+        .select('id, content_md, author, created_at')
+        .eq('entity_type', 'knowledge')
+        .eq('entity_id', entityId)
+        .order('created_at', { ascending: false });
+    if (error) throw new Error(`listar versões: ${error.message}`);
+    return (data ?? []).map((r) => ({
+        id: r.id,
+        contentMd: r.content_md,
+        author: r.author,
+        createdAt: r.created_at,
+    }));
+}
+export const listarVersoes = async (entityId: string) =>
+    listarVersoesCom(await createClient(), entityId);

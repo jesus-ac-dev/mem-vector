@@ -71,4 +71,14 @@ describe('escreverNota (integração RLS)', () => {
         const chunks2 = await alice.from('chunks').select('id').eq('metadata->>entity_id', r1.id);
         expect(chunks2.data?.length).toBe(1);
     }, 120_000);
+
+    it('lista as notas do dono e lê versões por slug', async () => {
+        const { listarKnowledgeCom, listarVersoesCom } =
+            await import('@/modules/knowledge/knowledge.service');
+        const notas = await listarKnowledgeCom(alice);
+        expect(notas.some((n) => n.slug === 'e5')).toBe(true);
+        const e5 = notas.find((n) => n.slug === 'e5')!;
+        const versoes = await listarVersoesCom(alice, e5.id);
+        expect(versoes.length).toBeGreaterThanOrEqual(2);
+    }, 30_000);
 });
