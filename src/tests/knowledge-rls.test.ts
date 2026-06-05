@@ -81,4 +81,47 @@ describe('escreverNota (integração RLS)', () => {
         const versoes = await listarVersoesCom(alice, e5.id);
         expect(versoes.length).toBeGreaterThanOrEqual(2);
     }, 30_000);
+
+    it('Bob não vê dados de Alice (isolamento cross-user)', async () => {
+        const { escreverNotaCom } = await import('@/modules/knowledge/knowledge.service');
+
+        // Criar uma nota exclusiva para este teste e limpar estado anterior.
+        const admin = getSupabaseAdmin();
+        const aliceUser = (await alice.auth.getUser()).data.user!;
+        const existente = await admin
+            .from('knowledge')
+            .select('id')
+            .eq('owner_id', aliceUser.id)
+            .eq('slug', 'segredo-alice')
+            .maybeSingle();
+        if (existente.data?.id) {
+            const noteId = existente.data.id;
+            await admin.from('file_versions').delete().eq('entity_id', noteId);
+            await admin.from('chunks').delete().eq('metadata->>entity_id', noteId);
+            await admin.from('edges').delete().eq('from_id', noteId);
+            await admin.from('knowledge').delete().eq('id', noteId);
+        }
+
+        const r = await escreverNotaCom(alice, {
+            title: 'Segredo Alice',
+            content_md: 'conteúdo secreto [[privado]]',
+            links: ['privado'],
+            reason: 'teste isolamento',
+        });
+        const aliceNoteId = r.id;
+
+        const bob = await userClient('bob-kn@test.local', 'pw-bob-456');
+
+        const { data: knRows } = await bob.from('knowledge').select('id').eq('id', aliceNoteId);
+        expect(knRows?.length).toBe(0);
+
+        const { data: fvRows } = await bob
+            .from('file_versions')
+            .select('id')
+            .eq('entity_id', aliceNoteId);
+        expect(fvRows?.length).toBe(0);
+
+        const { data: edgeRows } = await bob.from('edges').select('id').eq('from_id', aliceNoteId);
+        expect(edgeRows?.length).toBe(0);
+    }, 120_000);
 });

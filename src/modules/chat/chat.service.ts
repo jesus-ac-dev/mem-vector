@@ -3,7 +3,11 @@ import { generate } from '@/lib/claude';
 import { createClient } from '@/lib/supabase/server';
 import { buildPrompt, relevantSources, type Source } from './chat.prompt';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
-import { escreverNota as escreverNotaReal } from '@/modules/knowledge/knowledge.service';
+import {
+    escreverNota as escreverNotaReal,
+    type ResultadoEscrita,
+} from '@/modules/knowledge/knowledge.service';
+import type { EscritaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 export type { Source };
 
@@ -14,17 +18,14 @@ export interface ChatResult {
 }
 
 interface DestilDeps {
-    destilar: (q: string, a: string) => Promise<unknown>;
-    escrever: (input: unknown) => Promise<unknown>;
+    destilar: (q: string, a: string) => Promise<EscritaKnowledge | null>;
+    escrever: (input: EscritaKnowledge) => Promise<ResultadoEscrita>;
 }
 
 export async function aplicarDestilacao(
     question: string,
     answer: string,
-    deps: DestilDeps = {
-        destilar: destilarReal,
-        escrever: escreverNotaReal as DestilDeps['escrever'],
-    },
+    deps: DestilDeps = { destilar: destilarReal, escrever: escreverNotaReal },
 ): Promise<void> {
     const nota = await deps.destilar(question, answer);
     if (nota) await deps.escrever(nota);
