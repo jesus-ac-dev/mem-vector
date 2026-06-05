@@ -7,6 +7,7 @@ import { provenance } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { NotaEscrita } from '@/modules/chat/chat.service';
 import { Button } from '@/components/ui/button';
+import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Message {
@@ -127,16 +128,15 @@ export default function ChatPage() {
                 )}
                 {messages.map((m) => (
                     <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-                        <span
-                            className={
-                                'inline-block whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ' +
-                                (m.role === 'user'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted text-foreground')
-                            }
-                        >
-                            {m.content}
-                        </span>
+                        {m.role === 'user' ? (
+                            <span className="inline-block whitespace-pre-wrap rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+                                {m.content}
+                            </span>
+                        ) : (
+                            <span className="inline-block rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+                                <Markdown content={m.content} wikilinks={false} />
+                            </span>
+                        )}
                         {m.role === 'assistant' && m.sources && (
                             <ProvenanceLine sources={m.sources} />
                         )}
