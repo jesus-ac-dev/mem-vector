@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { AppHeader } from '@/components/layout/app-header';
 import { IconRail } from '@/components/layout/icon-rail';
+import { FileExplorer, knowledgeToFolder } from '@/components/layout/file-explorer';
+import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
-// Header em cima, rail de ícones à esquerda, conteúdo (futuro host dos panes)
-// à direita. O proxy já garante que só chega aqui quem tem sessão.
+// Header em cima, depois: icon rail | file explorer | conteúdo (flex-1).
+// O proxy já garante que só chega aqui quem tem sessão.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
     const supabase = await createClient();
     const {
@@ -21,11 +23,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         displayName = data?.display_name ?? user.email ?? '';
     }
 
+    const notas = await listarKnowledge();
+    const folders = [knowledgeToFolder(notas)];
+
     return (
         <div className="flex h-dvh flex-col">
             <AppHeader displayName={displayName} />
             <div className="flex flex-1 overflow-hidden">
                 <IconRail />
+                {/* File explorer — fixed width, independent scroll */}
+                <aside className="w-60 shrink-0 overflow-hidden border-r">
+                    <FileExplorer folders={folders} />
+                </aside>
                 <main className="flex-1 overflow-y-auto">{children}</main>
             </div>
         </div>
