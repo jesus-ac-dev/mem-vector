@@ -6,7 +6,7 @@ import { X, History, Pencil, FileText, Archive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
-import { Textarea } from '@/components/ui/textarea';
+import { NotaEditor } from '@/components/layout/nota-editor';
 import {
     Select,
     SelectContent,
@@ -335,10 +335,9 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
 
                 {vista === 'editor' && (
                     <div className="flex h-full flex-col gap-2">
-                        <Textarea
+                        <NotaEditor
                             value={rascunho}
-                            onChange={(e) => setRascunho(e.target.value)}
-                            className="min-h-0 flex-1 resize-none font-mono text-sm"
+                            onChange={setRascunho}
                             placeholder="Escreve em Markdown..."
                         />
                         {erroGuardar && <p className="text-xs text-destructive">{erroGuardar}</p>}
