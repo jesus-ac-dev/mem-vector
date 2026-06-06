@@ -74,12 +74,32 @@ confirma, **Esc** cancela, **blur** confirma. Nova pasta mostra o input no topo 
 secção Knowledge (estado `criandoPasta` no `LeftSidebar`); renomear entra em modo
 edição no nó (duplo-clique). Substitui os `window.prompt` do v1.
 
+## Cores (pasta + grafo)
+
+Dar significado visual aos nós do grafo por categoria. Spec:
+`docs/superpowers/specs/2026-06-06-cores-pasta-grafo-design.md`.
+
+- **Paleta** (`src/lib/cores.ts`): ~8 cores (hex) + `COR_DEFAULT` (cinza) +
+  `COR_DAILY_DEFAULT`. `resolverCor(hex, fallback)` resolve null→fallback.
+- **Onde fica a cor:** pasta → `folders.color`; daily → `profiles.daily_color`
+  (migration `20260606180000`). Guarda-se o **hex**. **Sem herança:** cada pasta
+  pinta só as suas notas diretas; sem pasta/cor → default.
+- **Edges de daily:** `regenerarEdgesCom` (`knowledge/edges.ts`, partilhado com
+  `escreverNotaCom`) é chamado também em `substituirDailyCom` → as dailies ligam-se
+  às notas no grafo. Limite v1: alvos resolvem em knowledge; daily→daily fica pendente.
+- **Grafo:** `grafoDadosCom` une nós knowledge (cor da pasta) + dailies (cor daily)
+    - arestas (`from_type` knowledge/daily); `workspace-graph` pinta por `nodeColor`;
+      clicar num nó daily abre o daily.
+- **Modal** `grafo-config.tsx` (ícone Palette no grafo): paleta por pasta + "Daily
+  Notes"; grava via `definirCorPastaAction`/`definirCorDailyAction`.
+- **Explorer:** a pasta com cor mostra uma bolinha (em vez do ícone Folder).
+- **Prova:** `npm run cores` (headless, 3 eixos).
+
 ## Estado
 
 Feito: modelo, criar pasta, **criar nota dentro de pasta** (pasta selecionada +
 Nova nota), explorer em árvore, **drag-drop** (`moverNota`), **renomear
-pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4) e
-**arquivar** (F5). As 5 funcionalidades do file explorer estão fechadas.
-**Por fazer (fora desta fatia):** cor de pasta na UI. Ver
-`docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md` e
-`docs/superpowers/specs/2026-06-06-file-explorer-f4-f5-design.md`.
+pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4),
+**arquivar** (F5) e **cores de pasta + dailies no grafo**. As 5 funcionalidades do
+file explorer estão fechadas + cores. Ver as specs em
+`docs/superpowers/specs/2026-06-06-*`.
