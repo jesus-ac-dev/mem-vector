@@ -170,7 +170,15 @@ function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops 
                     )}
                 >
                     <Chevron className="h-3 w-3 shrink-0" />
-                    <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    {no.pasta.color ? (
+                        <span
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: no.pasta.color }}
+                            aria-hidden
+                        />
+                    ) : (
+                        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
                     <span className="truncate">{no.pasta.name}</span>
                 </Button>
             )}
