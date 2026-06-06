@@ -5,8 +5,13 @@ import {
     escreverNota,
     listarVersoes,
     listarKnowledge,
+    backlinksDe,
+    forwardLinksDe,
+    type LinkNota,
+    type ForwardLink,
 } from '@/modules/knowledge/knowledge.service';
 import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
+import { extrairOutline, type OutlineItem } from '@/lib/outline';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
 
 export interface ConteudoFicheiro {
@@ -96,6 +101,37 @@ export async function criarNotaVazia(): Promise<{
         'user',
     );
     return { tipo: 'knowledge', chave: res.slug, titulo: res.title };
+}
+
+export interface DadosBarraDireita {
+    outline: OutlineItem[];
+    backlinks: LinkNota[];
+    forwardLinks: ForwardLink[];
+}
+
+/**
+ * Dados da barra da direita para o ficheiro ativo: outline (headings) sempre, e
+ * backlinks/forward links para knowledge (o daily não escreve edges).
+ */
+export async function dadosBarraDireita(
+    tipo: 'knowledge' | 'daily',
+    chave: string,
+): Promise<DadosBarraDireita> {
+    const vazio: DadosBarraDireita = { outline: [], backlinks: [], forwardLinks: [] };
+
+    if (tipo === 'knowledge') {
+        const nota = await getNota(chave);
+        if (!nota) return vazio;
+        const [backlinks, forwardLinks] = await Promise.all([
+            backlinksDe(nota.slug),
+            forwardLinksDe(nota.id),
+        ]);
+        return { outline: extrairOutline(nota.contentMd), backlinks, forwardLinks };
+    }
+
+    const daily = await getDaily(chave);
+    if (!daily) return vazio;
+    return { ...vazio, outline: extrairOutline(daily.contentMd) };
 }
 
 function humanizarSlug(slug: string): string {

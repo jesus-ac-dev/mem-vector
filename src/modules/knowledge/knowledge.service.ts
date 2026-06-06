@@ -227,6 +227,70 @@ export async function candidatosParaFactoCom(
 export const candidatosParaFacto = async (texto: string, limite = 3) =>
     candidatosParaFactoCom(await createClient(), texto, limite);
 
+export interface LinkNota {
+    slug: string;
+    title: string;
+}
+export interface ForwardLink extends LinkNota {
+    existe: boolean; // o alvo do wikilink existe como nota (senão é link quebrado)
+}
+
+// Backlinks: notas knowledge que apontam para `slug` (edges com to_slug = slug).
+export async function backlinksDeCom(db: SupabaseClient, slug: string): Promise<LinkNota[]> {
+    const { data: ed, error } = await db
+        .from('edges')
+        .select('from_id')
+        .eq('from_type', 'knowledge')
+        .eq('to_slug', slug);
+    if (error) throw new Error(`backlinks edges: ${error.message}`);
+
+    const ids = [...new Set((ed ?? []).map((e) => e.from_id as string))];
+    if (!ids.length) return [];
+
+    const { data, error: nErr } = await db
+        .from('knowledge')
+        .select('slug, title')
+        .in('id', ids)
+        .order('title');
+    if (nErr) throw new Error(`backlinks knowledge: ${nErr.message}`);
+    return (data ?? []).map((n) => ({ slug: n.slug, title: n.title }));
+}
+export const backlinksDe = async (slug: string) => backlinksDeCom(await createClient(), slug);
+
+// Forward links: wikilinks que esta nota faz (edges com from_id = noteId), com
+// flag `existe` (a nota-alvo existe ou é um link quebrado).
+export async function forwardLinksDeCom(
+    db: SupabaseClient,
+    noteId: string,
+): Promise<ForwardLink[]> {
+    const { data: ed, error } = await db
+        .from('edges')
+        .select('to_slug')
+        .eq('from_type', 'knowledge')
+        .eq('from_id', noteId);
+    if (error) throw new Error(`forward edges: ${error.message}`);
+
+    const slugs = [...new Set((ed ?? []).map((e) => e.to_slug as string))];
+    if (!slugs.length) return [];
+
+    const { data, error: nErr } = await db
+        .from('knowledge')
+        .select('slug, title')
+        .in('slug', slugs);
+    if (nErr) throw new Error(`forward knowledge: ${nErr.message}`);
+
+    const titlePorSlug = new Map((data ?? []).map((n) => [n.slug, n.title]));
+    return slugs
+        .map((slug) => ({
+            slug,
+            title: titlePorSlug.get(slug) ?? slug,
+            existe: titlePorSlug.has(slug),
+        }))
+        .sort((a, b) => a.title.localeCompare(b.title, 'pt'));
+}
+export const forwardLinksDe = async (noteId: string) =>
+    forwardLinksDeCom(await createClient(), noteId);
+
 export async function listarVersoesCom(db: SupabaseClient, entityId: string): Promise<Versao[]> {
     const { data, error } = await db
         .from('file_versions')

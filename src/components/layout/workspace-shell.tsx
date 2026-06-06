@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
@@ -30,7 +30,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { ExplorerFolder } from '@/components/layout/file-explorer';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
-import { criarNotaVazia } from '@/modules/workspace/workspace.actions';
+import {
+    criarNotaVazia,
+    abrirOuCriarNota,
+    dadosBarraDireita,
+    type DadosBarraDireita,
+} from '@/modules/workspace/workspace.actions';
+import { tabKey } from '@/components/layout/workspace-context';
 
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
@@ -300,6 +306,36 @@ function formatYMD(date: Date): string {
     return `${y}-${m}-${d}`;
 }
 
+// Link de nota clicável na barra (backlink ou forward link existente).
+function NotaLink({
+    titulo,
+    existe = true,
+    onClick,
+}: {
+    titulo: string;
+    existe?: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClick}
+            title={titulo}
+            className={cn(
+                'h-auto w-full justify-start truncate px-1.5 py-1 text-left text-xs font-normal',
+                existe ? 'text-foreground' : 'italic text-muted-foreground',
+            )}
+        >
+            {existe ? titulo : `${titulo} (criar)`}
+        </Button>
+    );
+}
+
+function vazio(texto: string) {
+    return <p className="px-1.5 text-xs text-muted-foreground">{texto}</p>;
+}
+
 function RightSidebar({
     collapsed,
     onToggle,
@@ -310,7 +346,43 @@ function RightSidebar({
     diasComDaily: string[];
 }) {
     const router = useRouter();
+    const { ficheiroAtivo, ficheirosAbertos, abrirFicheiro } = useWorkspace();
     const [activeTab, setActiveTab] = useState<RightTab>('outline');
+    // Dados carregados, marcados com a tabKey a que pertencem — assim, ao trocar de
+    // ficheiro, os dados antigos não aparecem (evita flash) e não há setState síncrono.
+    const [dados, setDados] = useState<{ key: string; d: DadosBarraDireita } | null>(null);
+
+    const ativo = ficheirosAbertos.find((f) => tabKey(f) === ficheiroAtivo) ?? null;
+    const ativoTipo = ativo?.tipo ?? null;
+    const ativoChave = ativo?.chave ?? null;
+
+    useEffect(() => {
+        if (!ativoTipo || !ativoChave) return;
+        const key = `${ativoTipo}:${ativoChave}`;
+        let cancelado = false;
+        void dadosBarraDireita(ativoTipo, ativoChave).then((d) => {
+            if (!cancelado) setDados({ key, d });
+        });
+        return () => {
+            cancelado = true;
+        };
+    }, [ativoTipo, ativoChave]);
+
+    const dadosAtivos = ativo && dados?.key === ficheiroAtivo ? dados.d : null;
+
+    function abrirNotaPorSlug(slug: string, titulo: string, existe: boolean) {
+        if (existe) {
+            abrirFicheiro({ tipo: 'knowledge', chave: slug, titulo });
+            router.push('/chat');
+            return;
+        }
+        // Link quebrado: materializa a nota ao clicar (comportamento Obsidian).
+        void abrirOuCriarNota(slug).then((r) => {
+            abrirFicheiro({ tipo: 'knowledge', chave: r.chave, titulo: r.titulo });
+            router.push('/chat');
+            router.refresh();
+        });
+    }
 
     if (collapsed) {
         return null;
@@ -352,7 +424,61 @@ function RightSidebar({
 
             {/* Active tab panel */}
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                <p className="text-xs text-muted-foreground">Selecciona um ficheiro</p>
+                {!ativo ? (
+                    vazio('Selecciona um ficheiro')
+                ) : !dadosAtivos ? (
+                    vazio('A carregar…')
+                ) : activeTab === 'outline' ? (
+                    dadosAtivos.outline.length ? (
+                        <ul className="space-y-0.5">
+                            {dadosAtivos.outline.map((h) => (
+                                <li
+                                    key={`${h.linha}-${h.texto}`}
+                                    style={{ paddingLeft: `${(h.nivel - 1) * 12}px` }}
+                                    className="truncate px-1.5 text-xs text-muted-foreground"
+                                    title={h.texto}
+                                >
+                                    {h.texto}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        vazio('Sem títulos')
+                    )
+                ) : activeTab === 'backlinks' ? (
+                    dadosAtivos.backlinks.length ? (
+                        <ul className="space-y-0.5">
+                            {dadosAtivos.backlinks.map((n) => (
+                                <li key={n.slug}>
+                                    <NotaLink
+                                        titulo={n.title}
+                                        onClick={() => abrirNotaPorSlug(n.slug, n.title, true)}
+                                    />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        vazio('Sem backlinks')
+                    )
+                ) : activeTab === 'forward' ? (
+                    dadosAtivos.forwardLinks.length ? (
+                        <ul className="space-y-0.5">
+                            {dadosAtivos.forwardLinks.map((l) => (
+                                <li key={l.slug}>
+                                    <NotaLink
+                                        titulo={l.title}
+                                        existe={l.existe}
+                                        onClick={() => abrirNotaPorSlug(l.slug, l.title, l.existe)}
+                                    />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        vazio('Sem links')
+                    )
+                ) : (
+                    vazio('Partilhas — em breve')
+                )}
             </div>
 
             {/* Footer — Calendar (no title row) */}
