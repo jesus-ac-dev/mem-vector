@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
 import { regenerarEdgesCom } from './edges';
+import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { parseWikilinks, reescreverWikilinks, slugify } from './knowledge.links';
 import { diffLines, type DiffLine } from './knowledge.diff';
@@ -473,7 +474,8 @@ export interface GrafoNode {
     id: string;
     slug: string;
     title: string;
-    group: string; // grupo para cor (v1: 'knowledge' constante)
+    group: string; // 'knowledge' | 'daily'
+    color: string; // hex resolvido (cor da pasta / cor daily / default)
 }
 export interface GrafoLink {
     source: string;
@@ -484,33 +486,66 @@ export interface GrafoDados {
     links: GrafoLink[];
 }
 
-// Grafo do conhecimento: nós = notas knowledge, arestas = wikilinks (edges com
-// to_id resolvido). Links quebrados (to_id null) omitidos no v1.
+// Grafo do conhecimento: nós = notas knowledge (cor da pasta) + dailies (cor do
+// grupo daily); arestas = wikilinks (edges com to_id resolvido). Arquivadas e
+// links pendentes (to_id null / extremo desconhecido) ficam de fora.
 export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
-    // Arquivadas saem do grafo (memória ativa); as arestas que lhes apontam caem
-    // pelo filtro idsValidos abaixo.
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+
+    // Cor por pasta (id → hex).
+    const { data: pastas } = await db.from('folders').select('id, color');
+    const corPorPasta = new Map<string, string | null>(
+        (pastas ?? []).map((p) => [String(p.id), (p.color as string | null) ?? null]),
+    );
+
+    // Nós knowledge (não arquivadas), cor = cor da pasta (ou default).
     const { data: notas, error } = await db
         .from('knowledge')
-        .select('id, slug, title')
+        .select('id, slug, title, folder_id')
         .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
-    const nodes: GrafoNode[] = (notas ?? []).map((n) => ({
+    const nodesK: GrafoNode[] = (notas ?? []).map((n) => ({
         id: String(n.id),
         slug: n.slug,
         title: n.title,
         group: 'knowledge',
+        color: resolverCor(n.folder_id ? corPorPasta.get(String(n.folder_id)) : null, COR_DEFAULT),
     }));
+
+    // Cor do grupo daily (profile do utilizador).
+    let corDailyHex: string | null = null;
+    if (user) {
+        const prof = await db
+            .from('profiles')
+            .select('daily_color')
+            .eq('id', user.id)
+            .maybeSingle();
+        corDailyHex = prof.data?.daily_color ?? null;
+    }
+    const corDaily = resolverCor(corDailyHex, COR_DAILY_DEFAULT);
+
+    // Nós daily.
+    const { data: dailies } = await db.from('dailies').select('id, dia');
+    const nodesD: GrafoNode[] = (dailies ?? []).map((d) => ({
+        id: String(d.id),
+        slug: d.dia,
+        title: d.dia,
+        group: 'daily',
+        color: corDaily,
+    }));
+
+    const nodes = [...nodesK, ...nodesD];
     const idsValidos = new Set(nodes.map((n) => n.id));
 
+    // Arestas: knowledge + daily, ambos os extremos têm de ser nós conhecidos.
     const { data: ed, error: eErr } = await db
         .from('edges')
         .select('from_id, to_id')
-        .eq('from_type', 'knowledge')
+        .in('from_type', ['knowledge', 'daily'])
         .not('to_id', 'is', null);
     if (eErr) throw new Error(`grafo edges: ${eErr.message}`);
-
-    // Só arestas cujos dois extremos são nós conhecidos (evita links pendentes
-    // que partem o force-graph).
     const links: GrafoLink[] = (ed ?? [])
         .map((e) => ({ source: String(e.from_id), target: String(e.to_id) }))
         .filter((l) => idsValidos.has(l.source) && idsValidos.has(l.target));
