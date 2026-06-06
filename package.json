@@ -34,7 +34,8 @@
         "prepare": "husky",
         "folders-data": "tsx scripts/folders-data.ts",
         "folders-ops": "tsx scripts/folders-ops.ts",
-        "folders-rename": "tsx scripts/folders-rename.ts"
+        "folders-rename": "tsx scripts/folders-rename.ts",
+        "arquivo": "tsx scripts/arquivo.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
