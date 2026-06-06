@@ -10,6 +10,8 @@ import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
+import { useWorkspace } from '@/components/layout/workspace-context';
+import { FilePane } from '@/components/layout/file-pane';
 
 interface Message {
     id: number;
@@ -76,7 +78,7 @@ function DailyEscritoChip({ daily }: { daily: DailyEscrito }) {
     );
 }
 
-export default function ChatPage() {
+function ChatContent() {
     const router = useRouter();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -210,6 +212,32 @@ export default function ChatPage() {
                     Enviar
                 </Button>
             </div>
+        </div>
+    );
+}
+
+export default function ChatPage() {
+    const { ficheiroAberto } = useWorkspace();
+
+    return (
+        <div className="flex h-full overflow-hidden">
+            {/* Chat pane — shrinks to 50% when a file is open, else fills */}
+            <div
+                className={
+                    ficheiroAberto
+                        ? 'flex flex-1 basis-0 overflow-y-auto'
+                        : 'flex flex-1 overflow-y-auto'
+                }
+            >
+                <ChatContent />
+            </div>
+
+            {/* File pane — only visible when ficheiroAberto is set */}
+            {ficheiroAberto && (
+                <div className="flex flex-1 basis-0 overflow-hidden">
+                    <FilePane ficheiro={ficheiroAberto} />
+                </div>
+            )}
         </div>
     );
 }

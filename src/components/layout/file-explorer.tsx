@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useWorkspace } from '@/components/layout/workspace-context';
 
 export interface ExplorerFolder {
     label: string;
@@ -19,8 +19,11 @@ interface FileExplorerProps {
 
 function FolderSection({ folder }: { folder: ExplorerFolder }) {
     const [open, setOpen] = useState(true);
-    const pathname = usePathname();
+    const router = useRouter();
+    const { ficheiroAberto, abrirFicheiro } = useWorkspace();
     const ChevronIcon = open ? ChevronDown : ChevronRight;
+
+    const tipo = folder.basePath === '/knowledge' ? 'knowledge' : 'daily';
 
     return (
         <div>
@@ -37,22 +40,31 @@ function FolderSection({ folder }: { folder: ExplorerFolder }) {
             {open && (
                 <ul>
                     {folder.items.map((item) => {
-                        const href = `${folder.basePath}/${item.slug}`;
-                        const isActive = pathname === href;
+                        const isActive =
+                            ficheiroAberto?.tipo === tipo && ficheiroAberto.chave === item.slug;
                         return (
                             <li key={item.id}>
-                                <Link
-                                    href={href}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        abrirFicheiro({
+                                            tipo,
+                                            chave: item.slug,
+                                            titulo: item.title,
+                                        });
+                                        router.push('/chat');
+                                    }}
+                                    title={item.title}
                                     className={cn(
-                                        'block truncate px-6 py-1.5 text-sm transition-colors',
+                                        'h-auto w-full justify-start truncate rounded-none px-6 py-1.5 text-sm transition-colors',
                                         isActive
                                             ? 'bg-accent text-accent-foreground'
                                             : 'text-foreground hover:bg-muted',
                                     )}
-                                    title={item.title}
                                 >
                                     {item.title}
-                                </Link>
+                                </Button>
                             </li>
                         );
                     })}

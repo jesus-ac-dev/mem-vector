@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { WorkspaceProvider } from '@/components/layout/workspace-context';
 import {
     BookText,
     CalendarDays,
@@ -348,47 +349,49 @@ export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShe
     const [rightCollapsed, setRightCollapsed] = useState(false);
 
     return (
-        <div className="flex flex-1 overflow-hidden">
-            {/* Ribbon */}
-            <Ribbon
-                activePanel={activePanel}
-                onPanelChange={setActivePanel}
-                leftCollapsed={leftCollapsed}
-                onOpenLeft={() => setLeftCollapsed(false)}
-            />
+        <WorkspaceProvider>
+            <div className="flex flex-1 overflow-hidden">
+                {/* Ribbon */}
+                <Ribbon
+                    activePanel={activePanel}
+                    onPanelChange={setActivePanel}
+                    leftCollapsed={leftCollapsed}
+                    onOpenLeft={() => setLeftCollapsed(false)}
+                />
 
-            {/* Left sidebar (zero width when collapsed) */}
-            <LeftSidebar
-                folders={folders}
-                activePanel={activePanel}
-                collapsed={leftCollapsed}
-                onToggle={() => setLeftCollapsed((v) => !v)}
-            />
+                {/* Left sidebar (zero width when collapsed) */}
+                <LeftSidebar
+                    folders={folders}
+                    activePanel={activePanel}
+                    collapsed={leftCollapsed}
+                    onToggle={() => setLeftCollapsed((v) => !v)}
+                />
 
-            {/* Main content area */}
-            <main className="relative flex-1 overflow-y-auto">
-                {/* Re-open right sidebar button (top-right corner, only when collapsed) */}
-                {rightCollapsed && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setRightCollapsed(false)}
-                        title="Abrir painel de propriedades"
-                        aria-label="Abrir painel de propriedades"
-                        className="absolute right-2 top-2 z-10 h-7 w-7 text-muted-foreground"
-                    >
-                        <PanelRightOpen className="h-4 w-4" />
-                    </Button>
-                )}
-                {children}
-            </main>
+                {/* Main content area */}
+                <main className="relative flex-1 overflow-hidden">
+                    {/* Re-open right sidebar button (top-right corner, only when collapsed) */}
+                    {rightCollapsed && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setRightCollapsed(false)}
+                            title="Abrir painel de propriedades"
+                            aria-label="Abrir painel de propriedades"
+                            className="absolute right-2 top-2 z-10 h-7 w-7 text-muted-foreground"
+                        >
+                            <PanelRightOpen className="h-4 w-4" />
+                        </Button>
+                    )}
+                    {children}
+                </main>
 
-            {/* Right sidebar (zero width when collapsed) */}
-            <RightSidebar
-                collapsed={rightCollapsed}
-                onToggle={() => setRightCollapsed((v) => !v)}
-                diasComDaily={diasComDaily}
-            />
-        </div>
+                {/* Right sidebar (zero width when collapsed) */}
+                <RightSidebar
+                    collapsed={rightCollapsed}
+                    onToggle={() => setRightCollapsed((v) => !v)}
+                    diasComDaily={diasComDaily}
+                />
+            </div>
+        </WorkspaceProvider>
     );
 }
