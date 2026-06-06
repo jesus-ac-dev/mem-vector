@@ -102,6 +102,15 @@ export async function acrescentarAoDailyCom(
         metadata: { dia: daily.dia },
     });
 
+    // Regenerar edges (wikilinks) — liga o daily às notas no grafo. É o caminho do
+    // agente (append por turno), por isso tem de gerar edges como o substituir.
+    await regenerarEdgesCom(db, {
+        ownerId: user.id,
+        fromType: 'daily',
+        fromId: daily.id,
+        alvos: parseWikilinks(novoContent),
+    });
+
     return { dia: diaAlvo, criado: !eraExistente };
 }
 export const acrescentarAoDaily = async (linha: string, dia?: string) =>

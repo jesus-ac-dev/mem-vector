@@ -76,7 +76,15 @@ export async function renomearPastaCom(
 ): Promise<void> {
     const nome = novoNome.trim();
     if (!nome) throw new Error('nome de pasta vazio');
-    const { error } = await db.from('folders').update({ name: nome }).eq('id', id);
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const { error } = await db
+        .from('folders')
+        .update({ name: nome })
+        .eq('owner_id', user.id)
+        .eq('id', id);
     if (error) throw new Error(`renomear pasta: ${error.message}`);
 }
 export const renomearPasta = async (id: string, novoNome: string) =>

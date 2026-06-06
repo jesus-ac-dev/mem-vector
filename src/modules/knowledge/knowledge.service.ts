@@ -493,9 +493,10 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     const {
         data: { user },
     } = await db.auth.getUser();
+    if (!user) return { nodes: [], links: [] };
 
     // Cor por pasta (id → hex).
-    const { data: pastas } = await db.from('folders').select('id, color');
+    const { data: pastas } = await db.from('folders').select('id, color').eq('owner_id', user.id);
     const corPorPasta = new Map<string, string | null>(
         (pastas ?? []).map((p) => [String(p.id), (p.color as string | null) ?? null]),
     );
@@ -504,6 +505,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     const { data: notas, error } = await db
         .from('knowledge')
         .select('id, slug, title, folder_id')
+        .eq('owner_id', user.id)
         .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
     const nodesK: GrafoNode[] = (notas ?? []).map((n) => ({
@@ -515,19 +517,11 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     }));
 
     // Cor do grupo daily (profile do utilizador).
-    let corDailyHex: string | null = null;
-    if (user) {
-        const prof = await db
-            .from('profiles')
-            .select('daily_color')
-            .eq('id', user.id)
-            .maybeSingle();
-        corDailyHex = prof.data?.daily_color ?? null;
-    }
-    const corDaily = resolverCor(corDailyHex, COR_DAILY_DEFAULT);
+    const prof = await db.from('profiles').select('daily_color').eq('id', user.id).maybeSingle();
+    const corDaily = resolverCor(prof.data?.daily_color ?? null, COR_DAILY_DEFAULT);
 
     // Nós daily.
-    const { data: dailies } = await db.from('dailies').select('id, dia');
+    const { data: dailies } = await db.from('dailies').select('id, dia').eq('owner_id', user.id);
     const nodesD: GrafoNode[] = (dailies ?? []).map((d) => ({
         id: String(d.id),
         slug: d.dia,
