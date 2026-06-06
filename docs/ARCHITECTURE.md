@@ -190,7 +190,8 @@ sequenceDiagram
 
 - **Degrau 1 — RAG + Chat:** ✓
 - **Degrau 2 — Kernel de ficheiros (`knowledge`):** ✓ · **`daily`:** ✓ · workspace Obsidian (explorer + diff + history) ✓
-- **A seguir:** próximos tipos (`decisions`/`projects`), "a pensar" dinâmico (streaming), persistir conversas, depois kanban e grafo (último).
+- **Degrau 3 — Editor estilo VSCode:** ✓ ficheiros em **tabs** (`file-pane`); toolbar de ações (editar/histórico/arquivar) no topo-direito do conteúdo · **co-autoria** (`author=user`, `guardarFicheiro`) · **chat fechável** + **Home** ao centro quando tudo fecha (`workspace-home`) · mensagens bottom-up · **broken links** criam a nota ao clicar (`abrirOuCriarNota`, comportamento Obsidian) · **painel Chats** (lista conversas, reabre histórico; `sources` persistidas por mensagem religam as citações `[N]`). Estado central em `workspace-context` (tabs + chat + conversa).
+- **A seguir:** próximos tipos (`decisions`/`projects`), "a pensar" dinâmico (streaming), persistir tabs/estado entre refreshes, estilo de broken-link + arquivar real, depois kanban e grafo (último).
 
 ## Onde mais ler
 
