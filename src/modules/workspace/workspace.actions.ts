@@ -7,7 +7,13 @@ import {
     listarKnowledge,
 } from '@/modules/knowledge/knowledge.service';
 import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
+import { criarPasta } from '@/modules/folders/folders.service';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
+
+/** Cria uma pasta nova na raiz (usada pelo botão "Nova pasta" do explorer). */
+export async function novaPasta(name: string): Promise<void> {
+    await criarPasta(name);
+}
 
 export interface ConteudoFicheiro {
     titulo: string;

@@ -137,7 +137,7 @@ export async function escreverNota(
 export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
     const { data, error } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md, updated_at')
+        .select('id, slug, title, content_md, updated_at, folder_id')
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar knowledge: ${error.message}`);
     return (data ?? []).map((r) => ({
@@ -146,6 +146,7 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
         title: r.title,
         contentMd: r.content_md,
         updatedAt: r.updated_at,
+        folderId: r.folder_id ?? null,
     }));
 }
 export const listarKnowledge = async () => listarKnowledgeCom(await createClient());

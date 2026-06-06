@@ -22,6 +22,7 @@ export interface NotaKnowledge {
     title: string;
     contentMd: string;
     updatedAt: string;
+    folderId?: string | null; // pasta onde vive (null/undefined = raiz)
 }
 
 // Nota existente oferecida ao agente-autor como candidata a CONTINUAR (UPDATE-bias),
