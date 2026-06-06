@@ -138,6 +138,7 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
     const { data, error } = await db
         .from('knowledge')
         .select('id, slug, title, content_md, updated_at, folder_id')
+        .eq('archived', false)
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar knowledge: ${error.message}`);
     return (data ?? []).map((r) => ({
