@@ -32,7 +32,8 @@
         "sim-measure": "tsx scripts/sim-measure.ts",
         "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:run",
         "prepare": "husky",
-        "sidebar-data": "tsx scripts/sidebar-data.ts"
+        "sidebar-data": "tsx scripts/sidebar-data.ts",
+        "grafo-data": "tsx scripts/grafo-data.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
@@ -52,6 +53,7 @@
         "react": "19.2.3",
         "react-day-picker": "^10.0.1",
         "react-dom": "19.2.3",
+        "react-force-graph-2d": "^1.29.1",
         "react-hook-form": "^7.69.0",
         "react-markdown": "^10.1.0",
         "remark-gfm": "^4.0.1",

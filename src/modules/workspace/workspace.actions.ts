@@ -7,8 +7,10 @@ import {
     listarKnowledge,
     backlinksDe,
     forwardLinksDe,
+    grafoDados as lerGrafo,
     type LinkNota,
     type ForwardLink,
+    type GrafoDados,
 } from '@/modules/knowledge/knowledge.service';
 import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
 import { extrairOutline, type OutlineItem } from '@/lib/outline';
@@ -132,6 +134,11 @@ export async function dadosBarraDireita(
     const daily = await getDaily(chave);
     if (!daily) return vazio;
     return { ...vazio, outline: extrairOutline(daily.contentMd) };
+}
+
+/** Dados do grafo do conhecimento (nós = notas, arestas = wikilinks). */
+export async function dadosGrafo(): Promise<GrafoDados> {
+    return lerGrafo();
 }
 
 function humanizarSlug(slug: string): string {

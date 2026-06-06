@@ -14,7 +14,6 @@ import {
     PanelLeftOpen,
     PanelRightClose,
     PanelRightOpen,
-    Network,
     List,
     CornerDownLeft,
     CornerUpRight,
@@ -30,6 +29,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { ExplorerFolder } from '@/components/layout/file-explorer';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
+import { WorkspaceGraph } from '@/components/layout/workspace-graph';
 import {
     criarNotaVazia,
     abrirOuCriarNota,
@@ -245,10 +245,9 @@ function LeftSidebar({
                 )}
             </div>
 
-            {/* Footer — Grafo placeholder (no title row) */}
-            <div className="flex h-80 shrink-0 flex-col items-center justify-center border-t">
-                <Network className="mb-2 h-4 w-4 text-muted-foreground" aria-hidden />
-                <span className="text-sm text-muted-foreground">Grafo 2D/3D — em breve</span>
+            {/* Footer — Grafo do conhecimento */}
+            <div className="h-80 shrink-0 border-t">
+                <WorkspaceGraph />
             </div>
         </aside>
     );
