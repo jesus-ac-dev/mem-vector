@@ -56,13 +56,15 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
     }
 
     // Substitui o termo escrito (entre [[ e o cursor) por `texto]]` e repõe o cursor.
+    // Lê o texto do DOM (ta.value), coerente com o cursor que também vem do DOM.
     function inserir(texto: string) {
         const ta = taRef.current;
         if (!ta) return;
         const cursor = ta.selectionStart;
-        const g = detetarGatilho(value, cursor);
+        const atual = ta.value;
+        const g = detetarGatilho(atual, cursor);
         if (!g) return fechar();
-        const novo = value.slice(0, g.inicio) + texto + ']]' + value.slice(cursor);
+        const novo = atual.slice(0, g.inicio) + texto + ']]' + atual.slice(cursor);
         const pos = g.inicio + texto.length + 2;
         onChange(novo);
         fechar();

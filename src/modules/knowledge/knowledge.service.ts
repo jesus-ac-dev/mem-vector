@@ -176,6 +176,7 @@ export async function arquivarNotaCom(db: SupabaseClient, slug: string): Promise
         .from('chunks')
         .delete()
         .eq('owner_id', user.id)
+        .eq('metadata->>entity_type', 'knowledge')
         .eq('metadata->>entity_id', nota.id);
     if (del.error) throw new Error(`apagar chunks: ${del.error.message}`);
 }
