@@ -41,10 +41,12 @@ export function buildTurnoPrompt(
         '1) "daily": array de 2 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
         'neste turno — factos, decisões, alterações, bloqueios, próximos passos. Só o recap, não ' +
         'respondas ao utilizador.\n' +
-        '2) "nota": decide se a troca contém um FACTO, DECISÃO ou CONHECIMENTO novo e DURÁVEL que ' +
-        'valha guardar. Critério apertado: NÃO guardes conversa trivial, saudações nem o óbvio. Se o ' +
-        'utilizador pedir explicitamente para registar/guardar/anotar/lembrar, é intenção forte de ' +
-        'escrita. Se NÃO valer, "nota": null. Se valer, "nota": ' +
+        '2) "nota": és PROATIVO a registar. Se a troca traz um FACTO, DECISÃO, PLANO, PREFERÊNCIA ou ' +
+        'CONHECIMENTO durável sobre o utilizador, o trabalho ou a vida dele, ESCREVE-O — não esperes ' +
+        'que peçam licença. Na dúvida entre guardar e não guardar, GUARDA: continua a nota dona (se ' +
+        'houver candidata) e as versões são a rede; escrever no sítio certo consolida, não espalha. ' +
+        'Só "nota": null para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
+        'facto novo. Quando escreves, "nota": ' +
         '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
