@@ -11,6 +11,7 @@ import {
 } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
+import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
 import { listarConversas, carregarConversa } from './chat.conversas';
 
 export async function listarConversasAction() {
@@ -98,15 +99,29 @@ export async function destilarTurno(question: string, answer: string): Promise<T
     } = await db.auth.getUser();
     if (!user) return { nota: null, daily: null };
 
+    // Uma só chamada ao CLI para o pós-turno (resumo do daily + decisão de nota).
+    let turno: TurnoDestiladoRaw;
+    try {
+        turno = await destilarResumirTurno(question, answer);
+    } catch (e) {
+        console.error('destilarResumirTurno falhou:', e);
+        return { nota: null, daily: null };
+    }
+    const { resumoMd, nota: notaProposta } = turno;
+
+    // As escritas não chamam o CLI: injetam-se os resultados já gerados. Mantêm-se
+    // isoladas para o daily sobreviver se a escrita da nota falhar.
     let nota: NotaEscrita | null = null;
     try {
-        nota = await aplicarDestilacao(question, answer);
+        nota = await aplicarDestilacao(question, answer, { destilar: async () => notaProposta });
     } catch (e) {
-        console.error('destilarTurno falhou:', e);
+        console.error('escrita da nota destilada falhou:', e);
     }
 
     try {
-        const daily = await aplicarDailyTurno(question, answer, nota);
+        const daily = await aplicarDailyTurno(question, answer, nota, {
+            resumir: async () => resumoMd,
+        });
         return { nota, daily };
     } catch (e) {
         console.error('append daily falhou:', e);
