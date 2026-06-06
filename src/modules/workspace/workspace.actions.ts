@@ -5,6 +5,11 @@ import {
     escreverNota,
     listarVersoes,
     listarKnowledge,
+    moverNota,
+    renomearNota,
+    arquivarNota,
+    reporNota,
+    listarArquivados,
 } from '@/modules/knowledge/knowledge.service';
 import {
     getDaily,
@@ -12,8 +17,6 @@ import {
     listarVersoesDaily,
     listarDailies,
 } from '@/modules/daily/daily.service';
-import { moverNota, renomearNota } from '@/modules/knowledge/knowledge.service';
-import { arquivarNota, reporNota, listarArquivados } from '@/modules/knowledge/knowledge.service';
 import { criarPasta, renomearPasta } from '@/modules/folders/folders.service';
 import type { Versao, NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 import type { NotaLinkavel } from '@/modules/workspace/wikilink-autocomplete';

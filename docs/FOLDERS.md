@@ -22,13 +22,45 @@ o Daily fica de fora (grupo à parte no explorer).
 - `(app)/layout.tsx` constrói a árvore (server) e passa-a ao `WorkspaceShell` →
   `file-explorer.tsx`, que a renderiza recursivamente.
 
+## F4 — `[[` autocomplete (fatia 3)
+
+No editor de notas (`<NotaEditor>`, usado pelo `file-pane.tsx`), escrever `[[`
+abre um dropdown que filtra notas enquanto escreves.
+
+- **Fonte cross-type:** `listarNotasLinkaveis` (`workspace.actions.ts`) agrega
+  knowledge (já sem arquivadas) + dailies. Tipos futuros entram aqui.
+- **Lógica pura:** `wikilink-autocomplete.ts` — `detetarGatilho(texto, cursor)`
+  (deteta o `[[` aberto e o termo) e `filtrarNotasParaLink(notas, termo)`
+  (substring, knowledge antes de daily, limitado). Testada (TDD).
+- **Resolvedor por data:** `alvoParaHref` (`knowledge.links.ts`) — alvos com cara
+  de `YYYY-MM-DD` resolvem para `/daily/<data>`, o resto para `/knowledge/<slug>`.
+  Usado por `preprocessWikilinks` (`markdown.tsx`). É o que permite `[[2026-…]]`.
+- **Criar «termo»:** última linha do dropdown cria a nota (`criarNotaComTitulo`)
+  e insere o link.
+- Teclado: ↑/↓ navega, Enter/Tab insere, Esc fecha.
+
+## F5 — arquivar (fatia 3)
+
+- **Schema:** `knowledge.archived` (`migrations/20260606170000_knowledge_archived.sql`),
+  `boolean not null default false` + índice parcial `where archived = false`.
+- **Sair da memória ativa:** `arquivarNota` marca `archived=true` e **apaga os
+  chunks** (sai do RAG); `reporNota` põe `archived=false` e **reindexa** (volta).
+  `listarKnowledge` filtra `archived=false` (explorer + dropdown do `[[`);
+  `listarArquivados` traz só as arquivadas. Versões e edges mantêm-se (auditoria).
+- **UI:** botão Arquivar no `file-pane.tsx` (arquiva + fecha a tab); toggle no
+  header do explorer (`workspace-shell.tsx`) que troca a árvore pela
+  `ArquivadosLista` (cada nota com **Repor**).
+- **Prova:** `npm run arquivo` (headless, 6 eixos).
+- **Pendente — reconciliação no merge:** esconder do **grafo** (`grafoDadosCom`,
+  no PR #16) precisa de `.eq('archived', false)` quando #16/#17 forem integrados.
+  Não cabe neste branch (o grafo não existe aqui).
+
 ## Estado
 
-Feito: modelo, criar pasta ("Nova pasta", `window.prompt` v1), explorer em árvore,
-**drag-drop** (arrastar nota → pasta, ou para a secção Knowledge = raiz;
-`moverNota` muda `folder_id`), **renomear pasta** (duplo-clique, `renomearPasta`), **renomear nota**
-(duplo-clique, `renomearNota` — muda título+slug e **reaponta os `[[links]]`** das
-notas que a referenciam, via `reescreverWikilinks`, para não partirem).
-**Por fazer:** criar-nota-dentro-de-pasta, arquivo, cor de pasta na UI, `[[`
-autocomplete. Ver
-`docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md`.
+Feito: modelo, criar pasta, explorer em árvore, **drag-drop** (`moverNota`),
+**renomear pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4)
+e **arquivar** (F5). As 5 funcionalidades do file explorer estão fechadas.
+**Por fazer (fora desta fatia):** criar-nota-dentro-de-pasta, cor de pasta na UI,
+esconder arquivadas do grafo (na integração do #16). Ver
+`docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md` e
+`docs/superpowers/specs/2026-06-06-file-explorer-f4-f5-design.md`.
