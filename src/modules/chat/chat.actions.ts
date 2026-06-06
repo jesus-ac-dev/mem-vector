@@ -12,6 +12,8 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
 import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
+import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
+import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { listarConversas, carregarConversa } from './chat.conversas';
 
 export async function listarConversasAction() {
@@ -99,10 +101,20 @@ export async function destilarTurno(question: string, answer: string): Promise<T
     } = await db.auth.getUser();
     if (!user) return { nota: null, daily: null };
 
+    // UPDATE-bias: procura notas existentes relacionadas para o agente CONTINUAR
+    // a certa em vez de criar uma nova por facto. Não-fatal: sem candidatos, cai
+    // no comportamento de criação.
+    let candidatos: NotaCandidata[] = [];
+    try {
+        candidatos = await candidatosParaFactoCom(db, `${question}\n${answer}`);
+    } catch (e) {
+        console.error('candidatos para facto falhou:', e);
+    }
+
     // Uma só chamada ao CLI para o pós-turno (resumo do daily + decisão de nota).
     let turno: TurnoDestiladoRaw;
     try {
-        turno = await destilarResumirTurno(question, answer);
+        turno = await destilarResumirTurno(question, answer, candidatos);
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);
         return { nota: null, daily: null };
