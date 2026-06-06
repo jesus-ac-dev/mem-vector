@@ -40,3 +40,7 @@ Clean architecture com fronteiras validadas por ESLint (`eslint-plugin-boundarie
 ## Estado
 
 **Scaffold (arranque).** A seguir: RAG + Chat (o motor). Planeamento detalhado no vault `mythos-engine` → `projects/mem-vector/`.
+
+## Forçar GIT
+
+ git push --no-verify --set-upstream origin feat/rag-chunking-hybrid
