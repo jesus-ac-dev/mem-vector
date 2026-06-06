@@ -54,6 +54,7 @@
         "react-day-picker": "^10.0.1",
         "react-dom": "19.2.3",
         "react-force-graph-2d": "^1.29.1",
+        "react-force-graph-3d": "^1.29.1",
         "react-hook-form": "^7.69.0",
         "react-markdown": "^10.1.0",
         "remark-gfm": "^4.0.1",
