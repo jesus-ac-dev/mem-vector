@@ -1,6 +1,11 @@
 'use server';
 
-import { getNota, escreverNota, listarVersoes } from '@/modules/knowledge/knowledge.service';
+import {
+    getNota,
+    escreverNota,
+    listarVersoes,
+    listarKnowledge,
+} from '@/modules/knowledge/knowledge.service';
 import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
 
@@ -62,6 +67,35 @@ export async function guardarFicheiro(
     } catch (e) {
         return { ok: false, erro: e instanceof Error ? e.message : 'erro ao guardar' };
     }
+}
+
+/**
+ * Cria uma nota knowledge nova e vazia com um título único ("Nova nota", "Nova nota 2"…)
+ * e devolve a chave para a abrir numa tab. Usada pela ação "Criar Nota" da Home.
+ */
+export async function criarNotaVazia(): Promise<{
+    tipo: 'knowledge';
+    chave: string;
+    titulo: string;
+}> {
+    const existentes = await listarKnowledge();
+    const usados = new Set(existentes.map((n) => n.title));
+    let titulo = 'Nova nota';
+    let n = 2;
+    while (usados.has(titulo)) {
+        titulo = `Nova nota ${n}`;
+        n += 1;
+    }
+    const res = await escreverNota(
+        {
+            title: titulo,
+            content_md: `# ${titulo}\n\n`,
+            links: [],
+            reason: 'nota criada pelo utilizador',
+        },
+        'user',
+    );
+    return { tipo: 'knowledge', chave: res.slug, titulo: res.title };
 }
 
 /**

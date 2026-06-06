@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { useWorkspace, tabKey } from '@/components/layout/workspace-context';
 
 export interface ExplorerFolder {
     label: string;
@@ -20,7 +20,7 @@ interface FileExplorerProps {
 function FolderSection({ folder }: { folder: ExplorerFolder }) {
     const [open, setOpen] = useState(true);
     const router = useRouter();
-    const { ficheiroAberto, abrirFicheiro } = useWorkspace();
+    const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
     const ChevronIcon = open ? ChevronDown : ChevronRight;
 
     const tipo = folder.basePath === '/knowledge' ? 'knowledge' : 'daily';
@@ -40,8 +40,7 @@ function FolderSection({ folder }: { folder: ExplorerFolder }) {
             {open && (
                 <ul>
                     {folder.items.map((item) => {
-                        const isActive =
-                            ficheiroAberto?.tipo === tipo && ficheiroAberto.chave === item.slug;
+                        const isActive = ficheiroAtivo === tabKey({ tipo, chave: item.slug });
                         return (
                             <li key={item.id}>
                                 <Button

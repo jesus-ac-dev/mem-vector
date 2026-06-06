@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
 import {
-    BookText,
-    CalendarDays,
     ListTodo,
     MessageSquare,
     Users,
@@ -43,13 +41,11 @@ const panelItems: { id: LeftPanel; label: string; Icon: React.ElementType }[] = 
     { id: 'chats', label: 'Conversas', Icon: MessagesSquare },
 ];
 
-// Route nav items (same as the original IconRail)
+// Route nav items (Knowledge e Daily vivem no file-explorer, não no ribbon)
 const navItems = [
     { href: '/chat', label: 'Chat', Icon: MessageSquare },
     { href: '/tarefas', label: 'Tarefas', Icon: ListTodo },
     { href: '/grupos', label: 'Grupos', Icon: Users },
-    { href: '/knowledge', label: 'Knowledge', Icon: BookText },
-    { href: '/daily', label: 'Daily Notes', Icon: CalendarDays },
 ];
 
 function Ribbon({
