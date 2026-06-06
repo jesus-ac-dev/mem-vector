@@ -1,0 +1,82 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import type { Source } from './chat.prompt';
+
+export interface ConversaResumo {
+    id: string;
+    titulo: string; // title ?? 'Sem título'
+    criadaEm: string; // created_at ISO
+    nMensagens: number;
+    custoTotal: number; // sum of cost_usd
+}
+
+export interface MensagemHist {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    criadaEm: string;
+    sources: Source[] | null; // só nas mensagens do assistente; religa as citações [N]
+}
+
+export async function listarConversasCom(db: SupabaseClient): Promise<ConversaResumo[]> {
+    const { data: convs, error: convErr } = await db
+        .from('conversations')
+        .select('id, title, created_at')
+        .order('created_at', { ascending: false });
+
+    if (convErr) throw new Error(`listarConversas falhou: ${convErr.message}`);
+    if (!convs || convs.length === 0) return [];
+
+    const ids = convs.map((c) => c.id as string);
+
+    const { data: msgs, error: msgErr } = await db
+        .from('messages')
+        .select('conversation_id, cost_usd')
+        .in('conversation_id', ids);
+
+    if (msgErr) throw new Error(`listarConversas (mensagens) falhou: ${msgErr.message}`);
+
+    // Aggregate per conversation
+    const agg: Record<string, { count: number; custo: number }> = {};
+    for (const id of ids) agg[id] = { count: 0, custo: 0 };
+    for (const m of msgs ?? []) {
+        const id = m.conversation_id as string;
+        if (agg[id]) {
+            agg[id].count += 1;
+            agg[id].custo += Number(m.cost_usd ?? 0);
+        }
+    }
+
+    return convs.map((c) => ({
+        id: c.id as string,
+        titulo: (c.title as string | null) ?? 'Sem título',
+        criadaEm: c.created_at as string,
+        nMensagens: agg[c.id as string]?.count ?? 0,
+        custoTotal: agg[c.id as string]?.custo ?? 0,
+    }));
+}
+
+export async function carregarConversaCom(db: SupabaseClient, id: string): Promise<MensagemHist[]> {
+    const { data, error } = await db
+        .from('messages')
+        .select('id, role, content, created_at, sources')
+        .eq('conversation_id', id)
+        .order('created_at', { ascending: true });
+
+    if (error) throw new Error(`carregarConversa falhou: ${error.message}`);
+
+    return (data ?? []).map((m) => ({
+        id: m.id as string,
+        role: m.role as 'user' | 'assistant',
+        content: m.content as string,
+        criadaEm: m.created_at as string,
+        sources: (m.sources as Source[] | null) ?? null,
+    }));
+}
+
+// Cookie-session wrappers
+export const listarConversas = async (): Promise<ConversaResumo[]> =>
+    listarConversasCom(await createClient());
+
+export const carregarConversa = async (id: string): Promise<MensagemHist[]> =>
+    carregarConversaCom(await createClient(), id);

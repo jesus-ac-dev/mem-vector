@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
 import {
-    BookText,
-    CalendarDays,
     ListTodo,
     MessageSquare,
     Users,
@@ -23,12 +22,15 @@ import {
     FilePlus,
     FolderPlus,
     Archive,
+    Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { ExplorerFolder } from '@/components/layout/file-explorer';
+import { ConversasPanel } from '@/components/layout/conversas-panel';
+import { criarNotaVazia } from '@/modules/workspace/workspace.actions';
 
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
@@ -40,13 +42,11 @@ const panelItems: { id: LeftPanel; label: string; Icon: React.ElementType }[] = 
     { id: 'chats', label: 'Conversas', Icon: MessagesSquare },
 ];
 
-// Route nav items (same as the original IconRail)
+// Route nav items (Knowledge e Daily vivem no file-explorer, não no ribbon)
 const navItems = [
     { href: '/chat', label: 'Chat', Icon: MessageSquare },
     { href: '/tarefas', label: 'Tarefas', Icon: ListTodo },
     { href: '/grupos', label: 'Grupos', Icon: Users },
-    { href: '/knowledge', label: 'Knowledge', Icon: BookText },
-    { href: '/daily', label: 'Daily Notes', Icon: CalendarDays },
 ];
 
 function Ribbon({
@@ -61,6 +61,7 @@ function Ribbon({
     onOpenLeft: () => void;
 }) {
     const pathname = usePathname();
+    const { abrirChat } = useWorkspace();
 
     return (
         <nav
@@ -97,6 +98,8 @@ function Ribbon({
                         href={href}
                         aria-label={label}
                         title={label}
+                        // O ícone Chat reabre o painel do chat (caso esteja fechado).
+                        onClick={href === '/chat' ? () => abrirChat() : undefined}
                         className={cn(
                             'flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
                             active && 'bg-accent text-accent-foreground',
@@ -141,45 +144,79 @@ function LeftSidebar({
     collapsed: boolean;
     onToggle: () => void;
 }) {
+    const router = useRouter();
+    const { abrirConversa, abrirFicheiro } = useWorkspace();
+
+    async function handleNovaNota() {
+        const nota = await criarNotaVazia();
+        abrirFicheiro({
+            tipo: nota.tipo,
+            chave: nota.chave,
+            titulo: nota.titulo,
+            vistaInicial: 'editor',
+        });
+        router.push('/chat');
+        router.refresh(); // mostra a nota nova no explorer (server)
+    }
+
     if (collapsed) {
         return null;
     }
 
     return (
         <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r">
-            {/* Header — action icons row + collapse button */}
+            {/* Header — action icons (por painel) + collapse button */}
             <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
                 <div className="flex items-center gap-0.5">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Novo ficheiro"
-                        aria-label="Novo ficheiro"
-                        onClick={() => {}}
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <FilePlus className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Nova pasta"
-                        aria-label="Nova pasta"
-                        onClick={() => {}}
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <FolderPlus className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Arquivar selecção"
-                        aria-label="Arquivar selecção"
-                        onClick={() => {}}
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <Archive className="h-3.5 w-3.5" />
-                    </Button>
+                    {activePanel === 'explorer' ? (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Nova nota"
+                                aria-label="Nova nota"
+                                onClick={() => void handleNovaNota()}
+                                className="h-6 w-6 text-muted-foreground"
+                            >
+                                <FilePlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Nova pasta"
+                                aria-label="Nova pasta"
+                                onClick={() => {}}
+                                className="h-6 w-6 text-muted-foreground"
+                            >
+                                <FolderPlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Arquivar selecção"
+                                aria-label="Arquivar selecção"
+                                onClick={() => {}}
+                                className="h-6 w-6 text-muted-foreground"
+                            >
+                                <Archive className="h-3.5 w-3.5" />
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Nova conversa"
+                            aria-label="Nova conversa"
+                            onClick={() => {
+                                abrirConversa(null);
+                                router.push('/chat');
+                            }}
+                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Nova conversa
+                        </Button>
+                    )}
                 </div>
                 <Button
                     variant="ghost"
@@ -198,9 +235,7 @@ function LeftSidebar({
                 {activePanel === 'explorer' ? (
                     <FileExplorer folders={folders} />
                 ) : (
-                    <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                        Conversas — em breve
-                    </div>
+                    <ConversasPanel />
                 )}
             </div>
 
@@ -348,47 +383,49 @@ export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShe
     const [rightCollapsed, setRightCollapsed] = useState(false);
 
     return (
-        <div className="flex flex-1 overflow-hidden">
-            {/* Ribbon */}
-            <Ribbon
-                activePanel={activePanel}
-                onPanelChange={setActivePanel}
-                leftCollapsed={leftCollapsed}
-                onOpenLeft={() => setLeftCollapsed(false)}
-            />
+        <WorkspaceProvider>
+            <div className="flex flex-1 overflow-hidden">
+                {/* Ribbon */}
+                <Ribbon
+                    activePanel={activePanel}
+                    onPanelChange={setActivePanel}
+                    leftCollapsed={leftCollapsed}
+                    onOpenLeft={() => setLeftCollapsed(false)}
+                />
 
-            {/* Left sidebar (zero width when collapsed) */}
-            <LeftSidebar
-                folders={folders}
-                activePanel={activePanel}
-                collapsed={leftCollapsed}
-                onToggle={() => setLeftCollapsed((v) => !v)}
-            />
+                {/* Left sidebar (zero width when collapsed) */}
+                <LeftSidebar
+                    folders={folders}
+                    activePanel={activePanel}
+                    collapsed={leftCollapsed}
+                    onToggle={() => setLeftCollapsed((v) => !v)}
+                />
 
-            {/* Main content area */}
-            <main className="relative flex-1 overflow-y-auto">
-                {/* Re-open right sidebar button (top-right corner, only when collapsed) */}
-                {rightCollapsed && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setRightCollapsed(false)}
-                        title="Abrir painel de propriedades"
-                        aria-label="Abrir painel de propriedades"
-                        className="absolute right-2 top-2 z-10 h-7 w-7 text-muted-foreground"
-                    >
-                        <PanelRightOpen className="h-4 w-4" />
-                    </Button>
-                )}
-                {children}
-            </main>
+                {/* Main content area */}
+                <main className="relative flex-1 overflow-hidden">
+                    {/* Re-open right sidebar button (top-right corner, only when collapsed) */}
+                    {rightCollapsed && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setRightCollapsed(false)}
+                            title="Abrir painel de propriedades"
+                            aria-label="Abrir painel de propriedades"
+                            className="absolute right-2 top-2 z-10 h-7 w-7 text-muted-foreground"
+                        >
+                            <PanelRightOpen className="h-4 w-4" />
+                        </Button>
+                    )}
+                    {children}
+                </main>
 
-            {/* Right sidebar (zero width when collapsed) */}
-            <RightSidebar
-                collapsed={rightCollapsed}
-                onToggle={() => setRightCollapsed((v) => !v)}
-                diasComDaily={diasComDaily}
-            />
-        </div>
+                {/* Right sidebar (zero width when collapsed) */}
+                <RightSidebar
+                    collapsed={rightCollapsed}
+                    onToggle={() => setRightCollapsed((v) => !v)}
+                    diasComDaily={diasComDaily}
+                />
+            </div>
+        </WorkspaceProvider>
     );
 }

@@ -1,15 +1,20 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ask, destilarTurno } from '@/modules/chat/chat.actions';
+import { X } from 'lucide-react';
+import { ask, destilarTurno, carregarConversaAction } from '@/modules/chat/chat.actions';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
+import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
+import { useWorkspace } from '@/components/layout/workspace-context';
+import { FilePane } from '@/components/layout/file-pane';
+import { WorkspaceHome } from '@/components/layout/workspace-home';
 
 interface Message {
     id: number;
@@ -76,7 +81,7 @@ function DailyEscritoChip({ daily }: { daily: DailyEscrito }) {
     );
 }
 
-export default function ChatPage() {
+function ChatContent() {
     const router = useRouter();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -85,6 +90,40 @@ export default function ChatPage() {
     const [lastCost, setLastCost] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const { conversaAberta, abrirConversa, fecharChat } = useWorkspace();
+    const conversaCarregadaRef = useRef<string | null>(null);
+
+    // Mantém a vista colada ao fundo (mensagens crescem de baixo para cima).
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, pending]);
+
+    useEffect(() => {
+        const alvo = conversaAberta; // string | null
+        if (alvo === conversaCarregadaRef.current) return;
+        let cancelled = false;
+        const p = alvo ? carregarConversaAction(alvo) : Promise.resolve([] as MensagemHist[]);
+        p.then((msgs) => {
+            if (cancelled) return;
+            conversaCarregadaRef.current = alvo;
+            setConversationId(alvo ?? undefined);
+            setMessages(
+                msgs.map((m) => ({
+                    id: nextIdRef.current++,
+                    role: m.role,
+                    content: m.content,
+                    // Religa as citações [N] e mostra a proveniência na conversa reaberta.
+                    sources: m.sources ?? undefined,
+                })),
+            );
+        }).catch(() => {
+            // on failure, don't half-load
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [conversaAberta]);
 
     async function handleSend() {
         const question = input.trim();
@@ -100,6 +139,10 @@ export default function ChatPage() {
             // Step 1: get the answer and render it immediately.
             const res = await ask({ question, conversationId });
             setConversationId(res.conversationId);
+            if (conversaAberta === null) {
+                conversaCarregadaRef.current = res.conversationId;
+                abrirConversa(res.conversationId);
+            }
             setLastCost(res.costUsd);
             asstMsgId = nextIdRef.current++;
             setMessages((prev) => [
@@ -139,63 +182,74 @@ export default function ChatPage() {
     }
 
     return (
-        <div className="mx-auto flex h-full max-w-2xl flex-col gap-4 p-6">
-            <header>
-                <h1 className="text-xl font-semibold">mem-vector — chat (ping-pong)</h1>
-                <p className="text-sm text-muted-foreground">
-                    RAG local: e5-small (CPU) + Supabase + claude CLI.
-                </p>
+        <div className="flex h-full w-full flex-col gap-3 p-6">
+            <header className="flex shrink-0 items-center justify-between">
+                <h1 className="text-sm font-semibold">Chat</h1>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={fecharChat}
+                    title="Fechar chat"
+                    aria-label="Fechar chat"
+                    className="h-7 w-7 text-muted-foreground"
+                >
+                    <X className="h-4 w-4" />
+                </Button>
             </header>
 
-            <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border p-4">
-                {messages.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                        Faz uma pergunta sobre o mem-vector...
-                    </p>
-                )}
-                {messages.map((m) => (
-                    <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-                        {m.role === 'user' ? (
-                            <span className="inline-block whitespace-pre-wrap rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
-                                {m.content}
-                            </span>
-                        ) : (
-                            <span className="inline-block rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-                                <Markdown
-                                    content={linkCitations(m.content, m.sources ?? [])}
-                                    wikilinks={false}
-                                />
-                            </span>
-                        )}
-                        {m.role === 'assistant' && m.sources && (
-                            <ProvenanceLine sources={m.sources} />
-                        )}
-                        {m.role === 'assistant' && m.destilando && (
-                            <p className="mt-1 text-xs text-muted-foreground">a destilar…</p>
-                        )}
-                        {m.role === 'assistant' && m.escrita && (
-                            <div>
-                                <NotaEscritaChip escrita={m.escrita} />
-                            </div>
-                        )}
-                        {m.role === 'assistant' && m.daily && (
-                            <div>
-                                <DailyEscritoChip daily={m.daily} />
-                            </div>
-                        )}
-                    </div>
-                ))}
-                {pending && <p className="text-sm text-muted-foreground">a pensar...</p>}
+            {/* Lista de mensagens — coladas ao fundo, crescem para cima */}
+            <div className="flex-1 overflow-y-auto rounded-lg border p-4">
+                <div className="flex min-h-full flex-col justify-end space-y-3">
+                    {messages.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                            Faz uma pergunta sobre o mem-vector...
+                        </p>
+                    )}
+                    {messages.map((m) => (
+                        <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
+                            {m.role === 'user' ? (
+                                <span className="inline-block whitespace-pre-wrap rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+                                    {m.content}
+                                </span>
+                            ) : (
+                                <span className="inline-block rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+                                    <Markdown
+                                        content={linkCitations(m.content, m.sources ?? [])}
+                                        wikilinks={false}
+                                    />
+                                </span>
+                            )}
+                            {m.role === 'assistant' && m.sources && (
+                                <ProvenanceLine sources={m.sources} />
+                            )}
+                            {m.role === 'assistant' && m.destilando && (
+                                <p className="mt-1 text-xs text-muted-foreground">a destilar…</p>
+                            )}
+                            {m.role === 'assistant' && m.escrita && (
+                                <div>
+                                    <NotaEscritaChip escrita={m.escrita} />
+                                </div>
+                            )}
+                            {m.role === 'assistant' && m.daily && (
+                                <div>
+                                    <DailyEscritoChip daily={m.daily} />
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {pending && <p className="text-sm text-muted-foreground">a pensar...</p>}
+                    <div ref={bottomRef} />
+                </div>
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="shrink-0 text-sm text-destructive">{error}</p>}
             {lastCost !== null && (
-                <p className="text-xs text-muted-foreground">
+                <p className="shrink-0 text-xs text-muted-foreground">
                     último custo: ${lastCost.toFixed(4)}
                 </p>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-2">
                 <Textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -210,6 +264,46 @@ export default function ChatPage() {
                     Enviar
                 </Button>
             </div>
+        </div>
+    );
+}
+
+export default function ChatPage() {
+    const { chatAberto, ficheirosAbertos } = useWorkspace();
+    const temFicheiros = ficheirosAbertos.length > 0;
+
+    // Tudo fechado → Home (estilo VSCode, ações ao centro).
+    if (!chatAberto && !temFicheiros) {
+        return <WorkspaceHome />;
+    }
+
+    return (
+        <div className="flex h-full overflow-hidden">
+            {/* Chat — 50% quando há ficheiros, senão preenche */}
+            {chatAberto && (
+                <div
+                    className={
+                        temFicheiros
+                            ? 'flex flex-1 basis-0 overflow-hidden'
+                            : 'flex flex-1 overflow-hidden'
+                    }
+                >
+                    <ChatContent />
+                </div>
+            )}
+
+            {/* Tabs de ficheiros — 50% quando o chat está aberto, senão preenche */}
+            {temFicheiros && (
+                <div
+                    className={
+                        chatAberto
+                            ? 'flex flex-1 basis-0 overflow-hidden'
+                            : 'flex flex-1 overflow-hidden'
+                    }
+                >
+                    <FilePane />
+                </div>
+            )}
         </div>
     );
 }

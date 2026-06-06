@@ -2,6 +2,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { slugify } from '@/modules/knowledge/knowledge.links';
+import { Button } from '@/components/ui/button';
 
 /**
  * Pre-processes [[wikilinks]] into standard markdown links so react-markdown
@@ -19,6 +20,12 @@ interface MarkdownProps {
     content: string;
     /** Pre-process [[wikilinks]] into internal links. Defaults to true. */
     wikilinks?: boolean;
+    /**
+     * Quando definido, os links internos (href que começa por "/") chamam este
+     * handler em vez de navegar — usado no pane para abrir o alvo numa tab
+     * (criando a nota se o link estiver quebrado). Torna o componente client-only.
+     */
+    onInternalLink?: (href: string) => void;
 }
 
 /**
@@ -31,7 +38,7 @@ interface MarkdownProps {
  * XSS: rehype-raw / allowDangerousHtml are intentionally NOT used — react-markdown
  * escapes HTML by default, keeping the surface safe.
  */
-export function Markdown({ content, wikilinks = true }: MarkdownProps) {
+export function Markdown({ content, wikilinks = true, onInternalLink }: MarkdownProps) {
     const processed = wikilinks ? preprocessWikilinks(content) : content;
 
     return (
@@ -59,6 +66,17 @@ export function Markdown({ content, wikilinks = true }: MarkdownProps) {
                 li: ({ children }) => <li className="text-foreground">{children}</li>,
                 a: ({ href, children }) => {
                     if (href?.startsWith('/')) {
+                        if (onInternalLink) {
+                            return (
+                                <Button
+                                    variant="link"
+                                    onClick={() => onInternalLink(href)}
+                                    className="h-auto p-0 align-baseline text-primary underline"
+                                >
+                                    {children}
+                                </Button>
+                            );
+                        }
                         return (
                             <Link href={href} className="text-primary underline">
                                 {children}

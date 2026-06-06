@@ -11,11 +11,28 @@ import {
 } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
+import { listarConversas, carregarConversa } from './chat.conversas';
+
+export async function listarConversasAction() {
+    return listarConversas();
+}
+
+export async function carregarConversaAction(id: string) {
+    return carregarConversa(id);
+}
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),
     conversationId: z.string().uuid().optional(),
 });
+
+// Título da conversa = a primeira pergunta, numa linha e cortada.
+// Sem chamada extra ao CLI (a dívida já são 3 chamadas/turno); barato e previsível.
+function tituloInicial(pergunta: string): string {
+    const limpo = pergunta.replace(/\s+/g, ' ').trim();
+    if (!limpo) return 'Conversa';
+    return limpo.length > 80 ? `${limpo.slice(0, 77)}…` : limpo;
+}
 
 export async function ask(
     input: z.infer<typeof askSchema>,
@@ -33,7 +50,7 @@ export async function ask(
         if (conversationId) return conversationId;
         const { data, error } = await db
             .from('conversations')
-            .insert({ title: 'ping-pong', owner_id: user.id })
+            .insert({ title: tituloInicial(question), owner_id: user.id })
             .select('id')
             .single();
         if (error || !data) throw new Error(`criar conversa falhou: ${error?.message ?? 'sem id'}`);
@@ -65,6 +82,8 @@ export async function ask(
         role: 'assistant',
         content: result.answer,
         cost_usd: result.costUsd,
+        // Guardar as fontes religa as citações [N] quando a conversa é reaberta.
+        sources: result.sources,
     });
     if (asstMsg.error) throw new Error(`guardar resposta falhou: ${asstMsg.error.message}`);
 

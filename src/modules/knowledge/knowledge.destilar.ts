@@ -10,7 +10,11 @@ export function buildDestilarPrompt(question: string, answer: string): string {
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Se NÃO valer, responde exatamente a palavra NADA.\n' +
         'Se valer, responde só um bloco ```json``` com: ' +
-        '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.'
+        '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.\n' +
+        'REGRA PARA title: deve ser um rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, ' +
+        'como um título de nota/wiki (ex.: "BD tipada vs memsearch"). ' +
+        'NÃO deve ser uma frase completa, NÃO deve ter prefixos como "Daily Notes" ou "Decisão:", ' +
+        'e NÃO deve descrever o contexto — só o tópico.'
     );
 }
 
