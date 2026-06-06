@@ -17,6 +17,7 @@ export interface ResultadoEscrita extends NotaKnowledge {
 export async function escreverNotaCom(
     db: SupabaseClient,
     input: EscritaKnowledge,
+    author: 'agent' | 'user' = 'agent',
 ): Promise<ResultadoEscrita> {
     const dados = EscritaKnowledgeSchema.parse(input);
 
@@ -66,7 +67,7 @@ export async function escreverNotaCom(
         entity_id: nota.id,
         content_md: dados.content_md,
         frontmatter,
-        author: 'agent',
+        author,
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
@@ -137,9 +138,12 @@ export async function escreverNotaCom(
 }
 
 // Variante para uso em Server Actions / Route Handlers (lê a sessão dos cookies).
-export async function escreverNota(input: EscritaKnowledge): Promise<ResultadoEscrita> {
+export async function escreverNota(
+    input: EscritaKnowledge,
+    author: 'agent' | 'user' = 'agent',
+): Promise<ResultadoEscrita> {
     const db = await createClient();
-    return escreverNotaCom(db, input);
+    return escreverNotaCom(db, input, author);
 }
 
 export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {

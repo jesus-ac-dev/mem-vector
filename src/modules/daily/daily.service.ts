@@ -112,6 +112,72 @@ export async function acrescentarAoDailyCom(
 export const acrescentarAoDaily = async (linha: string, dia?: string) =>
     acrescentarAoDailyCom(await createClient(), linha, dia);
 
+export async function substituirDailyCom(
+    db: SupabaseClient,
+    dia: string,
+    contentMd: string,
+    author: 'agent' | 'user',
+): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+
+    const contentNormalizado = contentMd.trim();
+    if (!contentNormalizado) throw new Error('daily vazio');
+
+    const frontmatter = { title: dia, type: 'daily' };
+
+    // Upsert pela constraint unique(owner_id, dia) — substitui o content completo.
+    const up = await db
+        .from('dailies')
+        .upsert(
+            {
+                owner_id: user.id,
+                dia,
+                content_md: contentNormalizado,
+                frontmatter,
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'owner_id,dia' },
+        )
+        .select('id, dia, content_md, updated_at')
+        .single();
+    if (up.error || !up.data) throw new Error(`upsert daily: ${up.error?.message}`);
+    const daily = up.data;
+
+    // Versão imutável do conteúdo desta escrita.
+    const { error: vErr } = await db.from('file_versions').insert({
+        owner_id: user.id,
+        entity_type: 'daily',
+        entity_id: daily.id,
+        content_md: contentNormalizado,
+        frontmatter,
+        author,
+    });
+    if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
+
+    // Regenerar chunks: apagar os antigos deste daily, inserir novo com embedding atual.
+    const { error: dChErr } = await db
+        .from('chunks')
+        .delete()
+        .eq('owner_id', user.id)
+        .eq('metadata->>entity_id', daily.id);
+    if (dChErr) throw new Error(`apagar chunks: ${dChErr.message}`);
+
+    const embedding = await embedPassage(contentNormalizado);
+    const { error: iChErr } = await db.from('chunks').insert({
+        content: contentNormalizado,
+        embedding: JSON.stringify(embedding),
+        source: 'daily',
+        owner_id: user.id,
+        metadata: { entity_type: 'daily', entity_id: daily.id, dia: daily.dia },
+    });
+    if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
+}
+export const substituirDaily = async (dia: string, contentMd: string, author: 'agent' | 'user') =>
+    substituirDailyCom(await createClient(), dia, contentMd, author);
+
 export async function listarDailiesCom(db: SupabaseClient): Promise<DailyListItem[]> {
     const { data, error } = await db
         .from('dailies')
