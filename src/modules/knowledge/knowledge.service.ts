@@ -1,11 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
+import { embedQuery } from '@/lib/embeddings';
 import { parseWikilinks, slugify } from './knowledge.links';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
     EscritaKnowledgeSchema,
     type EscritaKnowledge,
+    type NotaCandidata,
     type NotaKnowledge,
     type Versao,
 } from './knowledge.schema';
@@ -166,6 +168,64 @@ export async function getNotaCom(db: SupabaseClient, slug: string): Promise<Nota
         : null;
 }
 export const getNota = async (slug: string) => getNotaCom(await createClient(), slug);
+
+// UPDATE-bias: dado o texto de um facto, devolve as notas knowledge existentes
+// mais relacionadas (via busca híbrida), para o agente-autor CONTINUAR a certa
+// em vez de criar uma nova. Ordenadas por relevância, distintas, top `limite`.
+export async function candidatosParaFactoCom(
+    db: SupabaseClient,
+    texto: string,
+    limite = 3,
+): Promise<NotaCandidata[]> {
+    const emb = await embedQuery(texto);
+    const { data, error } = await db.rpc('match_chunks_hybrid', {
+        query_embedding: JSON.stringify(emb),
+        query_text: texto,
+        match_count: 8,
+    });
+    if (error) throw new Error(`candidatos match_chunks_hybrid: ${error.message}`);
+
+    const ids = (data ?? [])
+        .filter((r: { source: string | null }) => r.source === 'knowledge')
+        .map((r: { id: string }) => String(r.id));
+    if (!ids.length) return [];
+
+    const { data: chunkRows, error: cErr } = await db
+        .from('chunks')
+        .select('id, metadata')
+        .in('id', ids);
+    if (cErr) throw new Error(`candidatos metadata: ${cErr.message}`);
+
+    const entityIdPorChunk = new Map<string, string | null>(
+        (chunkRows ?? []).map((r) => {
+            const meta = (r.metadata ?? {}) as Record<string, unknown>;
+            return [String(r.id), typeof meta.entity_id === 'string' ? meta.entity_id : null];
+        }),
+    );
+
+    // Entity_ids distintos, na ordem de relevância dos chunks.
+    const entityIds: string[] = [];
+    for (const id of ids) {
+        const ent = entityIdPorChunk.get(id);
+        if (ent && !entityIds.includes(ent)) entityIds.push(ent);
+        if (entityIds.length >= limite) break;
+    }
+    if (!entityIds.length) return [];
+
+    const { data: notas, error: nErr } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md')
+        .in('id', entityIds);
+    if (nErr) throw new Error(`candidatos knowledge: ${nErr.message}`);
+
+    const porId = new Map((notas ?? []).map((n) => [String(n.id), n]));
+    return entityIds
+        .map((id) => porId.get(id))
+        .filter((n): n is NonNullable<typeof n> => Boolean(n))
+        .map((n) => ({ slug: n.slug, title: n.title, contentMd: n.content_md }));
+}
+export const candidatosParaFacto = async (texto: string, limite = 3) =>
+    candidatosParaFactoCom(await createClient(), texto, limite);
 
 export async function listarVersoesCom(db: SupabaseClient, entityId: string): Promise<Versao[]> {
     const { data, error } = await db

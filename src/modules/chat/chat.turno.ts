@@ -2,6 +2,7 @@ import { generate } from '@/lib/claude';
 import {
     EscritaKnowledgeSchema,
     type EscritaKnowledge,
+    type NotaCandidata,
 } from '@/modules/knowledge/knowledge.schema';
 import { parseDailyCapture } from '@/modules/daily/daily.capture';
 
@@ -10,9 +11,30 @@ export interface TurnoDestiladoRaw {
     nota: EscritaKnowledge | null;
 }
 
+// Secção de UPDATE-bias: oferece as notas existentes relacionadas para o agente
+// CONTINUAR a certa, em vez de criar uma nota nova por facto.
+function blocoCandidatos(candidatos: NotaCandidata[]): string {
+    if (!candidatos.length) return '';
+    const lista = candidatos
+        .map((c) => `- título: "${c.title}"\n  conteúdo atual:\n${c.contentMd}`)
+        .join('\n\n');
+    return (
+        'NOTAS EXISTENTES (preferir CONTINUAR uma destas a criar nova):\n' +
+        `${lista}\n\n` +
+        'Se o facto pertencer a uma destas notas, CONTINUA-A: usa EXATAMENTE o mesmo "title" e ' +
+        'devolve o "content_md" COMPLETO com o facto novo integrado (não percas o que já lá está). ' +
+        'Só cria nota nova se for mesmo um assunto novo.\n\n'
+    );
+}
+
 // Prompt único que funde as duas tarefas de pós-resposta (resumo do daily +
 // decisão/escrita de nota knowledge) numa só chamada ao CLI, em vez de duas.
-export function buildTurnoPrompt(question: string, answer: string): string {
+// Com candidatos, enviesa para UPDATE (continuar a nota dona do assunto).
+export function buildTurnoPrompt(
+    question: string,
+    answer: string,
+    candidatos: NotaCandidata[] = [],
+): string {
     return (
         'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes DUAS coisas, ' +
         'devolvidas num ÚNICO bloco ```json``` com a forma {"daily": [...], "nota": null | {...}}.\n\n' +
@@ -27,6 +49,7 @@ export function buildTurnoPrompt(question: string, answer: string): string {
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
         '"Decisão:", e sem descrever o contexto — só o tópico.\n\n' +
+        blocoCandidatos(candidatos) +
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Responde só com o bloco ```json```.'
     );
@@ -61,10 +84,12 @@ export function parseTurno(raw: string): TurnoDestiladoRaw {
 }
 
 // Uma só chamada ao CLI para o pós-turno (substitui destilar + resumir separados).
+// Os candidatos (notas existentes relacionadas) enviesam para UPDATE.
 export async function destilarResumirTurno(
     question: string,
     answer: string,
+    candidatos: NotaCandidata[] = [],
 ): Promise<TurnoDestiladoRaw> {
-    const { text } = await generate(buildTurnoPrompt(question, answer));
+    const { text } = await generate(buildTurnoPrompt(question, answer, candidatos));
     return parseTurno(text);
 }

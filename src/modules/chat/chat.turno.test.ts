@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { parseTurno } from './chat.turno';
+import { parseTurno, buildTurnoPrompt } from './chat.turno';
+
+describe('buildTurnoPrompt com candidatos', () => {
+    it('lista as notas existentes e manda continuar reutilizando o título exato', () => {
+        const prompt = buildTurnoPrompt('q', 'a', [
+            {
+                slug: 'filhos-de-carlos-e-sofia',
+                title: 'Filhos de Carlos e Sofia',
+                contentMd: 'O Carlos e a Sofia têm dois filhos: Lucas e Filipe.',
+            },
+        ]);
+        expect(prompt).toContain('Filhos de Carlos e Sofia');
+        expect(prompt).toContain('Lucas e Filipe');
+        expect(prompt).toMatch(/continua/i);
+        expect(prompt).toMatch(/exat/i); // reutilizar o título EXATAMENTE
+    });
+
+    it('sem candidatos não inclui a secção de notas existentes', () => {
+        expect(buildTurnoPrompt('q', 'a')).not.toMatch(/notas existentes/i);
+    });
+});
 
 describe('parseTurno', () => {
     it('extrai resumo (bullets) e nota de um bloco json combinado', () => {
