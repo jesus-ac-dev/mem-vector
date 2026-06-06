@@ -20,6 +20,7 @@ import {
     versoesFicheiro,
     guardarFicheiro,
     abrirOuCriarNota,
+    arquivarNotaAction,
 } from '@/modules/workspace/workspace.actions';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
@@ -98,7 +99,7 @@ type HistoryEstado = { tipo: 'carregando' } | { tipo: 'ok'; versoes: Versao[] };
 // ──────────────────────────────────────────────
 function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     const router = useRouter();
-    const { abrirFicheiro } = useWorkspace();
+    const { abrirFicheiro, fecharFicheiro } = useWorkspace();
     // ── conteúdo ──
     const [estado, setEstado] = useState<PaneEstado>({ tipo: 'carregando' });
     // ── vista (arranca em editor se pedido, ex.: "Criar Nota") ──
@@ -247,16 +248,23 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                     >
                         <History className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {}}
-                        title="Arquivar"
-                        aria-label="Arquivar"
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <Archive className="h-3.5 w-3.5" />
-                    </Button>
+                    {ficheiro.tipo === 'knowledge' && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                                void arquivarNotaAction(ficheiro.chave).then(() => {
+                                    fecharFicheiro(tabKey(ficheiro));
+                                    router.refresh();
+                                });
+                            }}
+                            title="Arquivar"
+                            aria-label="Arquivar"
+                            className="h-6 w-6 text-muted-foreground"
+                        >
+                            <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                    )}
                 </div>
             )}
 
