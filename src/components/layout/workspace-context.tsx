@@ -15,12 +15,15 @@ interface WorkspaceContextValue {
     ficheiroAberto: FicheiroAberto | null;
     abrirFicheiro: (f: FicheiroAberto) => void;
     fecharFicheiro: () => void;
+    conversaAberta: string | null;
+    abrirConversa: (id: string | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [ficheiroAberto, setFicheiroAberto] = useState<FicheiroAberto | null>(null);
+    const [conversaAberta, setConversaAberta] = useState<string | null>(null);
 
     function abrirFicheiro(f: FicheiroAberto) {
         setFicheiroAberto(f);
@@ -30,8 +33,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         setFicheiroAberto(null);
     }
 
+    function abrirConversa(id: string | null) {
+        setConversaAberta(id);
+    }
+
     return (
-        <WorkspaceContext.Provider value={{ ficheiroAberto, abrirFicheiro, fecharFicheiro }}>
+        <WorkspaceContext.Provider
+            value={{ ficheiroAberto, abrirFicheiro, fecharFicheiro, conversaAberta, abrirConversa }}
+        >
             {children}
         </WorkspaceContext.Provider>
     );

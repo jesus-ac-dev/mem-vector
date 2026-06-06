@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { ExplorerFolder } from '@/components/layout/file-explorer';
+import { ConversasPanel } from '@/components/layout/conversas-panel';
 
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
@@ -199,9 +200,7 @@ function LeftSidebar({
                 {activePanel === 'explorer' ? (
                     <FileExplorer folders={folders} />
                 ) : (
-                    <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                        Conversas — em breve
-                    </div>
+                    <ConversasPanel />
                 )}
             </div>
 

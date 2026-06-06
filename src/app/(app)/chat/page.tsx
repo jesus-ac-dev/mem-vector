@@ -1,12 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ask, destilarTurno } from '@/modules/chat/chat.actions';
+import { ask, destilarTurno, carregarConversaAction } from '@/modules/chat/chat.actions';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
+import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
@@ -87,6 +88,28 @@ function ChatContent() {
     const [lastCost, setLastCost] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
+    const { conversaAberta, abrirConversa } = useWorkspace();
+    const conversaCarregadaRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        const alvo = conversaAberta; // string | null
+        if (alvo === conversaCarregadaRef.current) return;
+        let cancelled = false;
+        const p = alvo ? carregarConversaAction(alvo) : Promise.resolve([] as MensagemHist[]);
+        p.then((msgs) => {
+            if (cancelled) return;
+            conversaCarregadaRef.current = alvo;
+            setConversationId(alvo ?? undefined);
+            setMessages(
+                msgs.map((m) => ({ id: nextIdRef.current++, role: m.role, content: m.content })),
+            );
+        }).catch(() => {
+            // on failure, don't half-load
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [conversaAberta]);
 
     async function handleSend() {
         const question = input.trim();
@@ -102,6 +125,10 @@ function ChatContent() {
             // Step 1: get the answer and render it immediately.
             const res = await ask({ question, conversationId });
             setConversationId(res.conversationId);
+            if (conversaAberta === null) {
+                conversaCarregadaRef.current = res.conversationId;
+                abrirConversa(res.conversationId);
+            }
             setLastCost(res.costUsd);
             asstMsgId = nextIdRef.current++;
             setMessages((prev) => [

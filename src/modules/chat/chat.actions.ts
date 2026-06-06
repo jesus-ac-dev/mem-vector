@@ -11,6 +11,15 @@ import {
 } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
+import { listarConversas, carregarConversa } from './chat.conversas';
+
+export async function listarConversasAction() {
+    return listarConversas();
+}
+
+export async function carregarConversaAction(id: string) {
+    return carregarConversa(id);
+}
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),
