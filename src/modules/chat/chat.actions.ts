@@ -12,7 +12,8 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
 import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
-import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
+import { candidatosParaFactoCom, escreverNotaCom } from '@/modules/knowledge/knowledge.service';
+import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { listarConversas, carregarConversa } from './chat.conversas';
 
@@ -121,11 +122,15 @@ export async function destilarTurno(question: string, answer: string): Promise<T
     }
     const { resumoMd, nota: notaProposta } = turno;
 
-    // As escritas não chamam o CLI: injetam-se os resultados já gerados. Mantêm-se
-    // isoladas para o daily sobreviver se a escrita da nota falhar.
+    // As escritas não chamam o CLI: injetam-se os resultados já gerados, e usam a
+    // MESMA sessão `db` (não abrir uma segunda). Mantêm-se isoladas para o daily
+    // sobreviver se a escrita da nota falhar.
     let nota: NotaEscrita | null = null;
     try {
-        nota = await aplicarDestilacao(question, answer, { destilar: async () => notaProposta });
+        nota = await aplicarDestilacao(question, answer, {
+            destilar: async () => notaProposta,
+            escrever: (input) => escreverNotaCom(db, input),
+        });
     } catch (e) {
         console.error('escrita da nota destilada falhou:', e);
     }
@@ -133,6 +138,7 @@ export async function destilarTurno(question: string, answer: string): Promise<T
     try {
         const daily = await aplicarDailyTurno(question, answer, nota, {
             resumir: async () => resumoMd,
+            escrever: (linha) => acrescentarAoDailyCom(db, linha),
         });
         return { nota, daily };
     } catch (e) {

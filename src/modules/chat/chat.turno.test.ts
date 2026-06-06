@@ -56,4 +56,14 @@ describe('parseTurno', () => {
         const raw = '{"daily":["x"],"nota":{"title":"sem corpo"}}';
         expect(parseTurno(raw)).toEqual({ resumoMd: '- x', nota: null });
     });
+
+    it('extrai a nota mesmo quando o content_md tem um bloco de código (fence interno)', () => {
+        const raw =
+            '```json\n' +
+            '{"daily":["x"],"nota":{"title":"T","content_md":"exemplo:\\n```js\\nx=1\\n```","links":[],"reason":"r"}}\n' +
+            '```';
+        const out = parseTurno(raw);
+        expect(out.nota?.title).toBe('T');
+        expect(out.nota?.content_md).toContain('x=1');
+    });
 });
