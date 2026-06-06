@@ -291,6 +291,51 @@ export async function forwardLinksDeCom(
 export const forwardLinksDe = async (noteId: string) =>
     forwardLinksDeCom(await createClient(), noteId);
 
+export interface GrafoNode {
+    id: string;
+    slug: string;
+    title: string;
+    group: string; // grupo para cor (v1: 'knowledge' constante)
+}
+export interface GrafoLink {
+    source: string;
+    target: string;
+}
+export interface GrafoDados {
+    nodes: GrafoNode[];
+    links: GrafoLink[];
+}
+
+// Grafo do conhecimento: nós = notas knowledge, arestas = wikilinks (edges com
+// to_id resolvido). Links quebrados (to_id null) omitidos no v1.
+export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
+    const { data: notas, error } = await db.from('knowledge').select('id, slug, title');
+    if (error) throw new Error(`grafo knowledge: ${error.message}`);
+    const nodes: GrafoNode[] = (notas ?? []).map((n) => ({
+        id: String(n.id),
+        slug: n.slug,
+        title: n.title,
+        group: 'knowledge',
+    }));
+    const idsValidos = new Set(nodes.map((n) => n.id));
+
+    const { data: ed, error: eErr } = await db
+        .from('edges')
+        .select('from_id, to_id')
+        .eq('from_type', 'knowledge')
+        .not('to_id', 'is', null);
+    if (eErr) throw new Error(`grafo edges: ${eErr.message}`);
+
+    // Só arestas cujos dois extremos são nós conhecidos (evita links pendentes
+    // que partem o force-graph).
+    const links: GrafoLink[] = (ed ?? [])
+        .map((e) => ({ source: String(e.from_id), target: String(e.to_id) }))
+        .filter((l) => idsValidos.has(l.source) && idsValidos.has(l.target));
+
+    return { nodes, links };
+}
+export const grafoDados = async () => grafoDadosCom(await createClient());
+
 export async function listarVersoesCom(db: SupabaseClient, entityId: string): Promise<Versao[]> {
     const { data, error } = await db
         .from('file_versions')
