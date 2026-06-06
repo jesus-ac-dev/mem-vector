@@ -13,8 +13,9 @@ import {
     listarDailies,
 } from '@/modules/daily/daily.service';
 import { moverNota, renomearNota } from '@/modules/knowledge/knowledge.service';
+import { arquivarNota, reporNota, listarArquivados } from '@/modules/knowledge/knowledge.service';
 import { criarPasta, renomearPasta } from '@/modules/folders/folders.service';
-import type { Versao } from '@/modules/knowledge/knowledge.schema';
+import type { Versao, NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 import type { NotaLinkavel } from '@/modules/workspace/wikilink-autocomplete';
 
 /** Cria uma pasta nova na raiz (usada pelo botão "Nova pasta" do explorer). */
@@ -204,4 +205,19 @@ export async function criarNotaComTitulo(
         'user',
     );
     return { chave: res.slug, titulo: res.title };
+}
+
+/** Arquiva uma nota knowledge (sai do explorer e do RAG). */
+export async function arquivarNotaAction(slug: string): Promise<void> {
+    await arquivarNota(slug);
+}
+
+/** Repõe uma nota arquivada (volta ao explorer e ao RAG). */
+export async function reporNotaAction(slug: string): Promise<void> {
+    await reporNota(slug);
+}
+
+/** Lista as notas arquivadas (para a vista de arquivados do explorer). */
+export async function listarArquivadosAction(): Promise<NotaKnowledge[]> {
+    return listarArquivados();
 }
