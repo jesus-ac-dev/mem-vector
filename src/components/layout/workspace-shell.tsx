@@ -60,6 +60,7 @@ function Ribbon({
     onOpenLeft: () => void;
 }) {
     const pathname = usePathname();
+    const { abrirChat } = useWorkspace();
 
     return (
         <nav
@@ -96,6 +97,8 @@ function Ribbon({
                         href={href}
                         aria-label={label}
                         title={label}
+                        // O ícone Chat reabre o painel do chat (caso esteja fechado).
+                        onClick={href === '/chat' ? () => abrirChat() : undefined}
                         className={cn(
                             'flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
                             active && 'bg-accent text-accent-foreground',
