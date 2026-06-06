@@ -37,7 +37,8 @@
         "folders-data": "tsx scripts/folders-data.ts",
         "folders-ops": "tsx scripts/folders-ops.ts",
         "folders-rename": "tsx scripts/folders-rename.ts",
-        "arquivo": "tsx scripts/arquivo.ts"
+        "arquivo": "tsx scripts/arquivo.ts",
+        "cores": "tsx scripts/cores.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
