@@ -15,8 +15,10 @@ export interface TurnoDestiladoRaw {
 // CONTINUAR a certa, em vez de criar uma nota nova por facto.
 function blocoCandidatos(candidatos: NotaCandidata[]): string {
     if (!candidatos.length) return '';
+    // Conteúdo entre <nota>…</nota> para o limite ser inequívoco (evita que um
+    // título ou um bloco de código dentro da nota se confunda com o prompt).
     const lista = candidatos
-        .map((c) => `- título: "${c.title}"\n  conteúdo atual:\n${c.contentMd}`)
+        .map((c) => `- título: "${c.title}"\n  conteúdo atual:\n<nota>\n${c.contentMd}\n</nota>`)
         .join('\n\n');
     return (
         'NOTAS EXISTENTES (preferir CONTINUAR uma destas a criar nova):\n' +
@@ -41,10 +43,12 @@ export function buildTurnoPrompt(
         '1) "daily": array de 2 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
         'neste turno — factos, decisões, alterações, bloqueios, próximos passos. Só o recap, não ' +
         'respondas ao utilizador.\n' +
-        '2) "nota": decide se a troca contém um FACTO, DECISÃO ou CONHECIMENTO novo e DURÁVEL que ' +
-        'valha guardar. Critério apertado: NÃO guardes conversa trivial, saudações nem o óbvio. Se o ' +
-        'utilizador pedir explicitamente para registar/guardar/anotar/lembrar, é intenção forte de ' +
-        'escrita. Se NÃO valer, "nota": null. Se valer, "nota": ' +
+        '2) "nota": és PROATIVO a registar. Se a troca traz um FACTO, DECISÃO, PLANO, PREFERÊNCIA ou ' +
+        'CONHECIMENTO durável sobre o utilizador, o trabalho ou a vida dele, ESCREVE-O — não esperes ' +
+        'que peçam licença. Na dúvida entre guardar e não guardar, GUARDA: continua a nota dona (se ' +
+        'houver candidata) e as versões são a rede; escrever no sítio certo consolida, não espalha. ' +
+        'Só "nota": null para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
+        'facto novo. Quando escreves, "nota": ' +
         '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
@@ -55,21 +59,37 @@ export function buildTurnoPrompt(
     );
 }
 
-// Parser tolerante: se o JSON falhar, salva o daily tratando o texto como bullets
-// (o recap nunca se perde por causa de uma nota mal-formada).
-export function parseTurno(raw: string): TurnoDestiladoRaw {
-    const txt = raw.trim();
-    const fence = txt.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const candidate = fence ? fence[1] : txt;
+// Extrai o objeto JSON da resposta do CLI, robusto a blocos de código internos:
+// tenta primeiro o intervalo do 1.º `{` ao último `}` (fences ` ``` ` ficam dentro
+// de strings JSON, não partem o parse), depois o bloco cercado, depois o cru.
+function extrairObjeto(txt: string): Record<string, unknown> | null {
+    const tentativas: string[] = [];
+    const ini = txt.indexOf('{');
+    const fim = txt.lastIndexOf('}');
+    if (ini !== -1 && fim > ini) tentativas.push(txt.slice(ini, fim + 1));
+    const fence = txt.match(/```(?:json)?\s*([\s\S]*)```/);
+    if (fence) tentativas.push(fence[1]);
+    tentativas.push(txt);
 
-    let obj: unknown;
-    try {
-        obj = JSON.parse(candidate);
-    } catch {
-        return { resumoMd: parseDailyCapture(raw), nota: null };
+    for (const t of tentativas) {
+        try {
+            const o: unknown = JSON.parse(t);
+            if (o && typeof o === 'object' && !Array.isArray(o)) {
+                return o as Record<string, unknown>;
+            }
+        } catch {
+            // tenta a próxima
+        }
     }
+    return null;
+}
 
-    const rec = obj && typeof obj === 'object' ? (obj as Record<string, unknown>) : {};
+// Parser tolerante: se não houver objeto válido, salva o daily tratando o texto
+// como bullets (o recap nunca se perde por causa de uma nota mal-formada).
+export function parseTurno(raw: string): TurnoDestiladoRaw {
+    const rec = extrairObjeto(raw.trim());
+    if (!rec) return { resumoMd: parseDailyCapture(raw), nota: null };
+
     const dailyRaw = Array.isArray(rec.daily)
         ? rec.daily.join('\n')
         : typeof rec.daily === 'string'
