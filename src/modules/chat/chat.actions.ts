@@ -26,6 +26,14 @@ const askSchema = z.object({
     conversationId: z.string().uuid().optional(),
 });
 
+// Título da conversa = a primeira pergunta, numa linha e cortada.
+// Sem chamada extra ao CLI (a dívida já são 3 chamadas/turno); barato e previsível.
+function tituloInicial(pergunta: string): string {
+    const limpo = pergunta.replace(/\s+/g, ' ').trim();
+    if (!limpo) return 'Conversa';
+    return limpo.length > 80 ? `${limpo.slice(0, 77)}…` : limpo;
+}
+
 export async function ask(
     input: z.infer<typeof askSchema>,
 ): Promise<ChatResult & { conversationId: string }> {
@@ -42,7 +50,7 @@ export async function ask(
         if (conversationId) return conversationId;
         const { data, error } = await db
             .from('conversations')
-            .insert({ title: 'ping-pong', owner_id: user.id })
+            .insert({ title: tituloInicial(question), owner_id: user.id })
             .select('id')
             .single();
         if (error || !data) throw new Error(`criar conversa falhou: ${error?.message ?? 'sem id'}`);
