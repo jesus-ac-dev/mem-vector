@@ -80,13 +80,13 @@ describe('acrescentarAoDaily (integração RLS)', () => {
         expect(r2.dia).toBe(DIA_TESTE);
         expect(r2.criado).toBe(false);
 
-        // Conteúdo deve ter as duas linhas.
+        // Conteúdo deve ter as duas entradas markdown separadas por bloco.
         const { data: daily } = await alice
             .from('dailies')
             .select('id, content_md')
             .eq('dia', DIA_TESTE)
             .maybeSingle();
-        expect(daily!.content_md).toBe('linha um do dia\nlinha dois do dia');
+        expect(daily!.content_md).toBe('linha um do dia\n\nlinha dois do dia');
 
         // Deve ter 2 versões agora.
         const versoes = await listarVersoesDailyCom(alice, daily!.id);
@@ -109,7 +109,7 @@ describe('acrescentarAoDaily (integração RLS)', () => {
         const daily = await getDailyCom(alice, DIA_TESTE);
         expect(daily).not.toBeNull();
         expect(daily!.dia).toBe(DIA_TESTE);
-        expect(daily!.contentMd).toBe('linha um do dia\nlinha dois do dia');
+        expect(daily!.contentMd).toBe('linha um do dia\n\nlinha dois do dia');
     }, 30_000);
 
     it('Bob não vê dados de Alice (isolamento cross-user)', async () => {

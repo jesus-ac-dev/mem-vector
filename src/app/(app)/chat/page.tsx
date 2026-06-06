@@ -2,10 +2,11 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ask, destilarTurno } from '@/modules/chat/chat.actions';
-import { provenance } from '@/modules/chat/chat.provenance';
+import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
-import type { NotaEscrita } from '@/modules/chat/chat.service';
+import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +17,7 @@ interface Message {
     content: string;
     sources?: Source[];
     escrita?: NotaEscrita | null;
+    daily?: DailyEscrito | null;
     destilando?: boolean;
 }
 
@@ -30,13 +32,23 @@ function ProvenanceLine({ sources }: { sources: Source[] }) {
         <details className="mt-1 text-xs text-muted-foreground">
             <summary className="cursor-pointer">📚 {p.label}</summary>
             <ul className="mt-1 space-y-1 pl-4">
-                {sources.map((s, i) => (
-                    <li key={i}>
-                        <span className="font-medium">{s.source ?? 'workspace'}</span>
-                        {` · ${Math.round(s.similarity * 100)}%`}
-                        <span className="block truncate">{s.content}</span>
-                    </li>
-                ))}
+                {sources.map((s, i) => {
+                    const href = sourceHref(s);
+                    const label = sourceLabel(s, i);
+                    return (
+                        <li key={i}>
+                            {href ? (
+                                <Link href={href} className="font-medium text-primary">
+                                    {label}
+                                </Link>
+                            ) : (
+                                <span className="font-medium">{label}</span>
+                            )}
+                            {` · ${Math.round(s.similarity * 100)}%`}
+                            <span className="block truncate">{s.content}</span>
+                        </li>
+                    );
+                })}
             </ul>
         </details>
     );
@@ -53,7 +65,19 @@ function NotaEscritaChip({ escrita }: { escrita: NotaEscrita }) {
     );
 }
 
+function DailyEscritoChip({ daily }: { daily: DailyEscrito }) {
+    return (
+        <Link
+            href={`/daily/${daily.dia}`}
+            className="mt-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-primary hover:bg-accent"
+        >
+            📅 Daily {daily.criado ? 'criado' : 'atualizado'}: {daily.dia}
+        </Link>
+    );
+}
+
 export default function ChatPage() {
+    const router = useRouter();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [pending, setPending] = useState(false);
@@ -92,12 +116,15 @@ export default function ChatPage() {
 
             // Step 2: distil in the background; update the message when done.
             destilarTurno(question, res.answer)
-                .then((escrita) => {
+                .then(({ nota, daily }) => {
                     setMessages((prev) =>
                         prev.map((m) =>
-                            m.id === asstMsgId ? { ...m, destilando: false, escrita } : m,
+                            m.id === asstMsgId
+                                ? { ...m, destilando: false, escrita: nota, daily }
+                                : m,
                         ),
                     );
+                    if (nota || daily) router.refresh();
                 })
                 .catch(() => {
                     // distillation failure is silent — just clear the hint
@@ -134,7 +161,10 @@ export default function ChatPage() {
                             </span>
                         ) : (
                             <span className="inline-block rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-                                <Markdown content={m.content} wikilinks={false} />
+                                <Markdown
+                                    content={linkCitations(m.content, m.sources ?? [])}
+                                    wikilinks={false}
+                                />
                             </span>
                         )}
                         {m.role === 'assistant' && m.sources && (
@@ -146,6 +176,11 @@ export default function ChatPage() {
                         {m.role === 'assistant' && m.escrita && (
                             <div>
                                 <NotaEscritaChip escrita={m.escrita} />
+                            </div>
+                        )}
+                        {m.role === 'assistant' && m.daily && (
+                            <div>
+                                <DailyEscritoChip daily={m.daily} />
                             </div>
                         )}
                     </div>

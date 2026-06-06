@@ -19,12 +19,12 @@ Cada nota é um documento Markdown com frontmatter (título, tags) identificado 
 
 ## Modelo de dados
 
-| Tabela | Propósito | Colunas-chave |
-|---|---|---|
-| `knowledge` | Nota viva (última versão) | `owner_id`, `slug` (unique juntos), `title`, `frontmatter` (jsonb), `content_md`, `visibility`, `group_id` |
-| `edges` | Grafo de wikilinks | `owner_id`, `from_type`, `from_id`, `to_slug`, `to_id` (null se alvo não existe ainda), `kind` |
-| `file_versions` | Histórico imutável | `owner_id`, `entity_type`, `entity_id`, `content_md`, `frontmatter`, `author` |
-| `chunks` | Embeddings RAG (tabela partilhada) | `owner_id`, `content`, `embedding`, `source='knowledge'`, `metadata->>entity_id` |
+| Tabela          | Propósito                          | Colunas-chave                                                                                                     |
+| --------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `knowledge`     | Nota viva (última versão)          | `owner_id`, `slug` (unique juntos), `title`, `frontmatter` (jsonb), `content_md`, `visibility`, `group_id`        |
+| `edges`         | Grafo de wikilinks                 | `owner_id`, `from_type`, `from_id`, `to_slug`, `to_id` (null se alvo não existe ainda), `kind`                    |
+| `file_versions` | Histórico imutável                 | `owner_id`, `entity_type`, `entity_id`, `content_md`, `frontmatter`, `author`                                     |
+| `chunks`        | Embeddings RAG (tabela partilhada) | `owner_id`, `content`, `embedding`, `source='knowledge'`, `metadata.entity_id`, `metadata.slug`, `metadata.title` |
 
 RLS ativa em todas as tabelas. `knowledge` e `file_versions` permitem leitura de notas `protected` a membros do mesmo grupo (`group_id in (select meus_grupos())`); escrita e apagamento são exclusivos do dono. `edges` e `file_versions` seguem política simples `owner_id = auth.uid()`. O schema é genérico: `entity_type`/`entity_id` em `file_versions` permitem versionar qualquer entidade (ex.: `'daily'`); `from_type`/`to_type` em `edges` permitem ligar qualquer tipo de nó.
 
@@ -81,9 +81,11 @@ diffLines(before: string, after: string): DiffLine[]
 ## Ligações
 
 **Usado por:**
+
 - **Chat** — `destilar(question, answer)` é chamado no fim de cada turno para decidir proativamente se persiste conhecimento novo.
 - **Daily** — reutiliza `file_versions` e `VersionPicker` com o mesmo padrão de versionamento.
 
 **Decisões de design:**
+
 - Registadas em `decisions/log.md` (vault) nas entradas de 2026-06-02 e 2026-06-05.
 - Spec e contexto no vault em `projects/mem-vector/`.

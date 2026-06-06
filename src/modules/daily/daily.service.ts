@@ -27,8 +27,8 @@ export interface Versao {
     createdAt: string;
 }
 
-function hoje(): string {
-    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Lisbon' }).format(new Date());
+export function hojeLisboa(date: Date = new Date()): string {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Lisbon' }).format(date);
 }
 
 export async function acrescentarAoDailyCom(
@@ -41,7 +41,9 @@ export async function acrescentarAoDailyCom(
     } = await db.auth.getUser();
     if (!user) throw new Error('sem sessão');
 
-    const diaAlvo = dia ?? hoje();
+    const diaAlvo = dia ?? hojeLisboa();
+    const linhaNormalizada = linha.trim();
+    if (!linhaNormalizada) throw new Error('daily vazio');
 
     // Ler o daily existente para este dia (se houver).
     const existente = await db
@@ -53,7 +55,9 @@ export async function acrescentarAoDailyCom(
     if (existente.error) throw new Error(`ler daily: ${existente.error.message}`);
 
     const eraExistente = existente.data !== null;
-    const novoContent = eraExistente ? `${existente.data!.content_md}\n${linha}` : linha;
+    const anterior = existente.data?.content_md.trim() ?? '';
+    const novoContent = anterior ? `${anterior}\n\n${linhaNormalizada}` : linhaNormalizada;
+    const frontmatter = { title: diaAlvo, type: 'daily' };
 
     // Upsert pela constraint unique(owner_id, dia).
     const up = await db
@@ -64,6 +68,7 @@ export async function acrescentarAoDailyCom(
                 owner_id: user.id,
                 dia: diaAlvo,
                 content_md: novoContent,
+                frontmatter,
                 updated_at: new Date().toISOString(),
             },
             { onConflict: 'owner_id,dia' },
@@ -79,7 +84,7 @@ export async function acrescentarAoDailyCom(
         entity_type: 'daily',
         entity_id: daily.id,
         content_md: novoContent,
-        frontmatter: {},
+        frontmatter,
         author: 'agent',
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
@@ -98,7 +103,7 @@ export async function acrescentarAoDailyCom(
         embedding: JSON.stringify(embedding),
         source: 'daily',
         owner_id: user.id,
-        metadata: { entity_type: 'daily', entity_id: daily.id },
+        metadata: { entity_type: 'daily', entity_id: daily.id, dia: daily.dia },
     });
     if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
 

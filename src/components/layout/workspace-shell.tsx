@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     BookText,
+    CalendarDays,
     ListTodo,
     MessageSquare,
     Users,
@@ -45,6 +46,7 @@ const navItems = [
     { href: '/tarefas', label: 'Tarefas', Icon: ListTodo },
     { href: '/grupos', label: 'Grupos', Icon: Users },
     { href: '/knowledge', label: 'Knowledge', Icon: BookText },
+    { href: '/daily', label: 'Daily Notes', Icon: CalendarDays },
 ];
 
 function Ribbon({

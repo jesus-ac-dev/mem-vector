@@ -20,4 +20,9 @@ describe('buildDestilarPrompt', () => {
         expect(p).toContain('q?');
         expect(p).toContain('NADA');
     });
+    it('trata pedidos explícitos de registo como intenção forte de escrita', () => {
+        const p = buildDestilarPrompt('Regista esta decisão', 'ok');
+        expect(p).toContain('intenção forte de escrita');
+        expect(p).toContain('cria ou atualiza a nota');
+    });
 });

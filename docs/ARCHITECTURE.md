@@ -6,7 +6,7 @@ Este é o mapa de cima. Cada módulo tem o seu próprio doc detalhado em `src/mo
 
 ## A tese (o loop)
 
-```
+```md
 chat → o agente escreve estado tipado → fica pesquisável (RAG) → daily/notas refletem o trabalho
 ```
 
@@ -40,7 +40,7 @@ flowchart TD
 ## Camadas
 
 | Camada | Onde | Responsabilidade |
-|---|---|---|
+| --- | --- | --- |
 | **App shell / UI** | `src/app/(app)/` | Workspace de 2 colunas: **file explorer global** (`layout.tsx` + `components/layout/file-explorer.tsx`) + conteúdo (chat / ficheiro). Rotas protegidas pelo middleware. |
 | **Módulos** | `src/modules/<feature>/` | Arquitetura **por feature**: `schema` (Zod) + `service` (dados+regras) + `actions` (porta servidor, valida Zod) [+ UI]. |
 | **Lib partilhada** | `src/lib/` | `supabase/` (server client + middleware), `embeddings` (e5-small), `claude` (`generate`). |
@@ -62,11 +62,13 @@ flowchart TD
 A decisão central ([decisions/log](../../MythosEngine/decisions/log.md) 2026-06-02): **esquema TIPADO por natureza**, não uma tabela genérica. Aparência Obsidian na UI, espinha SaaS por baixo (validação forte, RLS limpo, migrations sãs).
 
 **Tabelas tipadas (a espinha):**
+
 - `knowledge` (notas), `dailies` (recaps por dia), `tarefas`
 - `conversations` / `messages` (chat), `profiles`
 - `grupos` / `grupo_membros` / `grupo_convites`
 
 **Tabelas genéricas (infra transversal):**
+
 - `file_versions` — trilha de auditoria (a **rede de revisão**); `entity_type` + `entity_id` → serve qualquer tipo (knowledge, daily).
 - `edges` — wikilinks/grafo; liga uma linha a outra (`to_slug` resolve `to_id` quando o alvo existe).
 - `chunks` — pgvector; a **pesquisa só corre aqui**. Cada chunk aponta o seu objeto via `metadata.entity_id`.
@@ -127,6 +129,7 @@ erDiagram
 ## RLS (segurança)
 
 Toda a tabela de domínio segue o mesmo padrão (de `auth`):
+
 - **privado:** `owner_id = auth.uid()`
 - **protected:** `visibility = 'protected' AND group_id IN (SELECT meus_grupos())`
 - **apagar:** só o dono.
@@ -136,14 +139,17 @@ Toda a tabela de domínio segue o mesmo padrão (de `auth`):
 ## Fluxos-chave
 
 **Agente-autor (o coração):**
-```
+
+```md
 respond(pergunta)  → embedQuery → match_chunks → threshold(0.78) → buildPrompt → claude  → resposta JÁ
 destilarTurno(...)  → (async) o CLI decide se há nota durável → escreverNota (versionada) → append ao daily → chip "📝 nota"
 ```
+
 A resposta não espera pela destilação (evita dobrar a latência).
 
 **Escrita versionada (`escreverNota`/`acrescentarAoDaily`):**
-```
+
+```md
 upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikilinks) → devolve diff
 ```
 

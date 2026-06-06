@@ -1,10 +1,16 @@
 'use server';
 
 import { z } from 'zod';
-import { respond, aplicarDestilacao, type ChatResult, type NotaEscrita } from './chat.service';
+import {
+    respond,
+    aplicarDestilacao,
+    aplicarDailyTurno,
+    type ChatResult,
+    type NotaEscrita,
+    type TurnoDestilado,
+} from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { embedPassage } from '@/lib/embeddings';
-import { acrescentarAoDaily } from '@/modules/daily/daily.service';
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),
@@ -65,27 +71,26 @@ export async function ask(
     return { ...result, conversationId: convId };
 }
 
-export async function destilarTurno(question: string, answer: string): Promise<NotaEscrita | null> {
+export async function destilarTurno(question: string, answer: string): Promise<TurnoDestilado> {
     // Autentica antes de destilar — garante que a sessão existe.
     const db = await createClient();
     const {
         data: { user },
     } = await db.auth.getUser();
-    if (!user) return null;
+    if (!user) return { nota: null, daily: null };
 
+    let nota: NotaEscrita | null = null;
     try {
-        const escrita = await aplicarDestilacao(question, answer);
-        if (escrita) {
-            try {
-                const acao = escrita.criada ? 'Nota criada' : 'Nota atualizada';
-                await acrescentarAoDaily(`- ${acao}: [[${escrita.slug}]]`);
-            } catch (e) {
-                console.error('append daily falhou:', e);
-            }
-        }
-        return escrita;
+        nota = await aplicarDestilacao(question, answer);
     } catch (e) {
         console.error('destilarTurno falhou:', e);
-        return null;
+    }
+
+    try {
+        const daily = await aplicarDailyTurno(question, answer, nota);
+        return { nota, daily };
+    } catch (e) {
+        console.error('append daily falhou:', e);
+        return { nota, daily: null };
     }
 }
