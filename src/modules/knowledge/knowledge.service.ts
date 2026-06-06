@@ -152,6 +152,84 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
 }
 export const listarKnowledge = async () => listarKnowledgeCom(await createClient());
 
+// Arquivar: tira a nota da memória ativa. Marca archived=true e apaga os chunks
+// (sai do RAG). Versões e edges mantêm-se (auditoria).
+export async function arquivarNotaCom(db: SupabaseClient, slug: string): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+
+    const { data: nota, error } = await db
+        .from('knowledge')
+        .select('id')
+        .eq('owner_id', user.id)
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`ler nota: ${error.message}`);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const up = await db.from('knowledge').update({ archived: true }).eq('id', nota.id);
+    if (up.error) throw new Error(`arquivar nota: ${up.error.message}`);
+
+    const del = await db
+        .from('chunks')
+        .delete()
+        .eq('owner_id', user.id)
+        .eq('metadata->>entity_id', nota.id);
+    if (del.error) throw new Error(`apagar chunks: ${del.error.message}`);
+}
+export const arquivarNota = async (slug: string) => arquivarNotaCom(await createClient(), slug);
+
+// Repor: archived=false e reindexa (re-embeda o conteúdo, volta ao RAG).
+export async function reporNotaCom(db: SupabaseClient, slug: string): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+
+    const { data: nota, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md')
+        .eq('owner_id', user.id)
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`ler nota: ${error.message}`);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const up = await db.from('knowledge').update({ archived: false }).eq('id', nota.id);
+    if (up.error) throw new Error(`repor nota: ${up.error.message}`);
+
+    await reindexEntity(db, {
+        ownerId: user.id,
+        entityType: 'knowledge',
+        entityId: nota.id,
+        source: 'knowledge',
+        contentMd: nota.content_md,
+        metadata: { slug: nota.slug, title: nota.title },
+    });
+}
+export const reporNota = async (slug: string) => reporNotaCom(await createClient(), slug);
+
+// Notas arquivadas do utilizador (para a vista de arquivados do explorer).
+export async function listarArquivadosCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
+    const { data, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md, updated_at, folder_id')
+        .eq('archived', true)
+        .order('updated_at', { ascending: false });
+    if (error) throw new Error(`listar arquivados: ${error.message}`);
+    return (data ?? []).map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        title: r.title,
+        contentMd: r.content_md,
+        updatedAt: r.updated_at,
+        folderId: r.folder_id ?? null,
+    }));
+}
+export const listarArquivados = async () => listarArquivadosCom(await createClient());
+
 export async function getNotaCom(db: SupabaseClient, slug: string): Promise<NotaKnowledge | null> {
     const { data, error } = await db
         .from('knowledge')
