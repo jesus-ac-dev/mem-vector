@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
+import { regenerarEdgesCom } from './edges';
 import { embedQuery } from '@/lib/embeddings';
 import { parseWikilinks, reescreverWikilinks, slugify } from './knowledge.links';
 import { diffLines, type DiffLine } from './knowledge.diff';
@@ -83,37 +84,13 @@ export async function escreverNotaCom(
         metadata: { slug: nota.slug, title: nota.title },
     });
 
-    // Regenerar edges (wikilinks): apagar e reinserir.
-    const { error: dEdErr } = await db
-        .from('edges')
-        .delete()
-        .eq('owner_id', user.id)
-        .eq('from_type', 'knowledge')
-        .eq('from_id', nota.id);
-    if (dEdErr) throw new Error(`apagar edges: ${dEdErr.message}`);
-
-    const alvos = [...new Set([...parseWikilinks(dados.content_md), ...dados.links.map(slugify)])];
-    if (alvos.length) {
-        const alvosExistentes = await db
-            .from('knowledge')
-            .select('id, slug')
-            .eq('owner_id', user.id)
-            .in('slug', alvos);
-        const idPorSlug = new Map((alvosExistentes.data ?? []).map((r) => [r.slug, r.id]));
-
-        const { error: iEdErr } = await db.from('edges').insert(
-            alvos.map((to_slug) => ({
-                owner_id: user.id,
-                from_type: 'knowledge',
-                from_id: nota.id,
-                to_type: idPorSlug.has(to_slug) ? 'knowledge' : null,
-                to_slug,
-                to_id: idPorSlug.get(to_slug) ?? null,
-                kind: 'wikilink',
-            })),
-        );
-        if (iEdErr) throw new Error(`inserir edges: ${iEdErr.message}`);
-    }
+    // Regenerar edges (wikilinks) — helper partilhado com o daily.
+    await regenerarEdgesCom(db, {
+        ownerId: user.id,
+        fromType: 'knowledge',
+        fromId: nota.id,
+        alvos: [...new Set([...parseWikilinks(dados.content_md), ...dados.links.map(slugify)])],
+    });
 
     return {
         id: nota.id,
