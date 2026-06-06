@@ -6,10 +6,16 @@ import {
     listarVersoes,
     listarKnowledge,
 } from '@/modules/knowledge/knowledge.service';
-import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
+import {
+    getDaily,
+    substituirDaily,
+    listarVersoesDaily,
+    listarDailies,
+} from '@/modules/daily/daily.service';
 import { moverNota, renomearNota } from '@/modules/knowledge/knowledge.service';
 import { criarPasta, renomearPasta } from '@/modules/folders/folders.service';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
+import type { NotaLinkavel } from '@/modules/workspace/wikilink-autocomplete';
 
 /** Cria uma pasta nova na raiz (usada pelo botão "Nova pasta" do explorer). */
 export async function novaPasta(name: string): Promise<void> {
@@ -167,4 +173,35 @@ export async function versoesFicheiro(
     const daily = await getDaily(chave);
     if (!daily) return [];
     return listarVersoesDaily(daily.id);
+}
+
+/**
+ * Notas linkáveis por [[ ]]: knowledge (já filtra arquivadas via listarKnowledge)
+ * + dailies. Fonte única do autocomplete; tipos futuros entram aqui.
+ */
+export async function listarNotasLinkaveis(): Promise<NotaLinkavel[]> {
+    const [notas, dailies] = await Promise.all([listarKnowledge(), listarDailies()]);
+    return [
+        ...notas.map((n) => ({ tipo: 'knowledge' as const, titulo: n.title, chave: n.slug })),
+        ...dailies.map((d) => ({ tipo: 'daily' as const, titulo: d.dia, chave: d.dia })),
+    ];
+}
+
+/**
+ * Cria (ou reabre, se já existir o mesmo slug) uma nota knowledge com o título
+ * dado. Usada pela opção "Criar «termo»" do autocomplete.
+ */
+export async function criarNotaComTitulo(
+    titulo: string,
+): Promise<{ chave: string; titulo: string }> {
+    const res = await escreverNota(
+        {
+            title: titulo,
+            content_md: `# ${titulo}\n\n`,
+            links: [],
+            reason: 'nota criada pelo [[ autocomplete',
+        },
+        'user',
+    );
+    return { chave: res.slug, titulo: res.title };
 }
