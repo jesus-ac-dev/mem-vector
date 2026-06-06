@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
+import { regenerarEdgesCom } from './edges';
+import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
-import { parseWikilinks, slugify } from './knowledge.links';
+import { parseWikilinks, reescreverWikilinks, slugify } from './knowledge.links';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
     EscritaKnowledgeSchema,
@@ -83,37 +85,13 @@ export async function escreverNotaCom(
         metadata: { slug: nota.slug, title: nota.title },
     });
 
-    // Regenerar edges (wikilinks): apagar e reinserir.
-    const { error: dEdErr } = await db
-        .from('edges')
-        .delete()
-        .eq('owner_id', user.id)
-        .eq('from_type', 'knowledge')
-        .eq('from_id', nota.id);
-    if (dEdErr) throw new Error(`apagar edges: ${dEdErr.message}`);
-
-    const alvos = [...new Set([...parseWikilinks(dados.content_md), ...dados.links.map(slugify)])];
-    if (alvos.length) {
-        const alvosExistentes = await db
-            .from('knowledge')
-            .select('id, slug')
-            .eq('owner_id', user.id)
-            .in('slug', alvos);
-        const idPorSlug = new Map((alvosExistentes.data ?? []).map((r) => [r.slug, r.id]));
-
-        const { error: iEdErr } = await db.from('edges').insert(
-            alvos.map((to_slug) => ({
-                owner_id: user.id,
-                from_type: 'knowledge',
-                from_id: nota.id,
-                to_type: idPorSlug.has(to_slug) ? 'knowledge' : null,
-                to_slug,
-                to_id: idPorSlug.get(to_slug) ?? null,
-                kind: 'wikilink',
-            })),
-        );
-        if (iEdErr) throw new Error(`inserir edges: ${iEdErr.message}`);
-    }
+    // Regenerar edges (wikilinks) — helper partilhado com o daily.
+    await regenerarEdgesCom(db, {
+        ownerId: user.id,
+        fromType: 'knowledge',
+        fromId: nota.id,
+        alvos: [...new Set([...parseWikilinks(dados.content_md), ...dados.links.map(slugify)])],
+    });
 
     return {
         id: nota.id,
@@ -137,7 +115,8 @@ export async function escreverNota(
 export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
     const { data, error } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md, updated_at')
+        .select('id, slug, title, content_md, updated_at, folder_id')
+        .eq('archived', false)
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar knowledge: ${error.message}`);
     return (data ?? []).map((r) => ({
@@ -146,9 +125,89 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
         title: r.title,
         contentMd: r.content_md,
         updatedAt: r.updated_at,
+        folderId: r.folder_id ?? null,
     }));
 }
 export const listarKnowledge = async () => listarKnowledgeCom(await createClient());
+
+// Arquivar: tira a nota da memória ativa. Marca archived=true e apaga os chunks
+// (sai do RAG). Versões e edges mantêm-se (auditoria).
+export async function arquivarNotaCom(db: SupabaseClient, slug: string): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+
+    const { data: nota, error } = await db
+        .from('knowledge')
+        .select('id')
+        .eq('owner_id', user.id)
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`ler nota: ${error.message}`);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const up = await db.from('knowledge').update({ archived: true }).eq('id', nota.id);
+    if (up.error) throw new Error(`arquivar nota: ${up.error.message}`);
+
+    const del = await db
+        .from('chunks')
+        .delete()
+        .eq('owner_id', user.id)
+        .eq('metadata->>entity_type', 'knowledge')
+        .eq('metadata->>entity_id', nota.id);
+    if (del.error) throw new Error(`apagar chunks: ${del.error.message}`);
+}
+export const arquivarNota = async (slug: string) => arquivarNotaCom(await createClient(), slug);
+
+// Repor: archived=false e reindexa (re-embeda o conteúdo, volta ao RAG).
+export async function reporNotaCom(db: SupabaseClient, slug: string): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+
+    const { data: nota, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md')
+        .eq('owner_id', user.id)
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`ler nota: ${error.message}`);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const up = await db.from('knowledge').update({ archived: false }).eq('id', nota.id);
+    if (up.error) throw new Error(`repor nota: ${up.error.message}`);
+
+    await reindexEntity(db, {
+        ownerId: user.id,
+        entityType: 'knowledge',
+        entityId: nota.id,
+        source: 'knowledge',
+        contentMd: nota.content_md,
+        metadata: { slug: nota.slug, title: nota.title },
+    });
+}
+export const reporNota = async (slug: string) => reporNotaCom(await createClient(), slug);
+
+// Notas arquivadas do utilizador (para a vista de arquivados do explorer).
+export async function listarArquivadosCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
+    const { data, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, content_md, updated_at, folder_id')
+        .eq('archived', true)
+        .order('updated_at', { ascending: false });
+    if (error) throw new Error(`listar arquivados: ${error.message}`);
+    return (data ?? []).map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        title: r.title,
+        contentMd: r.content_md,
+        updatedAt: r.updated_at,
+        folderId: r.folder_id ?? null,
+    }));
+}
+export const listarArquivados = async () => listarArquivadosCom(await createClient());
 
 export async function getNotaCom(db: SupabaseClient, slug: string): Promise<NotaKnowledge | null> {
     const { data, error } = await db
@@ -168,6 +227,126 @@ export async function getNotaCom(db: SupabaseClient, slug: string): Promise<Nota
         : null;
 }
 export const getNota = async (slug: string) => getNotaCom(await createClient(), slug);
+
+// Move uma nota para uma pasta (folderId null = raiz). Drag-drop do explorer.
+export async function moverNotaCom(
+    db: SupabaseClient,
+    slug: string,
+    folderId: string | null,
+): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const { error } = await db
+        .from('knowledge')
+        .update({ folder_id: folderId })
+        .eq('owner_id', user.id)
+        .eq('slug', slug);
+    if (error) throw new Error(`mover nota: ${error.message}`);
+}
+export const moverNota = async (slug: string, folderId: string | null) =>
+    moverNotaCom(await createClient(), slug, folderId);
+
+// Renomeia uma nota: muda título+slug e reescreve os [[links]] nas notas que
+// apontam para ela (senão ficariam quebrados). Se o slug não muda, só atualiza o
+// título de exibição.
+export async function renomearNotaCom(
+    db: SupabaseClient,
+    slug: string,
+    novoTitulo: string,
+): Promise<{ novoSlug: string }> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const titulo = novoTitulo.trim();
+    if (!titulo) throw new Error('título vazio');
+    const novoSlug = slugify(titulo);
+
+    const { data: nota, error } = await db
+        .from('knowledge')
+        .select('id, frontmatter')
+        .eq('owner_id', user.id)
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`ler nota: ${error.message}`);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const frontmatter = { ...((nota.frontmatter as Record<string, unknown>) ?? {}), title: titulo };
+
+    if (novoSlug === slug) {
+        const up = await db
+            .from('knowledge')
+            .update({ title: titulo, frontmatter })
+            .eq('id', nota.id);
+        if (up.error) throw new Error(`renomear nota: ${up.error.message}`);
+        return { novoSlug };
+    }
+
+    // Colisão de slug?
+    const col = await db
+        .from('knowledge')
+        .select('id')
+        .eq('owner_id', user.id)
+        .eq('slug', novoSlug)
+        .maybeSingle();
+    if (col.data) throw new Error('já existe uma nota com esse nome');
+
+    // 1) Renomear a própria nota (id estável).
+    const up = await db
+        .from('knowledge')
+        .update({ title: titulo, slug: novoSlug, frontmatter })
+        .eq('id', nota.id);
+    if (up.error) throw new Error(`renomear nota: ${up.error.message}`);
+
+    // 2) Atualizar slug/title na metadata dos chunks da nota.
+    const ch = await db
+        .from('chunks')
+        .select('id, metadata')
+        .eq('owner_id', user.id)
+        .eq('metadata->>entity_id', nota.id);
+    for (const c of ch.data ?? []) {
+        const meta = {
+            ...((c.metadata as Record<string, unknown>) ?? {}),
+            slug: novoSlug,
+            title: titulo,
+        };
+        await db.from('chunks').update({ metadata: meta }).eq('id', c.id);
+    }
+
+    // 3) Reescrever os [[links]] nas notas que apontam para a antiga (re-save
+    //    regenera os edges dessas notas a apontar para o novo slug).
+    const ed = await db
+        .from('edges')
+        .select('from_id')
+        .eq('owner_id', user.id)
+        .eq('from_type', 'knowledge')
+        .eq('to_slug', slug);
+    const fromIds = [...new Set((ed.data ?? []).map((e) => e.from_id as string))];
+    if (fromIds.length) {
+        const refs = await db.from('knowledge').select('id, title, content_md').in('id', fromIds);
+        for (const ref of refs.data ?? []) {
+            const novoConteudo = reescreverWikilinks(ref.content_md, slug, titulo);
+            if (novoConteudo !== ref.content_md) {
+                await escreverNotaCom(
+                    db,
+                    {
+                        title: ref.title,
+                        content_md: novoConteudo,
+                        links: [],
+                        reason: `rename ${slug}`,
+                    },
+                    'agent',
+                );
+            }
+        }
+    }
+
+    return { novoSlug };
+}
+export const renomearNota = async (slug: string, novoTitulo: string) =>
+    renomearNotaCom(await createClient(), slug, novoTitulo);
 
 // UPDATE-bias: dado o texto de um facto, devolve as notas knowledge existentes
 // mais relacionadas (via busca híbrida), para o agente-autor CONTINUAR a certa
@@ -295,7 +474,8 @@ export interface GrafoNode {
     id: string;
     slug: string;
     title: string;
-    group: string; // grupo para cor (v1: 'knowledge' constante)
+    group: string; // 'knowledge' | 'daily'
+    color: string; // hex resolvido (cor da pasta / cor daily / default)
 }
 export interface GrafoLink {
     source: string;
@@ -306,28 +486,60 @@ export interface GrafoDados {
     links: GrafoLink[];
 }
 
-// Grafo do conhecimento: nós = notas knowledge, arestas = wikilinks (edges com
-// to_id resolvido). Links quebrados (to_id null) omitidos no v1.
+// Grafo do conhecimento: nós = notas knowledge (cor da pasta) + dailies (cor do
+// grupo daily); arestas = wikilinks (edges com to_id resolvido). Arquivadas e
+// links pendentes (to_id null / extremo desconhecido) ficam de fora.
 export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
-    const { data: notas, error } = await db.from('knowledge').select('id, slug, title');
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) return { nodes: [], links: [] };
+
+    // Cor por pasta (id → hex).
+    const { data: pastas } = await db.from('folders').select('id, color').eq('owner_id', user.id);
+    const corPorPasta = new Map<string, string | null>(
+        (pastas ?? []).map((p) => [String(p.id), (p.color as string | null) ?? null]),
+    );
+
+    // Nós knowledge (não arquivadas), cor = cor da pasta (ou default).
+    const { data: notas, error } = await db
+        .from('knowledge')
+        .select('id, slug, title, folder_id')
+        .eq('owner_id', user.id)
+        .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
-    const nodes: GrafoNode[] = (notas ?? []).map((n) => ({
+    const nodesK: GrafoNode[] = (notas ?? []).map((n) => ({
         id: String(n.id),
         slug: n.slug,
         title: n.title,
         group: 'knowledge',
+        color: resolverCor(n.folder_id ? corPorPasta.get(String(n.folder_id)) : null, COR_DEFAULT),
     }));
+
+    // Cor do grupo daily (profile do utilizador).
+    const prof = await db.from('profiles').select('daily_color').eq('id', user.id).maybeSingle();
+    const corDaily = resolverCor(prof.data?.daily_color ?? null, COR_DAILY_DEFAULT);
+
+    // Nós daily.
+    const { data: dailies } = await db.from('dailies').select('id, dia').eq('owner_id', user.id);
+    const nodesD: GrafoNode[] = (dailies ?? []).map((d) => ({
+        id: String(d.id),
+        slug: d.dia,
+        title: d.dia,
+        group: 'daily',
+        color: corDaily,
+    }));
+
+    const nodes = [...nodesK, ...nodesD];
     const idsValidos = new Set(nodes.map((n) => n.id));
 
+    // Arestas: knowledge + daily, ambos os extremos têm de ser nós conhecidos.
     const { data: ed, error: eErr } = await db
         .from('edges')
         .select('from_id, to_id')
-        .eq('from_type', 'knowledge')
+        .in('from_type', ['knowledge', 'daily'])
         .not('to_id', 'is', null);
     if (eErr) throw new Error(`grafo edges: ${eErr.message}`);
-
-    // Só arestas cujos dois extremos são nós conhecidos (evita links pendentes
-    // que partem o force-graph).
     const links: GrafoLink[] = (ed ?? [])
         .map((e) => ({ source: String(e.from_id), target: String(e.to_id) }))
         .filter((l) => idsValidos.has(l.source) && idsValidos.has(l.target));

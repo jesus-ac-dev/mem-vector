@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
+import { regenerarEdgesCom } from '@/modules/knowledge/edges';
+import { parseWikilinks } from '@/modules/knowledge/knowledge.links';
 
 export interface ResultadoAcrescento {
     dia: string;
@@ -100,6 +102,15 @@ export async function acrescentarAoDailyCom(
         metadata: { dia: daily.dia },
     });
 
+    // Regenerar edges (wikilinks) — liga o daily às notas no grafo. É o caminho do
+    // agente (append por turno), por isso tem de gerar edges como o substituir.
+    await regenerarEdgesCom(db, {
+        ownerId: user.id,
+        fromType: 'daily',
+        fromId: daily.id,
+        alvos: parseWikilinks(novoContent),
+    });
+
     return { dia: diaAlvo, criado: !eraExistente };
 }
 export const acrescentarAoDaily = async (linha: string, dia?: string) =>
@@ -159,9 +170,45 @@ export async function substituirDailyCom(
         contentMd: contentNormalizado,
         metadata: { dia: daily.dia },
     });
+
+    // Regenerar edges (wikilinks) — liga o daily às notas no grafo.
+    await regenerarEdgesCom(db, {
+        ownerId: user.id,
+        fromType: 'daily',
+        fromId: daily.id,
+        alvos: parseWikilinks(contentNormalizado),
+    });
 }
 export const substituirDaily = async (dia: string, contentMd: string, author: 'agent' | 'user') =>
     substituirDailyCom(await createClient(), dia, contentMd, author);
+
+// Cor (hex) do grupo daily, guardada no profile do utilizador. null limpa.
+export async function definirCorDailyCom(db: SupabaseClient, cor: string | null): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const { error } = await db
+        .from('profiles')
+        .upsert({ id: user.id, daily_color: cor }, { onConflict: 'id' });
+    if (error) throw new Error(`definir cor daily: ${error.message}`);
+}
+export const definirCorDaily = async (cor: string | null) =>
+    definirCorDailyCom(await createClient(), cor);
+
+export async function corDailyCom(db: SupabaseClient): Promise<string | null> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) return null;
+    const { data } = await db
+        .from('profiles')
+        .select('daily_color')
+        .eq('id', user.id)
+        .maybeSingle();
+    return data?.daily_color ?? null;
+}
+export const corDaily = async () => corDailyCom(await createClient());
 
 export async function listarDailiesCom(db: SupabaseClient): Promise<DailyListItem[]> {
     const { data, error } = await db

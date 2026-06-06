@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { slugify } from '@/modules/knowledge/knowledge.links';
+import { alvoParaHref } from '@/modules/knowledge/knowledge.links';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -11,8 +11,7 @@ import { Button } from '@/components/ui/button';
  */
 function preprocessWikilinks(content: string): string {
     return content.replace(/\[\[([^\]|]+)\]\]/g, (_match, target: string) => {
-        const slug = slugify(target.trim());
-        return `[${target.trim()}](/knowledge/${slug})`;
+        return `[${target.trim()}](${alvoParaHref(target)})`;
     });
 }
 

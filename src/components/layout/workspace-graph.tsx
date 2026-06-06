@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Play } from 'lucide-react';
+import { Play, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/layout/workspace-context';
+import { GrafoConfig } from '@/components/layout/grafo-config';
 import { dadosGrafo } from '@/modules/workspace/workspace.actions';
 import type { GrafoDados } from '@/modules/knowledge/knowledge.service';
 
@@ -22,6 +23,7 @@ interface NoGrafo {
     slug: string;
     title: string;
     group: string;
+    color: string;
 }
 
 // Grafo do conhecimento: nós = notas, arestas = wikilinks. Toggle 2D/3D (2D
@@ -36,6 +38,7 @@ export function WorkspaceGraph() {
     const [dados, setDados] = useState<GrafoDados | null>(null);
     const [modo, setModo] = useState<Modo>('2D');
     const [animKey, setAnimKey] = useState(0); // bump → remonta o grafo → re-anima o layout
+    const [config, setConfig] = useState(false);
 
     useEffect(() => {
         let cancelado = false;
@@ -59,7 +62,11 @@ export function WorkspaceGraph() {
 
     function abrirNo(node: object) {
         const n = node as NoGrafo;
-        abrirFicheiro({ tipo: 'knowledge', chave: n.slug, titulo: n.title });
+        if (n.group === 'daily') {
+            abrirFicheiro({ tipo: 'daily', chave: n.slug, titulo: n.title });
+        } else {
+            abrirFicheiro({ tipo: 'knowledge', chave: n.slug, titulo: n.title });
+        }
         router.push('/chat');
     }
 
@@ -69,14 +76,14 @@ export function WorkspaceGraph() {
         height: dim.h,
         nodeId: 'id',
         nodeLabel: 'title',
-        nodeAutoColorBy: 'group',
+        nodeColor: (n: object) => (n as NoGrafo).color,
         nodeRelSize: 4,
         cooldownTicks: 80,
         onNodeClick: abrirNo,
     };
 
     return (
-        <div className="flex h-full w-full flex-col overflow-hidden">
+        <div className="relative flex h-full w-full flex-col overflow-hidden">
             {/* Barra de controlos: 2D/3D à esquerda, animate à direita */}
             <div className="flex h-7 shrink-0 items-center justify-between border-b px-1.5">
                 <div className="flex items-center gap-0.5">
@@ -95,16 +102,28 @@ export function WorkspaceGraph() {
                         </Button>
                     ))}
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Animar layout"
-                    aria-label="Animar layout"
-                    onClick={() => setAnimKey((k) => k + 1)}
-                    className="h-5 w-5 text-muted-foreground"
-                >
-                    <Play className="h-3 w-3" />
-                </Button>
+                <div className="flex items-center gap-0.5">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Cores do grafo"
+                        aria-label="Cores do grafo"
+                        onClick={() => setConfig(true)}
+                        className="h-5 w-5 text-muted-foreground"
+                    >
+                        <Palette className="h-3 w-3" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Animar layout"
+                        aria-label="Animar layout"
+                        onClick={() => setAnimKey((k) => k + 1)}
+                        className="h-5 w-5 text-muted-foreground"
+                    >
+                        <Play className="h-3 w-3" />
+                    </Button>
+                </div>
             </div>
 
             {/* Corpo do grafo */}
@@ -121,6 +140,8 @@ export function WorkspaceGraph() {
                     </div>
                 )}
             </div>
+
+            {config && <GrafoConfig onFechar={() => setConfig(false)} />}
         </div>
     );
 }

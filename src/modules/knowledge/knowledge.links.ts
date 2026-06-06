@@ -8,6 +8,16 @@ export function slugify(text: string): string {
         .replace(/^-+|-+$/g, '');
 }
 
+const PADRAO_DATA = /^\d{4}-\d{2}-\d{2}$/;
+
+// Resolve o alvo de um [[wikilink]] para um href interno. Alvos com cara de data
+// (YYYY-MM-DD) apontam para o daily desse dia; o resto para uma nota knowledge.
+export function alvoParaHref(target: string): string {
+    const t = target.trim();
+    if (PADRAO_DATA.test(t)) return `/daily/${t}`;
+    return `/knowledge/${slugify(t)}`;
+}
+
 export function parseWikilinks(markdown: string): string[] {
     const out: string[] = [];
     const seen = new Set<string>();
@@ -19,4 +29,12 @@ export function parseWikilinks(markdown: string): string[] {
         }
     }
     return out;
+}
+
+// Reescreve [[wikilinks]] cujo alvo slugifica para `oldSlug`, apontando-os para
+// `novoTitulo`. Usado ao renomear uma nota, para os links não partirem.
+export function reescreverWikilinks(markdown: string, oldSlug: string, novoTitulo: string): string {
+    return markdown.replace(/\[\[([^\]]+)\]\]/g, (m, inner: string) =>
+        slugify(inner) === oldSlug ? `[[${novoTitulo}]]` : m,
+    );
 }

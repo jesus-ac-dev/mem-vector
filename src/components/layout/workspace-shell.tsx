@@ -27,16 +27,21 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
-import type { ExplorerFolder } from '@/components/layout/file-explorer';
+import type { DailyItem } from '@/components/layout/file-explorer';
+import { ArquivadosLista } from '@/components/layout/arquivados-lista';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
 import { WorkspaceGraph } from '@/components/layout/workspace-graph';
 import {
-    criarNotaVazia,
+    criarNotaNaPasta,
+    novaPasta,
     abrirOuCriarNota,
     dadosBarraDireita,
+    listarArquivadosAction,
     type DadosBarraDireita,
 } from '@/modules/workspace/workspace.actions';
 import { tabKey } from '@/components/layout/workspace-context';
+import type { Arvore } from '@/modules/folders/folders.tree';
+import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
@@ -140,21 +145,39 @@ function Ribbon({
 // Left sidebar
 // ──────────────────────────────────────────────
 function LeftSidebar({
-    folders,
+    arvore,
+    dailies,
     activePanel,
     collapsed,
     onToggle,
 }: {
-    folders: ExplorerFolder[];
+    arvore: Arvore;
+    dailies: DailyItem[];
     activePanel: LeftPanel;
     collapsed: boolean;
     onToggle: () => void;
 }) {
     const router = useRouter();
     const { abrirConversa, abrirFicheiro } = useWorkspace();
+    const [verArquivados, setVerArquivados] = useState(false);
+    const [arquivados, setArquivados] = useState<NotaKnowledge[]>([]);
+    const [pastaSelecionada, setPastaSelecionada] = useState<string | null>(null);
+    const [criandoPasta, setCriandoPasta] = useState(false);
+
+    async function carregarArquivados() {
+        setArquivados(await listarArquivadosAction());
+    }
+
+    function toggleArquivados() {
+        setVerArquivados((v) => {
+            const novo = !v;
+            if (novo) void carregarArquivados();
+            return novo;
+        });
+    }
 
     async function handleNovaNota() {
-        const nota = await criarNotaVazia();
+        const nota = await criarNotaNaPasta(pastaSelecionada);
         abrirFicheiro({
             tipo: nota.tipo,
             chave: nota.chave,
@@ -163,6 +186,16 @@ function LeftSidebar({
         });
         router.push('/chat');
         router.refresh(); // mostra a nota nova no explorer (server)
+    }
+
+    function handleNovaPasta() {
+        setCriandoPasta(true); // mostra o input inline no topo da árvore
+    }
+
+    async function confirmarCriarPasta(nome: string) {
+        setCriandoPasta(false);
+        await novaPasta(nome);
+        router.refresh(); // mostra a pasta nova no explorer (server)
     }
 
     if (collapsed) {
@@ -191,7 +224,7 @@ function LeftSidebar({
                                 size="icon"
                                 title="Nova pasta"
                                 aria-label="Nova pasta"
-                                onClick={() => {}}
+                                onClick={handleNovaPasta}
                                 className="h-6 w-6 text-muted-foreground"
                             >
                                 <FolderPlus className="h-3.5 w-3.5" />
@@ -199,10 +232,14 @@ function LeftSidebar({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                title="Arquivar selecção"
-                                aria-label="Arquivar selecção"
-                                onClick={() => {}}
-                                className="h-6 w-6 text-muted-foreground"
+                                title={verArquivados ? 'Ver notas' : 'Ver arquivados'}
+                                aria-label="Ver arquivados"
+                                aria-pressed={verArquivados}
+                                onClick={toggleArquivados}
+                                className={cn(
+                                    'h-6 w-6 text-muted-foreground',
+                                    verArquivados && 'bg-accent text-accent-foreground',
+                                )}
                             >
                                 <Archive className="h-3.5 w-3.5" />
                             </Button>
@@ -239,7 +276,19 @@ function LeftSidebar({
             {/* Main panel content */}
             <div className="min-h-0 flex-1 overflow-y-auto">
                 {activePanel === 'explorer' ? (
-                    <FileExplorer folders={folders} />
+                    verArquivados ? (
+                        <ArquivadosLista arquivados={arquivados} onMudou={carregarArquivados} />
+                    ) : (
+                        <FileExplorer
+                            arvore={arvore}
+                            dailies={dailies}
+                            pastaSelecionada={pastaSelecionada}
+                            onSelecionarPasta={setPastaSelecionada}
+                            criandoPasta={criandoPasta}
+                            onCriarPasta={(nome) => void confirmarCriarPasta(nome)}
+                            onCancelarCriarPasta={() => setCriandoPasta(false)}
+                        />
+                    )
                 ) : (
                     <ConversasPanel />
                 )}
@@ -497,12 +546,13 @@ function RightSidebar({
 // WorkspaceShell — main export
 // ──────────────────────────────────────────────
 export interface WorkspaceShellProps {
-    folders: ExplorerFolder[];
+    arvore: Arvore;
+    dailies: DailyItem[];
     diasComDaily: string[];
     children: React.ReactNode;
 }
 
-export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShellProps) {
+export function WorkspaceShell({ arvore, dailies, diasComDaily, children }: WorkspaceShellProps) {
     const [activePanel, setActivePanel] = useState<LeftPanel>('explorer');
     const [leftCollapsed, setLeftCollapsed] = useState(false);
     const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -520,7 +570,8 @@ export function WorkspaceShell({ folders, diasComDaily, children }: WorkspaceShe
 
                 {/* Left sidebar (zero width when collapsed) */}
                 <LeftSidebar
-                    folders={folders}
+                    arvore={arvore}
+                    dailies={dailies}
                     activePanel={activePanel}
                     collapsed={leftCollapsed}
                     onToggle={() => setLeftCollapsed((v) => !v)}
