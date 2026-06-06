@@ -7,6 +7,7 @@ type Extractor = (
 ) => Promise<{ data: Float32Array }>;
 
 export const EMBEDDING_DIMS = 384;
+export const EMBEDDING_MODEL = 'multilingual-e5-small';
 
 let extractorPromise: Promise<Extractor> | null = null;
 

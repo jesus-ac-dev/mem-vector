@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { embedPassage } from '@/lib/embeddings';
+import { reindexEntity } from '@/lib/indexing';
 import { parseWikilinks, slugify } from './knowledge.links';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
@@ -71,29 +71,15 @@ export async function escreverNotaCom(
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
-    // Regenerar chunks: apagar os antigos, inserir um novo com o embedding actual.
-    // Nota: filtramos por metadata->>'entity_id' (operador ->> devolve texto).
-    const { error: dChErr } = await db
-        .from('chunks')
-        .delete()
-        .eq('owner_id', user.id)
-        .eq('metadata->>entity_id', nota.id);
-    if (dChErr) throw new Error(`apagar chunks: ${dChErr.message}`);
-
-    const embedding = await embedPassage(dados.content_md);
-    const { error: iChErr } = await db.from('chunks').insert({
-        content: dados.content_md,
-        embedding: JSON.stringify(embedding),
+    // Regenerar chunks por heading, de forma incremental (só re-embeda o que mudou).
+    await reindexEntity(db, {
+        ownerId: user.id,
+        entityType: 'knowledge',
+        entityId: nota.id,
         source: 'knowledge',
-        owner_id: user.id,
-        metadata: {
-            entity_type: 'knowledge',
-            entity_id: nota.id,
-            slug: nota.slug,
-            title: nota.title,
-        },
+        contentMd: dados.content_md,
+        metadata: { slug: nota.slug, title: nota.title },
     });
-    if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
 
     // Regenerar edges (wikilinks): apagar e reinserir.
     const { error: dEdErr } = await db
