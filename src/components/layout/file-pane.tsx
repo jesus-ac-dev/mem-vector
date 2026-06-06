@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, History, Pencil, FileText, Archive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import {
     lerFicheiro,
     versoesFicheiro,
     guardarFicheiro,
+    abrirOuCriarNota,
 } from '@/modules/workspace/workspace.actions';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
@@ -95,6 +97,8 @@ type HistoryEstado = { tipo: 'carregando' } | { tipo: 'ok'; versoes: Versao[] };
 // FicheiroVista — conteúdo / histórico / editor de UM ficheiro
 // ──────────────────────────────────────────────
 function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
+    const router = useRouter();
+    const { abrirFicheiro } = useWorkspace();
     // ── conteúdo ──
     const [estado, setEstado] = useState<PaneEstado>({ tipo: 'carregando' });
     // ── vista (arranca em editor se pedido, ex.: "Criar Nota") ──
@@ -178,6 +182,24 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         }
     }
 
+    // Clicar num wikilink abre o alvo numa tab; se a nota não existir (link
+    // quebrado), cria-a primeiro (comportamento Obsidian).
+    async function handleInternalLink(href: string) {
+        const mKnow = /^\/knowledge\/(.+)$/.exec(href);
+        if (mKnow) {
+            const slug = decodeURIComponent(mKnow[1]);
+            const nota = await abrirOuCriarNota(slug);
+            abrirFicheiro({ tipo: 'knowledge', chave: nota.chave, titulo: nota.titulo });
+            if (nota.criada) router.refresh();
+            return;
+        }
+        const mDaily = /^\/daily\/(.+)$/.exec(href);
+        if (mDaily) {
+            const dia = decodeURIComponent(mDaily[1]);
+            abrirFicheiro({ tipo: 'daily', chave: dia, titulo: dia });
+        }
+    }
+
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {/* Toolbar de ações — topo-direito do ficheiro (longe do toggle da direita) */}
@@ -248,7 +270,13 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                         {estado.tipo === 'erro' && (
                             <p className="text-muted-foreground">não encontrado</p>
                         )}
-                        {estado.tipo === 'ok' && <Markdown content={estado.contentMd} wikilinks />}
+                        {estado.tipo === 'ok' && (
+                            <Markdown
+                                content={estado.contentMd}
+                                wikilinks
+                                onInternalLink={handleInternalLink}
+                            />
+                        )}
                     </>
                 )}
 

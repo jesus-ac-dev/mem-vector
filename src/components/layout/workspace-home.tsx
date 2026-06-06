@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { MessageSquarePlus, FilePlus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/layout/workspace-context';
@@ -9,6 +10,7 @@ import { criarNotaVazia } from '@/modules/workspace/workspace.actions';
 // Home do workspace — aparece quando o chat e todas as tabs estão fechados.
 // Estilo VSCode: ações ao centro para recomeçar.
 export function WorkspaceHome() {
+    const router = useRouter();
     const { abrirChat, abrirConversa, abrirFicheiro } = useWorkspace();
     const [criando, setCriando] = useState(false);
 
@@ -28,6 +30,7 @@ export function WorkspaceHome() {
                 titulo: nota.titulo,
                 vistaInicial: 'editor',
             });
+            router.refresh(); // atualiza o file-explorer (server) com a nota nova
         } finally {
             setCriando(false);
         }

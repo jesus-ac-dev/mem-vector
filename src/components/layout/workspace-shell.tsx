@@ -30,6 +30,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { ExplorerFolder } from '@/components/layout/file-explorer';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
+import { criarNotaVazia } from '@/modules/workspace/workspace.actions';
 
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
@@ -144,7 +145,19 @@ function LeftSidebar({
     onToggle: () => void;
 }) {
     const router = useRouter();
-    const { abrirConversa } = useWorkspace();
+    const { abrirConversa, abrirFicheiro } = useWorkspace();
+
+    async function handleNovaNota() {
+        const nota = await criarNotaVazia();
+        abrirFicheiro({
+            tipo: nota.tipo,
+            chave: nota.chave,
+            titulo: nota.titulo,
+            vistaInicial: 'editor',
+        });
+        router.push('/chat');
+        router.refresh(); // mostra a nota nova no explorer (server)
+    }
 
     if (collapsed) {
         return null;
@@ -160,9 +173,9 @@ function LeftSidebar({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                title="Novo ficheiro"
-                                aria-label="Novo ficheiro"
-                                onClick={() => {}}
+                                title="Nova nota"
+                                aria-label="Nova nota"
+                                onClick={() => void handleNovaNota()}
                                 className="h-6 w-6 text-muted-foreground"
                             >
                                 <FilePlus className="h-3.5 w-3.5" />
@@ -191,16 +204,17 @@ function LeftSidebar({
                     ) : (
                         <Button
                             variant="ghost"
-                            size="icon"
+                            size="sm"
                             title="Nova conversa"
                             aria-label="Nova conversa"
                             onClick={() => {
                                 abrirConversa(null);
                                 router.push('/chat');
                             }}
-                            className="h-6 w-6 text-muted-foreground"
+                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
                         >
                             <Plus className="h-3.5 w-3.5" />
+                            Nova conversa
                         </Button>
                     )}
                 </div>

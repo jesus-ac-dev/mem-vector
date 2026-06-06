@@ -98,6 +98,35 @@ export async function criarNotaVazia(): Promise<{
     return { tipo: 'knowledge', chave: res.slug, titulo: res.title };
 }
 
+function humanizarSlug(slug: string): string {
+    const t = slug.replace(/-/g, ' ').trim();
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Nova nota';
+}
+
+/**
+ * Resolve um wikilink de knowledge: se a nota existir, devolve-a; se não existir
+ * (link quebrado), cria-a vazia a partir do slug e devolve-a. É o comportamento
+ * Obsidian — clicar num link quebrado materializa a nota.
+ */
+export async function abrirOuCriarNota(
+    slug: string,
+): Promise<{ chave: string; titulo: string; criada: boolean }> {
+    const existente = await getNota(slug);
+    if (existente) return { chave: existente.slug, titulo: existente.title, criada: false };
+
+    const titulo = humanizarSlug(slug);
+    const res = await escreverNota(
+        {
+            title: titulo,
+            content_md: `# ${titulo}\n\n`,
+            links: [],
+            reason: 'nota criada a partir de um wikilink',
+        },
+        'user',
+    );
+    return { chave: res.slug, titulo: res.title, criada: true };
+}
+
 /**
  * Devolve as versões de um ficheiro (knowledge ou daily), da mais recente para a mais antiga.
  * Devolve [] se o ficheiro não existir ou não tiver versões.
