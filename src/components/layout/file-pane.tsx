@@ -6,7 +6,7 @@ import { X, History, Pencil, FileText, Archive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
-import { Textarea } from '@/components/ui/textarea';
+import { NotaEditor } from '@/components/layout/nota-editor';
 import {
     Select,
     SelectContent,
@@ -20,6 +20,7 @@ import {
     versoesFicheiro,
     guardarFicheiro,
     abrirOuCriarNota,
+    arquivarNotaAction,
 } from '@/modules/workspace/workspace.actions';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
@@ -98,7 +99,7 @@ type HistoryEstado = { tipo: 'carregando' } | { tipo: 'ok'; versoes: Versao[] };
 // ──────────────────────────────────────────────
 function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     const router = useRouter();
-    const { abrirFicheiro } = useWorkspace();
+    const { abrirFicheiro, fecharFicheiro } = useWorkspace();
     // ── conteúdo ──
     const [estado, setEstado] = useState<PaneEstado>({ tipo: 'carregando' });
     // ── vista (arranca em editor se pedido, ex.: "Criar Nota") ──
@@ -247,16 +248,23 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                     >
                         <History className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {}}
-                        title="Arquivar"
-                        aria-label="Arquivar"
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <Archive className="h-3.5 w-3.5" />
-                    </Button>
+                    {ficheiro.tipo === 'knowledge' && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                                void arquivarNotaAction(ficheiro.chave).then(() => {
+                                    fecharFicheiro(tabKey(ficheiro));
+                                    router.refresh();
+                                });
+                            }}
+                            title="Arquivar"
+                            aria-label="Arquivar"
+                            className="h-6 w-6 text-muted-foreground"
+                        >
+                            <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                    )}
                 </div>
             )}
 
@@ -335,10 +343,9 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
 
                 {vista === 'editor' && (
                     <div className="flex h-full flex-col gap-2">
-                        <Textarea
+                        <NotaEditor
                             value={rascunho}
-                            onChange={(e) => setRascunho(e.target.value)}
-                            className="min-h-0 flex-1 resize-none font-mono text-sm"
+                            onChange={setRascunho}
                             placeholder="Escreve em Markdown..."
                         />
                         {erroGuardar && <p className="text-xs text-destructive">{erroGuardar}</p>}
