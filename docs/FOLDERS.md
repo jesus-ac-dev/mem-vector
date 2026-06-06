@@ -66,6 +66,14 @@ abre um dropdown que filtra notas enquanto escreves.
   raiz se nenhuma) via `criarNotaNaPasta(folderId)` = `criarNotaVazia` +
   `moverNota`. Abre em editor + refresh. (A seleção não persiste em refresh — v1.)
 
+## Edição inline (sem `window.prompt`)
+
+Criar pasta, renomear pasta e renomear nota usam um `InlineInput` na própria
+árvore (componente em `file-explorer.tsx`): autofocus + seleciona o texto, **Enter**
+confirma, **Esc** cancela, **blur** confirma. Nova pasta mostra o input no topo da
+secção Knowledge (estado `criandoPasta` no `LeftSidebar`); renomear entra em modo
+edição no nó (duplo-clique). Substitui os `window.prompt` do v1.
+
 ## Estado
 
 Feito: modelo, criar pasta, **criar nota dentro de pasta** (pasta selecionada +

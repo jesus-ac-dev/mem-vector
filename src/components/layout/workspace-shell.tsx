@@ -162,6 +162,7 @@ function LeftSidebar({
     const [verArquivados, setVerArquivados] = useState(false);
     const [arquivados, setArquivados] = useState<NotaKnowledge[]>([]);
     const [pastaSelecionada, setPastaSelecionada] = useState<string | null>(null);
+    const [criandoPasta, setCriandoPasta] = useState(false);
 
     async function carregarArquivados() {
         setArquivados(await listarArquivadosAction());
@@ -187,10 +188,13 @@ function LeftSidebar({
         router.refresh(); // mostra a nota nova no explorer (server)
     }
 
-    async function handleNovaPasta() {
-        const nome = window.prompt('Nome da nova pasta:');
-        if (!nome?.trim()) return;
-        await novaPasta(nome.trim());
+    function handleNovaPasta() {
+        setCriandoPasta(true); // mostra o input inline no topo da árvore
+    }
+
+    async function confirmarCriarPasta(nome: string) {
+        setCriandoPasta(false);
+        await novaPasta(nome);
         router.refresh(); // mostra a pasta nova no explorer (server)
     }
 
@@ -220,7 +224,7 @@ function LeftSidebar({
                                 size="icon"
                                 title="Nova pasta"
                                 aria-label="Nova pasta"
-                                onClick={() => void handleNovaPasta()}
+                                onClick={handleNovaPasta}
                                 className="h-6 w-6 text-muted-foreground"
                             >
                                 <FolderPlus className="h-3.5 w-3.5" />
@@ -280,6 +284,9 @@ function LeftSidebar({
                             dailies={dailies}
                             pastaSelecionada={pastaSelecionada}
                             onSelecionarPasta={setPastaSelecionada}
+                            criandoPasta={criandoPasta}
+                            onCriarPasta={(nome) => void confirmarCriarPasta(nome)}
+                            onCancelarCriarPasta={() => setCriandoPasta(false)}
                         />
                     )
                 ) : (

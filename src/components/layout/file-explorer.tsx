@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useWorkspace, tabKey } from '@/components/layout/workspace-context';
 import {
     moverNotaParaPasta,
@@ -29,11 +30,74 @@ interface Ops {
 
 const DRAG_TIPO = 'application/x-mem-nota-slug';
 
+// Input inline para criar/renomear na própria árvore (substitui window.prompt).
+// Autofocus + seleciona o texto; Enter confirma, Esc cancela, blur confirma.
+function InlineInput({
+    valorInicial,
+    depth,
+    onConfirm,
+    onCancel,
+}: {
+    valorInicial: string;
+    depth: number;
+    onConfirm: (valor: string) => void;
+    onCancel: () => void;
+}) {
+    const [valor, setValor] = useState(valorInicial);
+    const ref = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        ref.current?.focus();
+        ref.current?.select();
+    }, []);
+
+    function confirmar() {
+        const v = valor.trim();
+        if (v) onConfirm(v);
+        else onCancel();
+    }
+
+    return (
+        <Input
+            ref={ref}
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmar();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    onCancel();
+                }
+            }}
+            onBlur={confirmar}
+            style={{ marginLeft: `${depth * 16}px` }}
+            className="h-7 rounded-none py-1 text-sm"
+        />
+    );
+}
+
 // Link de uma nota knowledge (abre numa tab; arrastável para mover; duplo-clique renomeia).
 function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Ops }) {
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
+    const [editando, setEditando] = useState(false);
     const isActive = ficheiroAtivo === tabKey({ tipo: 'knowledge', chave: nota.slug });
+
+    if (editando) {
+        return (
+            <InlineInput
+                valorInicial={nota.title}
+                depth={depth}
+                onConfirm={(titulo) => {
+                    setEditando(false);
+                    if (titulo !== nota.title) ops.renomearNota(nota.slug, titulo);
+                }}
+                onCancel={() => setEditando(false)}
+            />
+        );
+    }
+
     return (
         <Button
             type="button"
@@ -44,7 +108,7 @@ function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Op
                 abrirFicheiro({ tipo: 'knowledge', chave: nota.slug, titulo: nota.title });
                 router.push('/chat');
             }}
-            onDoubleClick={() => ops.renomearNota(nota.slug, nota.title)}
+            onDoubleClick={() => setEditando(true)}
             title={`${nota.title} (duplo-clique para renomear)`}
             style={{ paddingLeft: `${depth * 16}px` }}
             className={cn(
@@ -61,42 +125,55 @@ function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Op
 function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops }) {
     const [open, setOpen] = useState(true);
     const [over, setOver] = useState(false);
+    const [editando, setEditando] = useState(false);
     const Chevron = open ? ChevronDown : ChevronRight;
     return (
         <div>
-            <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                    ops.selecionarPasta(no.pasta.id);
-                    setOpen((v) => !v);
-                }}
-                onDoubleClick={() => ops.renomearPasta(no.pasta.id, no.pasta.name)}
-                onDragOver={(e) => {
-                    if (e.dataTransfer.types.includes(DRAG_TIPO)) {
+            {editando ? (
+                <InlineInput
+                    valorInicial={no.pasta.name}
+                    depth={depth}
+                    onConfirm={(nome) => {
+                        setEditando(false);
+                        if (nome !== no.pasta.name) ops.renomearPasta(no.pasta.id, nome);
+                    }}
+                    onCancel={() => setEditando(false)}
+                />
+            ) : (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                        ops.selecionarPasta(no.pasta.id);
+                        setOpen((v) => !v);
+                    }}
+                    onDoubleClick={() => setEditando(true)}
+                    onDragOver={(e) => {
+                        if (e.dataTransfer.types.includes(DRAG_TIPO)) {
+                            e.preventDefault();
+                            setOver(true);
+                        }
+                    }}
+                    onDragLeave={() => setOver(false)}
+                    onDrop={(e) => {
                         e.preventDefault();
-                        setOver(true);
-                    }
-                }}
-                onDragLeave={() => setOver(false)}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    setOver(false);
-                    const slug = e.dataTransfer.getData(DRAG_TIPO);
-                    if (slug) ops.mover(slug, no.pasta.id);
-                }}
-                title={`${no.pasta.name} (clique seleciona, duplo-clique renomeia)`}
-                style={{ paddingLeft: `${depth * 16}px` }}
-                className={cn(
-                    'flex h-auto w-full items-center justify-start gap-1 rounded-none py-1.5 pr-3 text-sm text-foreground hover:bg-muted',
-                    (over || ops.selecionadaId === no.pasta.id) &&
-                        'bg-accent text-accent-foreground',
-                )}
-            >
-                <Chevron className="h-3 w-3 shrink-0" />
-                <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{no.pasta.name}</span>
-            </Button>
+                        setOver(false);
+                        const slug = e.dataTransfer.getData(DRAG_TIPO);
+                        if (slug) ops.mover(slug, no.pasta.id);
+                    }}
+                    title={`${no.pasta.name} (clique seleciona, duplo-clique renomeia)`}
+                    style={{ paddingLeft: `${depth * 16}px` }}
+                    className={cn(
+                        'flex h-auto w-full items-center justify-start gap-1 rounded-none py-1.5 pr-3 text-sm text-foreground hover:bg-muted',
+                        (over || ops.selecionadaId === no.pasta.id) &&
+                            'bg-accent text-accent-foreground',
+                    )}
+                >
+                    <Chevron className="h-3 w-3 shrink-0" />
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{no.pasta.name}</span>
+                </Button>
+            )}
             {open && (
                 <div>
                     {no.subpastas.map((sub) => (
@@ -196,6 +273,9 @@ interface FileExplorerProps {
     dailies: DailyItem[];
     pastaSelecionada: string | null;
     onSelecionarPasta: (id: string | null) => void;
+    criandoPasta: boolean;
+    onCriarPasta: (nome: string) => void;
+    onCancelarCriarPasta: () => void;
 }
 
 export function FileExplorer({
@@ -203,6 +283,9 @@ export function FileExplorer({
     dailies,
     pastaSelecionada,
     onSelecionarPasta,
+    criandoPasta,
+    onCriarPasta,
+    onCancelarCriarPasta,
 }: FileExplorerProps) {
     const router = useRouter();
 
@@ -210,17 +293,11 @@ export function FileExplorer({
         mover: (slug, folderId) => {
             void moverNotaParaPasta(slug, folderId).then(() => router.refresh());
         },
-        renomearPasta: (id, nomeAtual) => {
-            const novo = window.prompt('Renomear pasta:', nomeAtual);
-            if (novo?.trim() && novo.trim() !== nomeAtual) {
-                void renomearPastaAction(id, novo.trim()).then(() => router.refresh());
-            }
+        renomearPasta: (id, novoNome) => {
+            void renomearPastaAction(id, novoNome).then(() => router.refresh());
         },
-        renomearNota: (slug, tituloAtual) => {
-            const novo = window.prompt('Renomear nota:', tituloAtual);
-            if (novo?.trim() && novo.trim() !== tituloAtual) {
-                void renomearNotaAction(slug, novo.trim()).then(() => router.refresh());
-            }
+        renomearNota: (slug, novoTitulo) => {
+            void renomearNotaAction(slug, novoTitulo).then(() => router.refresh());
         },
         selecionarPasta: onSelecionarPasta,
         selecionadaId: pastaSelecionada,
@@ -235,6 +312,14 @@ export function FileExplorer({
                     onDropRaiz={(slug) => ops.mover(slug, null)}
                     onClickLabel={() => onSelecionarPasta(null)}
                 >
+                    {criandoPasta && (
+                        <InlineInput
+                            valorInicial=""
+                            depth={1}
+                            onConfirm={onCriarPasta}
+                            onCancel={onCancelarCriarPasta}
+                        />
+                    )}
                     {arvore.raizPastas.map((no) => (
                         <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
                     ))}
