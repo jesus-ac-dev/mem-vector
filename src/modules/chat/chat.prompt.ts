@@ -13,6 +13,7 @@ export interface Source {
     content: string;
     source: string | null;
     similarity: number;
+    lexical?: boolean; // o FTS bateu mesmo no termo da query (sinal léxico do híbrido)
     metadata?: SourceMetadata | null;
 }
 
@@ -25,11 +26,14 @@ export const RELEVANCE_THRESHOLD = 0.78;
 
 // Filtra as fontes recuperadas, deixando só as relevantes o suficiente para servirem
 // de contexto. Abaixo do corte, é melhor `(sem contexto)` + fallback do que injetar ruído.
+// Threshold honesto do híbrido: uma fonte conta se for semanticamente próxima (cosseno
+// >= threshold) OU se o FTS bateu no termo exato (lexical) — assim não se perdem slugs,
+// erros ou IDs que o embedding dilui mas o utilizador escreveu literalmente.
 export function relevantSources(
     sources: Source[],
     threshold: number = RELEVANCE_THRESHOLD,
 ): Source[] {
-    return sources.filter((s) => s.similarity >= threshold);
+    return sources.filter((s) => s.similarity >= threshold || s.lexical === true);
 }
 
 // Regra RAG-preferred + LLM-fallback: o contexto é a fonte preferencial e conduz a

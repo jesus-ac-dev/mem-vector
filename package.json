@@ -26,6 +26,8 @@
         "pingpong": "tsx scripts/ping-pong.ts",
         "rag-fallback": "tsx scripts/rag-fallback.ts",
         "kernel-knowledge": "tsx scripts/kernel-knowledge.ts",
+        "rag-hybrid": "tsx scripts/rag-hybrid.ts",
+        "destilar-turno": "tsx scripts/destilar-turno.ts",
         "sim-measure": "tsx scripts/sim-measure.ts",
         "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:run",
         "prepare": "husky"

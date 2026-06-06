@@ -64,4 +64,17 @@ describe('relevantSources', () => {
         const kept = relevantSources([withSim(0.834), withSim(0.763)]);
         expect(kept.map((s) => s.similarity)).toEqual([0.834]);
     });
+
+    // Híbrido: o FTS apanha termos exatos (slug, erro, ID) que o embedding dilui.
+    // Uma fonte com match lexical conta como do workspace mesmo com cosseno baixo.
+    it('mantém fonte abaixo do threshold quando o FTS bateu no termo (lexical)', () => {
+        const lexical: Source = { content: 'x', source: null, similarity: 0.5, lexical: true };
+        const kept = relevantSources([lexical], 0.78);
+        expect(kept).toEqual([lexical]);
+    });
+
+    it('corta fonte abaixo do threshold sem match lexical', () => {
+        const denso: Source = { content: 'x', source: null, similarity: 0.5, lexical: false };
+        expect(relevantSources([denso], 0.78)).toEqual([]);
+    });
 });

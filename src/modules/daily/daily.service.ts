@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { embedPassage } from '@/lib/embeddings';
+import { reindexEntity } from '@/lib/indexing';
 
 export interface ResultadoAcrescento {
     dia: string;
@@ -89,23 +89,16 @@ export async function acrescentarAoDailyCom(
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
-    // Regenerar chunks: apagar os antigos deste daily, inserir novo com embedding atual.
-    const { error: dChErr } = await db
-        .from('chunks')
-        .delete()
-        .eq('owner_id', user.id)
-        .eq('metadata->>entity_id', daily.id);
-    if (dChErr) throw new Error(`apagar chunks: ${dChErr.message}`);
-
-    const embedding = await embedPassage(novoContent);
-    const { error: iChErr } = await db.from('chunks').insert({
-        content: novoContent,
-        embedding: JSON.stringify(embedding),
+    // Regenerar chunks por heading, incremental: o daily cresce a cada turno,
+    // logo só os blocos novos/alterados são re-embedados.
+    await reindexEntity(db, {
+        ownerId: user.id,
+        entityType: 'daily',
+        entityId: daily.id,
         source: 'daily',
-        owner_id: user.id,
-        metadata: { entity_type: 'daily', entity_id: daily.id, dia: daily.dia },
+        contentMd: novoContent,
+        metadata: { dia: daily.dia },
     });
-    if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
 
     return { dia: diaAlvo, criado: !eraExistente };
 }
@@ -157,23 +150,15 @@ export async function substituirDailyCom(
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
-    // Regenerar chunks: apagar os antigos deste daily, inserir novo com embedding atual.
-    const { error: dChErr } = await db
-        .from('chunks')
-        .delete()
-        .eq('owner_id', user.id)
-        .eq('metadata->>entity_id', daily.id);
-    if (dChErr) throw new Error(`apagar chunks: ${dChErr.message}`);
-
-    const embedding = await embedPassage(contentNormalizado);
-    const { error: iChErr } = await db.from('chunks').insert({
-        content: contentNormalizado,
-        embedding: JSON.stringify(embedding),
+    // Regenerar chunks por heading, incremental (mesma lógica do acrescento).
+    await reindexEntity(db, {
+        ownerId: user.id,
+        entityType: 'daily',
+        entityId: daily.id,
         source: 'daily',
-        owner_id: user.id,
-        metadata: { entity_type: 'daily', entity_id: daily.id, dia: daily.dia },
+        contentMd: contentNormalizado,
+        metadata: { dia: daily.dia },
     });
-    if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
 }
 export const substituirDaily = async (dia: string, contentMd: string, author: 'agent' | 'user') =>
     substituirDailyCom(await createClient(), dia, contentMd, author);

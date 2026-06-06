@@ -160,11 +160,12 @@ async function enriquecerSourcesComMetadata(
 export async function aplicarDestilacao(
     question: string,
     answer: string,
-    deps: DestilDeps = { destilar: destilarReal, escrever: escreverNotaReal },
+    deps: Partial<DestilDeps> = {},
 ): Promise<NotaEscrita | null> {
-    const nota = await deps.destilar(question, answer);
+    const { destilar = destilarReal, escrever = escreverNotaReal } = deps;
+    const nota = await destilar(question, answer);
     if (!nota) return null;
-    const resultado = await deps.escrever(nota);
+    const resultado = await escrever(nota);
     return { slug: resultado.slug, title: resultado.title, criada: resultado.diff === null };
 }
 
@@ -172,11 +173,12 @@ export async function aplicarDailyTurno(
     question: string,
     answer: string,
     nota: NotaEscrita | null,
-    deps: DailyDeps = { resumir: resumirTurnoParaDailyReal, escrever: acrescentarAoDailyReal },
+    deps: Partial<DailyDeps> = {},
 ): Promise<DailyEscrito> {
-    const resumoMd = await deps.resumir(question, answer);
+    const { resumir = resumirTurnoParaDailyReal, escrever = acrescentarAoDailyReal } = deps;
+    const resumoMd = await resumir(question, answer);
     const entrada = formatDailyTurnoEntry({ resumoMd, nota });
-    const resultado = await deps.escrever(entrada);
+    const resultado = await escrever(entrada);
     return { dia: resultado.dia, criado: resultado.criado };
 }
 
@@ -185,11 +187,12 @@ export async function respond(question: string): Promise<ChatResult> {
     const db = await createClient();
     const queryEmbedding = await embedQuery(question);
 
-    const { data, error } = await db.rpc('match_chunks', {
+    const { data, error } = await db.rpc('match_chunks_hybrid', {
         query_embedding: JSON.stringify(queryEmbedding),
+        query_text: question,
         match_count: 5,
     });
-    if (error) throw new Error(`match_chunks falhou: ${error.message}`);
+    if (error) throw new Error(`match_chunks_hybrid falhou: ${error.message}`);
 
     // Filtra o lixo de fundo: só fontes relevantes vão ao prompt e ao resultado
     // (sources honesto). Abaixo do corte → (sem contexto) → fallback limpo.
