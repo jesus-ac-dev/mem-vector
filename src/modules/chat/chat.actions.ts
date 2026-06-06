@@ -82,6 +82,8 @@ export async function ask(
         role: 'assistant',
         content: result.answer,
         cost_usd: result.costUsd,
+        // Guardar as fontes religa as citações [N] quando a conversa é reaberta.
+        sources: result.sources,
     });
     if (asstMsg.error) throw new Error(`guardar resposta falhou: ${asstMsg.error.message}`);
 

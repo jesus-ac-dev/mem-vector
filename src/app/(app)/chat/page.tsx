@@ -101,7 +101,13 @@ function ChatContent() {
             conversaCarregadaRef.current = alvo;
             setConversationId(alvo ?? undefined);
             setMessages(
-                msgs.map((m) => ({ id: nextIdRef.current++, role: m.role, content: m.content })),
+                msgs.map((m) => ({
+                    id: nextIdRef.current++,
+                    role: m.role,
+                    content: m.content,
+                    // Religa as citações [N] e mostra a proveniência na conversa reaberta.
+                    sources: m.sources ?? undefined,
+                })),
             );
         }).catch(() => {
             // on failure, don't half-load

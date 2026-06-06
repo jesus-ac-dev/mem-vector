@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
+import type { Source } from './chat.prompt';
 
 export interface ConversaResumo {
     id: string;
@@ -14,6 +15,7 @@ export interface MensagemHist {
     role: 'user' | 'assistant';
     content: string;
     criadaEm: string;
+    sources: Source[] | null; // só nas mensagens do assistente; religa as citações [N]
 }
 
 export async function listarConversasCom(db: SupabaseClient): Promise<ConversaResumo[]> {
@@ -57,7 +59,7 @@ export async function listarConversasCom(db: SupabaseClient): Promise<ConversaRe
 export async function carregarConversaCom(db: SupabaseClient, id: string): Promise<MensagemHist[]> {
     const { data, error } = await db
         .from('messages')
-        .select('id, role, content, created_at')
+        .select('id, role, content, created_at, sources')
         .eq('conversation_id', id)
         .order('created_at', { ascending: true });
 
@@ -68,6 +70,7 @@ export async function carregarConversaCom(db: SupabaseClient, id: string): Promi
         role: m.role as 'user' | 'assistant',
         content: m.content as string,
         criadaEm: m.created_at as string,
+        sources: (m.sources as Source[] | null) ?? null,
     }));
 }
 
