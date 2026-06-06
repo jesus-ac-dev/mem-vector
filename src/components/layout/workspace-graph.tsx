@@ -22,6 +22,7 @@ interface NoGrafo {
     slug: string;
     title: string;
     group: string;
+    color: string;
 }
 
 // Grafo do conhecimento: nós = notas, arestas = wikilinks. Toggle 2D/3D (2D
@@ -59,7 +60,11 @@ export function WorkspaceGraph() {
 
     function abrirNo(node: object) {
         const n = node as NoGrafo;
-        abrirFicheiro({ tipo: 'knowledge', chave: n.slug, titulo: n.title });
+        if (n.group === 'daily') {
+            abrirFicheiro({ tipo: 'daily', chave: n.slug, titulo: n.title });
+        } else {
+            abrirFicheiro({ tipo: 'knowledge', chave: n.slug, titulo: n.title });
+        }
         router.push('/chat');
     }
 
@@ -69,7 +74,7 @@ export function WorkspaceGraph() {
         height: dim.h,
         nodeId: 'id',
         nodeLabel: 'title',
-        nodeAutoColorBy: 'group',
+        nodeColor: (n: object) => (n as NoGrafo).color,
         nodeRelSize: 4,
         cooldownTicks: 80,
         onNodeClick: abrirNo,
