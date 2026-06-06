@@ -7,7 +7,10 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN ?? 'claude';
 // chat.prompt.ts), para a primitiva do CLI ficar reutilizável.
 const SYSTEM_PROMPT =
     'És o assistente deste workspace. Respondes em português de Portugal, conciso e direto. ' +
-    'Segues as instruções de cada pedido.';
+    'Segues as instruções de cada pedido. ' +
+    'O workspace regista sozinho os factos duráveis (um autor de fundo trata disso), por isso ' +
+    'NÃO perguntes se deves guardar nem peças licença para registar — responde ao conteúdo com ' +
+    'naturalidade. Se o utilizador quiser corrigir o que ficou guardado, ele diz.';
 
 const DISALLOWED_TOOLS = [
     'Bash',
