@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { WorkspaceProvider } from '@/components/layout/workspace-context';
+import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
 import {
     BookText,
     CalendarDays,
@@ -24,6 +24,7 @@ import {
     FilePlus,
     FolderPlus,
     Archive,
+    Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -143,45 +144,66 @@ function LeftSidebar({
     collapsed: boolean;
     onToggle: () => void;
 }) {
+    const router = useRouter();
+    const { abrirConversa } = useWorkspace();
+
     if (collapsed) {
         return null;
     }
 
     return (
         <aside className="flex w-60 shrink-0 flex-col overflow-hidden border-r">
-            {/* Header — action icons row + collapse button */}
+            {/* Header — action icons (por painel) + collapse button */}
             <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
                 <div className="flex items-center gap-0.5">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Novo ficheiro"
-                        aria-label="Novo ficheiro"
-                        onClick={() => {}}
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <FilePlus className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Nova pasta"
-                        aria-label="Nova pasta"
-                        onClick={() => {}}
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <FolderPlus className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Arquivar selecção"
-                        aria-label="Arquivar selecção"
-                        onClick={() => {}}
-                        className="h-6 w-6 text-muted-foreground"
-                    >
-                        <Archive className="h-3.5 w-3.5" />
-                    </Button>
+                    {activePanel === 'explorer' ? (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Novo ficheiro"
+                                aria-label="Novo ficheiro"
+                                onClick={() => {}}
+                                className="h-6 w-6 text-muted-foreground"
+                            >
+                                <FilePlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Nova pasta"
+                                aria-label="Nova pasta"
+                                onClick={() => {}}
+                                className="h-6 w-6 text-muted-foreground"
+                            >
+                                <FolderPlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Arquivar selecção"
+                                aria-label="Arquivar selecção"
+                                onClick={() => {}}
+                                className="h-6 w-6 text-muted-foreground"
+                            >
+                                <Archive className="h-3.5 w-3.5" />
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Nova conversa"
+                            aria-label="Nova conversa"
+                            onClick={() => {
+                                abrirConversa(null);
+                                router.push('/chat');
+                            }}
+                            className="h-6 w-6 text-muted-foreground"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                    )}
                 </div>
                 <Button
                     variant="ghost"

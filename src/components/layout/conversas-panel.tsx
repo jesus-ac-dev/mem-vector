@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/layout/workspace-context';
@@ -40,11 +39,6 @@ export function ConversasPanel() {
             });
     }, []);
 
-    function handleNovaConversa() {
-        abrirConversa(null);
-        router.push('/chat');
-    }
-
     function handleAbrirConversa(id: string) {
         abrirConversa(id);
         router.push('/chat');
@@ -52,20 +46,7 @@ export function ConversasPanel() {
 
     return (
         <nav className="flex h-full flex-col overflow-hidden">
-            {/* Nova conversa */}
-            <div className="shrink-0 border-b px-2 py-1.5">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={handleNovaConversa}
-                    className="flex h-auto w-full items-center justify-start gap-1.5 rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    Nova conversa
-                </Button>
-            </div>
-
-            {/* List area */}
+            {/* List area (o botão "Nova conversa" vive no header da sidebar) */}
             <div className="min-h-0 flex-1 overflow-y-auto py-1">
                 {estado.tipo === 'carregando' && (
                     <p className="px-4 py-3 text-xs text-muted-foreground">a carregar…</p>
