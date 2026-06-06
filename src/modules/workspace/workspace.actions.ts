@@ -22,8 +22,16 @@ import {
     substituirDaily,
     listarVersoesDaily,
     listarDailies,
+    definirCorDaily,
+    corDaily,
 } from '@/modules/daily/daily.service';
-import { criarPasta, renomearPasta } from '@/modules/folders/folders.service';
+import {
+    criarPasta,
+    renomearPasta,
+    definirCorPasta,
+    listarPastas,
+} from '@/modules/folders/folders.service';
+import type { Pasta } from '@/modules/folders/folders.tree';
 import { extrairOutline, type OutlineItem } from '@/lib/outline';
 import type { Versao, NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 import type { NotaLinkavel } from '@/modules/workspace/wikilink-autocomplete';
@@ -280,4 +288,24 @@ export async function reporNotaAction(slug: string): Promise<void> {
 /** Lista as notas arquivadas (para a vista de arquivados do explorer). */
 export async function listarArquivadosAction(): Promise<NotaKnowledge[]> {
     return listarArquivados();
+}
+
+/** Lista as pastas do utilizador (para o modal de cores do grafo). */
+export async function listarPastasAction(): Promise<Pasta[]> {
+    return listarPastas();
+}
+
+/** Define a cor (hex) de uma pasta. */
+export async function definirCorPastaAction(folderId: string, cor: string | null): Promise<void> {
+    await definirCorPasta(folderId, cor);
+}
+
+/** Define a cor (hex) do grupo daily. */
+export async function definirCorDailyAction(cor: string | null): Promise<void> {
+    await definirCorDaily(cor);
+}
+
+/** Cor atual do grupo daily (ou null). */
+export async function corDailyAction(): Promise<string | null> {
+    return corDaily();
 }
