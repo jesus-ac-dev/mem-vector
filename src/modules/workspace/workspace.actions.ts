@@ -7,7 +7,7 @@ import {
     listarKnowledge,
 } from '@/modules/knowledge/knowledge.service';
 import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
-import { moverNota } from '@/modules/knowledge/knowledge.service';
+import { moverNota, renomearNota } from '@/modules/knowledge/knowledge.service';
 import { criarPasta, renomearPasta } from '@/modules/folders/folders.service';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
 
@@ -24,6 +24,11 @@ export async function moverNotaParaPasta(slug: string, folderId: string | null):
 /** Renomeia uma pasta. */
 export async function renomearPastaAction(id: string, novoNome: string): Promise<void> {
     await renomearPasta(id, novoNome);
+}
+
+/** Renomeia uma nota (muda título+slug e reaponta os [[links]] das que a referenciam). */
+export async function renomearNotaAction(slug: string, novoTitulo: string): Promise<void> {
+    await renomearNota(slug, novoTitulo);
 }
 
 export interface ConteudoFicheiro {

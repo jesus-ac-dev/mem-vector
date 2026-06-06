@@ -26,7 +26,9 @@ o Daily fica de fora (grupo à parte no explorer).
 
 Feito: modelo, criar pasta ("Nova pasta", `window.prompt` v1), explorer em árvore,
 **drag-drop** (arrastar nota → pasta, ou para a secção Knowledge = raiz;
-`moverNota` muda `folder_id`), **renomear pasta** (duplo-clique, `renomearPasta`).
-**Por fazer:** renomear nota, criar-nota-dentro-de-pasta, arquivo, cor de pasta na
-UI, `[[` autocomplete. Ver
+`moverNota` muda `folder_id`), **renomear pasta** (duplo-clique, `renomearPasta`), **renomear nota**
+(duplo-clique, `renomearNota` — muda título+slug e **reaponta os `[[links]]`** das
+notas que a referenciam, via `reescreverWikilinks`, para não partirem).
+**Por fazer:** criar-nota-dentro-de-pasta, arquivo, cor de pasta na UI, `[[`
+autocomplete. Ver
 `docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md`.

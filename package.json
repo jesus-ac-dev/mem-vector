@@ -33,7 +33,8 @@
         "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:run",
         "prepare": "husky",
         "folders-data": "tsx scripts/folders-data.ts",
-        "folders-ops": "tsx scripts/folders-ops.ts"
+        "folders-ops": "tsx scripts/folders-ops.ts",
+        "folders-rename": "tsx scripts/folders-rename.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",

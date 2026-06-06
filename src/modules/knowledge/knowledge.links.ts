@@ -20,3 +20,11 @@ export function parseWikilinks(markdown: string): string[] {
     }
     return out;
 }
+
+// Reescreve [[wikilinks]] cujo alvo slugifica para `oldSlug`, apontando-os para
+// `novoTitulo`. Usado ao renomear uma nota, para os links não partirem.
+export function reescreverWikilinks(markdown: string, oldSlug: string, novoTitulo: string): string {
+    return markdown.replace(/\[\[([^\]]+)\]\]/g, (m, inner: string) =>
+        slugify(inner) === oldSlug ? `[[${novoTitulo}]]` : m,
+    );
+}

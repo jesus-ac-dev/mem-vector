@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
 import { embedQuery } from '@/lib/embeddings';
-import { parseWikilinks, slugify } from './knowledge.links';
+import { parseWikilinks, reescreverWikilinks, slugify } from './knowledge.links';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
     EscritaKnowledgeSchema,
@@ -189,6 +189,106 @@ export async function moverNotaCom(
 }
 export const moverNota = async (slug: string, folderId: string | null) =>
     moverNotaCom(await createClient(), slug, folderId);
+
+// Renomeia uma nota: muda título+slug e reescreve os [[links]] nas notas que
+// apontam para ela (senão ficariam quebrados). Se o slug não muda, só atualiza o
+// título de exibição.
+export async function renomearNotaCom(
+    db: SupabaseClient,
+    slug: string,
+    novoTitulo: string,
+): Promise<{ novoSlug: string }> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const titulo = novoTitulo.trim();
+    if (!titulo) throw new Error('título vazio');
+    const novoSlug = slugify(titulo);
+
+    const { data: nota, error } = await db
+        .from('knowledge')
+        .select('id, frontmatter')
+        .eq('owner_id', user.id)
+        .eq('slug', slug)
+        .maybeSingle();
+    if (error) throw new Error(`ler nota: ${error.message}`);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const frontmatter = { ...((nota.frontmatter as Record<string, unknown>) ?? {}), title: titulo };
+
+    if (novoSlug === slug) {
+        const up = await db
+            .from('knowledge')
+            .update({ title: titulo, frontmatter })
+            .eq('id', nota.id);
+        if (up.error) throw new Error(`renomear nota: ${up.error.message}`);
+        return { novoSlug };
+    }
+
+    // Colisão de slug?
+    const col = await db
+        .from('knowledge')
+        .select('id')
+        .eq('owner_id', user.id)
+        .eq('slug', novoSlug)
+        .maybeSingle();
+    if (col.data) throw new Error('já existe uma nota com esse nome');
+
+    // 1) Renomear a própria nota (id estável).
+    const up = await db
+        .from('knowledge')
+        .update({ title: titulo, slug: novoSlug, frontmatter })
+        .eq('id', nota.id);
+    if (up.error) throw new Error(`renomear nota: ${up.error.message}`);
+
+    // 2) Atualizar slug/title na metadata dos chunks da nota.
+    const ch = await db
+        .from('chunks')
+        .select('id, metadata')
+        .eq('owner_id', user.id)
+        .eq('metadata->>entity_id', nota.id);
+    for (const c of ch.data ?? []) {
+        const meta = {
+            ...((c.metadata as Record<string, unknown>) ?? {}),
+            slug: novoSlug,
+            title: titulo,
+        };
+        await db.from('chunks').update({ metadata: meta }).eq('id', c.id);
+    }
+
+    // 3) Reescrever os [[links]] nas notas que apontam para a antiga (re-save
+    //    regenera os edges dessas notas a apontar para o novo slug).
+    const ed = await db
+        .from('edges')
+        .select('from_id')
+        .eq('owner_id', user.id)
+        .eq('from_type', 'knowledge')
+        .eq('to_slug', slug);
+    const fromIds = [...new Set((ed.data ?? []).map((e) => e.from_id as string))];
+    if (fromIds.length) {
+        const refs = await db.from('knowledge').select('id, title, content_md').in('id', fromIds);
+        for (const ref of refs.data ?? []) {
+            const novoConteudo = reescreverWikilinks(ref.content_md, slug, titulo);
+            if (novoConteudo !== ref.content_md) {
+                await escreverNotaCom(
+                    db,
+                    {
+                        title: ref.title,
+                        content_md: novoConteudo,
+                        links: [],
+                        reason: `rename ${slug}`,
+                    },
+                    'agent',
+                );
+            }
+        }
+    }
+
+    return { novoSlug };
+}
+export const renomearNota = async (slug: string, novoTitulo: string) =>
+    renomearNotaCom(await createClient(), slug, novoTitulo);
 
 // UPDATE-bias: dado o texto de um facto, devolve as notas knowledge existentes
 // mais relacionadas (via busca híbrida), para o agente-autor CONTINUAR a certa

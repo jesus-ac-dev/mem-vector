@@ -6,7 +6,11 @@ import { ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useWorkspace, tabKey } from '@/components/layout/workspace-context';
-import { moverNotaParaPasta, renomearPastaAction } from '@/modules/workspace/workspace.actions';
+import {
+    moverNotaParaPasta,
+    renomearPastaAction,
+    renomearNotaAction,
+} from '@/modules/workspace/workspace.actions';
 import type { Arvore, NoArvore, NotaItem } from '@/modules/folders/folders.tree';
 
 export interface DailyItem {
@@ -18,12 +22,13 @@ export interface DailyItem {
 interface Ops {
     mover: (slug: string, folderId: string | null) => void;
     renomearPasta: (id: string, nomeAtual: string) => void;
+    renomearNota: (slug: string, tituloAtual: string) => void;
 }
 
 const DRAG_TIPO = 'application/x-mem-nota-slug';
 
-// Link de uma nota knowledge (abre numa tab; arrastável para mover de pasta).
-function NotaLink({ nota, depth }: { nota: NotaItem; depth: number }) {
+// Link de uma nota knowledge (abre numa tab; arrastável para mover; duplo-clique renomeia).
+function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Ops }) {
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
     const isActive = ficheiroAtivo === tabKey({ tipo: 'knowledge', chave: nota.slug });
@@ -37,7 +42,8 @@ function NotaLink({ nota, depth }: { nota: NotaItem; depth: number }) {
                 abrirFicheiro({ tipo: 'knowledge', chave: nota.slug, titulo: nota.title });
                 router.push('/chat');
             }}
-            title={nota.title}
+            onDoubleClick={() => ops.renomearNota(nota.slug, nota.title)}
+            title={`${nota.title} (duplo-clique para renomear)`}
             style={{ paddingLeft: `${depth * 16}px` }}
             className={cn(
                 'h-auto w-full justify-start truncate rounded-none py-1.5 pr-3 text-sm transition-colors',
@@ -91,7 +97,7 @@ function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops 
                         <FolderNode key={sub.pasta.id} no={sub} depth={depth + 1} ops={ops} />
                     ))}
                     {no.notas.map((nota) => (
-                        <NotaLink key={nota.id} nota={nota} depth={depth + 1} />
+                        <NotaLink key={nota.id} nota={nota} depth={depth + 1} ops={ops} />
                     ))}
                 </div>
             )}
@@ -192,6 +198,12 @@ export function FileExplorer({ arvore, dailies }: FileExplorerProps) {
                 void renomearPastaAction(id, novo.trim()).then(() => router.refresh());
             }
         },
+        renomearNota: (slug, tituloAtual) => {
+            const novo = window.prompt('Renomear nota:', tituloAtual);
+            if (novo?.trim() && novo.trim() !== tituloAtual) {
+                void renomearNotaAction(slug, novo.trim()).then(() => router.refresh());
+            }
+        },
     };
 
     const vazioKnowledge = arvore.raizPastas.length === 0 && arvore.raizNotas.length === 0;
@@ -203,7 +215,7 @@ export function FileExplorer({ arvore, dailies }: FileExplorerProps) {
                         <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
                     ))}
                     {arvore.raizNotas.map((nota) => (
-                        <NotaLink key={nota.id} nota={nota} depth={1} />
+                        <NotaLink key={nota.id} nota={nota} depth={1} ops={ops} />
                     ))}
                     {vazioKnowledge && (
                         <p className="px-6 py-1.5 text-xs text-muted-foreground">Sem itens.</p>
