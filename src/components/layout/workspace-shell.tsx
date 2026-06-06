@@ -29,9 +29,15 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { FileExplorer } from '@/components/layout/file-explorer';
 import type { DailyItem } from '@/components/layout/file-explorer';
+import { ArquivadosLista } from '@/components/layout/arquivados-lista';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
-import { criarNotaVazia, novaPasta } from '@/modules/workspace/workspace.actions';
+import {
+    criarNotaVazia,
+    novaPasta,
+    listarArquivadosAction,
+} from '@/modules/workspace/workspace.actions';
 import type { Arvore } from '@/modules/folders/folders.tree';
+import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
@@ -149,6 +155,20 @@ function LeftSidebar({
 }) {
     const router = useRouter();
     const { abrirConversa, abrirFicheiro } = useWorkspace();
+    const [verArquivados, setVerArquivados] = useState(false);
+    const [arquivados, setArquivados] = useState<NotaKnowledge[]>([]);
+
+    async function carregarArquivados() {
+        setArquivados(await listarArquivadosAction());
+    }
+
+    function toggleArquivados() {
+        setVerArquivados((v) => {
+            const novo = !v;
+            if (novo) void carregarArquivados();
+            return novo;
+        });
+    }
 
     async function handleNovaNota() {
         const nota = await criarNotaVazia();
@@ -203,10 +223,14 @@ function LeftSidebar({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                title="Arquivar selecção"
-                                aria-label="Arquivar selecção"
-                                onClick={() => {}}
-                                className="h-6 w-6 text-muted-foreground"
+                                title={verArquivados ? 'Ver notas' : 'Ver arquivados'}
+                                aria-label="Ver arquivados"
+                                aria-pressed={verArquivados}
+                                onClick={toggleArquivados}
+                                className={cn(
+                                    'h-6 w-6 text-muted-foreground',
+                                    verArquivados && 'bg-accent text-accent-foreground',
+                                )}
                             >
                                 <Archive className="h-3.5 w-3.5" />
                             </Button>
@@ -243,7 +267,11 @@ function LeftSidebar({
             {/* Main panel content */}
             <div className="min-h-0 flex-1 overflow-y-auto">
                 {activePanel === 'explorer' ? (
-                    <FileExplorer arvore={arvore} dailies={dailies} />
+                    verArquivados ? (
+                        <ArquivadosLista arquivados={arquivados} onMudou={carregarArquivados} />
+                    ) : (
+                        <FileExplorer arvore={arvore} dailies={dailies} />
+                    )
                 ) : (
                     <ConversasPanel />
                 )}
