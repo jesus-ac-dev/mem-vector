@@ -185,11 +185,12 @@ export async function respond(question: string): Promise<ChatResult> {
     const db = await createClient();
     const queryEmbedding = await embedQuery(question);
 
-    const { data, error } = await db.rpc('match_chunks', {
+    const { data, error } = await db.rpc('match_chunks_hybrid', {
         query_embedding: JSON.stringify(queryEmbedding),
+        query_text: question,
         match_count: 5,
     });
-    if (error) throw new Error(`match_chunks falhou: ${error.message}`);
+    if (error) throw new Error(`match_chunks_hybrid falhou: ${error.message}`);
 
     // Filtra o lixo de fundo: só fontes relevantes vão ao prompt e ao resultado
     // (sources honesto). Abaixo do corte → (sem contexto) → fallback limpo.
