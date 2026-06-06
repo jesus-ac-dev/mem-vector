@@ -137,6 +137,20 @@ export async function criarNotaVazia(): Promise<{
     return { tipo: 'knowledge', chave: res.slug, titulo: res.title };
 }
 
+/**
+ * Cria uma nota nova já dentro de uma pasta (folderId null = raiz). Reusa
+ * criarNotaVazia + moverNota. Usada pelo "Nova nota" quando há pasta selecionada.
+ */
+export async function criarNotaNaPasta(folderId: string | null): Promise<{
+    tipo: 'knowledge';
+    chave: string;
+    titulo: string;
+}> {
+    const nota = await criarNotaVazia();
+    if (folderId) await moverNota(nota.chave, folderId);
+    return nota;
+}
+
 export interface DadosBarraDireita {
     outline: OutlineItem[];
     backlinks: LinkNota[];

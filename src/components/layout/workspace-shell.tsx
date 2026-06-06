@@ -32,7 +32,7 @@ import { ArquivadosLista } from '@/components/layout/arquivados-lista';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
 import { WorkspaceGraph } from '@/components/layout/workspace-graph';
 import {
-    criarNotaVazia,
+    criarNotaNaPasta,
     novaPasta,
     abrirOuCriarNota,
     dadosBarraDireita,
@@ -161,6 +161,7 @@ function LeftSidebar({
     const { abrirConversa, abrirFicheiro } = useWorkspace();
     const [verArquivados, setVerArquivados] = useState(false);
     const [arquivados, setArquivados] = useState<NotaKnowledge[]>([]);
+    const [pastaSelecionada, setPastaSelecionada] = useState<string | null>(null);
 
     async function carregarArquivados() {
         setArquivados(await listarArquivadosAction());
@@ -175,7 +176,7 @@ function LeftSidebar({
     }
 
     async function handleNovaNota() {
-        const nota = await criarNotaVazia();
+        const nota = await criarNotaNaPasta(pastaSelecionada);
         abrirFicheiro({
             tipo: nota.tipo,
             chave: nota.chave,
@@ -274,7 +275,12 @@ function LeftSidebar({
                     verArquivados ? (
                         <ArquivadosLista arquivados={arquivados} onMudou={carregarArquivados} />
                     ) : (
-                        <FileExplorer arvore={arvore} dailies={dailies} />
+                        <FileExplorer
+                            arvore={arvore}
+                            dailies={dailies}
+                            pastaSelecionada={pastaSelecionada}
+                            onSelecionarPasta={setPastaSelecionada}
+                        />
                     )
                 ) : (
                     <ConversasPanel />

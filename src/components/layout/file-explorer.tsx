@@ -23,6 +23,8 @@ interface Ops {
     mover: (slug: string, folderId: string | null) => void;
     renomearPasta: (id: string, nomeAtual: string) => void;
     renomearNota: (slug: string, tituloAtual: string) => void;
+    selecionarPasta: (id: string | null) => void;
+    selecionadaId: string | null;
 }
 
 const DRAG_TIPO = 'application/x-mem-nota-slug';
@@ -65,7 +67,10 @@ function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops 
             <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => {
+                    ops.selecionarPasta(no.pasta.id);
+                    setOpen((v) => !v);
+                }}
                 onDoubleClick={() => ops.renomearPasta(no.pasta.id, no.pasta.name)}
                 onDragOver={(e) => {
                     if (e.dataTransfer.types.includes(DRAG_TIPO)) {
@@ -80,11 +85,12 @@ function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops 
                     const slug = e.dataTransfer.getData(DRAG_TIPO);
                     if (slug) ops.mover(slug, no.pasta.id);
                 }}
-                title={`${no.pasta.name} (duplo-clique para renomear)`}
+                title={`${no.pasta.name} (clique seleciona, duplo-clique renomeia)`}
                 style={{ paddingLeft: `${depth * 16}px` }}
                 className={cn(
                     'flex h-auto w-full items-center justify-start gap-1 rounded-none py-1.5 pr-3 text-sm text-foreground hover:bg-muted',
-                    over && 'bg-accent text-accent-foreground',
+                    (over || ops.selecionadaId === no.pasta.id) &&
+                        'bg-accent text-accent-foreground',
                 )}
             >
                 <Chevron className="h-3 w-3 shrink-0" />
@@ -109,10 +115,12 @@ function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops 
 function Seccao({
     label,
     onDropRaiz,
+    onClickLabel,
     children,
 }: {
     label: string;
     onDropRaiz?: (slug: string) => void;
+    onClickLabel?: () => void;
     children: React.ReactNode;
 }) {
     const [open, setOpen] = useState(true);
@@ -146,7 +154,10 @@ function Seccao({
             <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => {
+                    onClickLabel?.();
+                    setOpen((v) => !v);
+                }}
                 className="flex h-auto w-full items-center justify-start gap-1 rounded-none px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
             >
                 <Chevron className="h-3 w-3 shrink-0" />
@@ -183,9 +194,16 @@ function DailyLink({ daily }: { daily: DailyItem }) {
 interface FileExplorerProps {
     arvore: Arvore;
     dailies: DailyItem[];
+    pastaSelecionada: string | null;
+    onSelecionarPasta: (id: string | null) => void;
 }
 
-export function FileExplorer({ arvore, dailies }: FileExplorerProps) {
+export function FileExplorer({
+    arvore,
+    dailies,
+    pastaSelecionada,
+    onSelecionarPasta,
+}: FileExplorerProps) {
     const router = useRouter();
 
     const ops: Ops = {
@@ -204,13 +222,19 @@ export function FileExplorer({ arvore, dailies }: FileExplorerProps) {
                 void renomearNotaAction(slug, novo.trim()).then(() => router.refresh());
             }
         },
+        selecionarPasta: onSelecionarPasta,
+        selecionadaId: pastaSelecionada,
     };
 
     const vazioKnowledge = arvore.raizPastas.length === 0 && arvore.raizNotas.length === 0;
     return (
         <nav className="flex h-full flex-col overflow-y-auto">
             <div className="flex-1 overflow-y-auto py-1">
-                <Seccao label="Knowledge" onDropRaiz={(slug) => ops.mover(slug, null)}>
+                <Seccao
+                    label="Knowledge"
+                    onDropRaiz={(slug) => ops.mover(slug, null)}
+                    onClickLabel={() => onSelecionarPasta(null)}
+                >
                     {arvore.raizPastas.map((no) => (
                         <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
                     ))}

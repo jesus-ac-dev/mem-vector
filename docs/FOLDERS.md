@@ -56,11 +56,22 @@ abre um dropdown que filtra notas enquanto escreves.
   e o arquivar (#17) coexistem. As arestas para arquivadas caem pelo filtro
   `idsValidos`. (No branch `feat/folders` isolado não existe `grafoDadosCom`.)
 
+## Criar nota dentro de pasta
+
+- **Seleção de pasta:** clicar numa pasta no explorer seleciona-a (destaque) e
+  mantém o expandir/colapsar; clicar no cabeçalho "Knowledge" desseleciona (raiz).
+  Estado `pastaSelecionada` no `LeftSidebar` (`workspace-shell.tsx`), passado ao
+  `FileExplorer` via `Ops` (`selecionarPasta`/`selecionadaId`).
+- **Nova nota:** o botão "Nova nota" do header cria na pasta selecionada (ou na
+  raiz se nenhuma) via `criarNotaNaPasta(folderId)` = `criarNotaVazia` +
+  `moverNota`. Abre em editor + refresh. (A seleção não persiste em refresh — v1.)
+
 ## Estado
 
-Feito: modelo, criar pasta, explorer em árvore, **drag-drop** (`moverNota`),
-**renomear pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4)
-e **arquivar** (F5). As 5 funcionalidades do file explorer estão fechadas.
-**Por fazer (fora desta fatia):** criar-nota-dentro-de-pasta, cor de pasta na UI. Ver
+Feito: modelo, criar pasta, **criar nota dentro de pasta** (pasta selecionada +
+Nova nota), explorer em árvore, **drag-drop** (`moverNota`), **renomear
+pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4) e
+**arquivar** (F5). As 5 funcionalidades do file explorer estão fechadas.
+**Por fazer (fora desta fatia):** cor de pasta na UI. Ver
 `docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md` e
 `docs/superpowers/specs/2026-06-06-file-explorer-f4-f5-design.md`.
