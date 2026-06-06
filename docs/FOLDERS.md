@@ -10,7 +10,7 @@ o Daily fica de fora (grupo à parte no explorer).
   as cores do grafo, ainda não usada na UI), `created_at`. RLS por dono. Nome
   único por nível (`owner_id` + `parent_id` + `lower(name)`).
 - **`knowledge.folder_id`** (uuid null → raiz; FK `folders`, `on delete set
-  null`): apagar uma pasta devolve as notas à raiz.
+null`): apagar uma pasta devolve as notas à raiz.
 
 ## Código
 
@@ -51,16 +51,16 @@ abre um dropdown que filtra notas enquanto escreves.
   header do explorer (`workspace-shell.tsx`) que troca a árvore pela
   `ArquivadosLista` (cada nota com **Repor**).
 - **Prova:** `npm run arquivo` (headless, 6 eixos).
-- **Pendente — reconciliação no merge:** esconder do **grafo** (`grafoDadosCom`,
-  no PR #16) precisa de `.eq('archived', false)` quando #16/#17 forem integrados.
-  Não cabe neste branch (o grafo não existe aqui).
+- **Esconder do grafo:** `grafoDadosCom` filtra `.eq('archived', false)` — aplicado
+  na integração da stack (branch `integra/file-explorer-stack`), onde o grafo (#16)
+  e o arquivar (#17) coexistem. As arestas para arquivadas caem pelo filtro
+  `idsValidos`. (No branch `feat/folders` isolado não existe `grafoDadosCom`.)
 
 ## Estado
 
 Feito: modelo, criar pasta, explorer em árvore, **drag-drop** (`moverNota`),
 **renomear pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4)
 e **arquivar** (F5). As 5 funcionalidades do file explorer estão fechadas.
-**Por fazer (fora desta fatia):** criar-nota-dentro-de-pasta, cor de pasta na UI,
-esconder arquivadas do grafo (na integração do #16). Ver
+**Por fazer (fora desta fatia):** criar-nota-dentro-de-pasta, cor de pasta na UI. Ver
 `docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md` e
 `docs/superpowers/specs/2026-06-06-file-explorer-f4-f5-design.md`.
