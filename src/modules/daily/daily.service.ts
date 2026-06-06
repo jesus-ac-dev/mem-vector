@@ -173,6 +173,34 @@ export async function substituirDailyCom(
 export const substituirDaily = async (dia: string, contentMd: string, author: 'agent' | 'user') =>
     substituirDailyCom(await createClient(), dia, contentMd, author);
 
+// Cor (hex) do grupo daily, guardada no profile do utilizador. null limpa.
+export async function definirCorDailyCom(db: SupabaseClient, cor: string | null): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const { error } = await db
+        .from('profiles')
+        .upsert({ id: user.id, daily_color: cor }, { onConflict: 'id' });
+    if (error) throw new Error(`definir cor daily: ${error.message}`);
+}
+export const definirCorDaily = async (cor: string | null) =>
+    definirCorDailyCom(await createClient(), cor);
+
+export async function corDailyCom(db: SupabaseClient): Promise<string | null> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) return null;
+    const { data } = await db
+        .from('profiles')
+        .select('daily_color')
+        .eq('id', user.id)
+        .maybeSingle();
+    return data?.daily_color ?? null;
+}
+export const corDaily = async () => corDailyCom(await createClient());
+
 export async function listarDailiesCom(db: SupabaseClient): Promise<DailyListItem[]> {
     const { data, error } = await db
         .from('dailies')

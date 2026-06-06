@@ -26,6 +26,26 @@ export async function listarPastasCom(db: SupabaseClient): Promise<Pasta[]> {
 }
 export const listarPastas = async () => listarPastasCom(await createClient());
 
+// Define a cor (hex) de uma pasta. null limpa a cor.
+export async function definirCorPastaCom(
+    db: SupabaseClient,
+    folderId: string,
+    cor: string | null,
+): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const { error } = await db
+        .from('folders')
+        .update({ color: cor })
+        .eq('owner_id', user.id)
+        .eq('id', folderId);
+    if (error) throw new Error(`definir cor pasta: ${error.message}`);
+}
+export const definirCorPasta = async (folderId: string, cor: string | null) =>
+    definirCorPastaCom(await createClient(), folderId, cor);
+
 export async function criarPastaCom(
     db: SupabaseClient,
     name: string,
