@@ -170,6 +170,26 @@ export async function getNotaCom(db: SupabaseClient, slug: string): Promise<Nota
 }
 export const getNota = async (slug: string) => getNotaCom(await createClient(), slug);
 
+// Move uma nota para uma pasta (folderId null = raiz). Drag-drop do explorer.
+export async function moverNotaCom(
+    db: SupabaseClient,
+    slug: string,
+    folderId: string | null,
+): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const { error } = await db
+        .from('knowledge')
+        .update({ folder_id: folderId })
+        .eq('owner_id', user.id)
+        .eq('slug', slug);
+    if (error) throw new Error(`mover nota: ${error.message}`);
+}
+export const moverNota = async (slug: string, folderId: string | null) =>
+    moverNotaCom(await createClient(), slug, folderId);
+
 // UPDATE-bias: dado o texto de um facto, devolve as notas knowledge existentes
 // mais relacionadas (via busca híbrida), para o agente-autor CONTINUAR a certa
 // em vez de criar uma nova. Ordenadas por relevância, distintas, top `limite`.

@@ -22,9 +22,11 @@ o Daily fica de fora (grupo à parte no explorer).
 - `(app)/layout.tsx` constrói a árvore (server) e passa-a ao `WorkspaceShell` →
   `file-explorer.tsx`, que a renderiza recursivamente.
 
-## Estado (fatia 1)
+## Estado
 
-Feito: modelo, criar pasta (na raiz, via "Nova pasta" — `window.prompt` no v1),
-explorer em árvore. **Por fazer:** drag-drop mover nota → pasta, renomear
-pasta/nota, criar-nota-dentro-de-pasta, arquivo, cor de pasta na UI, `[[`
-autocomplete. Ver `docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md`.
+Feito: modelo, criar pasta ("Nova pasta", `window.prompt` v1), explorer em árvore,
+**drag-drop** (arrastar nota → pasta, ou para a secção Knowledge = raiz;
+`moverNota` muda `folder_id`), **renomear pasta** (duplo-clique, `renomearPasta`).
+**Por fazer:** renomear nota, criar-nota-dentro-de-pasta, arquivo, cor de pasta na
+UI, `[[` autocomplete. Ver
+`docs/superpowers/specs/2026-06-06-file-explorer-folders-design.md`.

@@ -7,12 +7,23 @@ import {
     listarKnowledge,
 } from '@/modules/knowledge/knowledge.service';
 import { getDaily, substituirDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
-import { criarPasta } from '@/modules/folders/folders.service';
+import { moverNota } from '@/modules/knowledge/knowledge.service';
+import { criarPasta, renomearPasta } from '@/modules/folders/folders.service';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
 
 /** Cria uma pasta nova na raiz (usada pelo botão "Nova pasta" do explorer). */
 export async function novaPasta(name: string): Promise<void> {
     await criarPasta(name);
+}
+
+/** Move uma nota (por slug) para uma pasta (folderId null = raiz). Drag-drop. */
+export async function moverNotaParaPasta(slug: string, folderId: string | null): Promise<void> {
+    await moverNota(slug, folderId);
+}
+
+/** Renomeia uma pasta. */
+export async function renomearPastaAction(id: string, novoNome: string): Promise<void> {
+    await renomearPasta(id, novoNome);
 }
 
 export interface ConteudoFicheiro {

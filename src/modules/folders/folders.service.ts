@@ -48,3 +48,16 @@ export async function criarPastaCom(
 }
 export const criarPasta = async (name: string, parentId: string | null = null) =>
     criarPastaCom(await createClient(), name, parentId);
+
+export async function renomearPastaCom(
+    db: SupabaseClient,
+    id: string,
+    novoNome: string,
+): Promise<void> {
+    const nome = novoNome.trim();
+    if (!nome) throw new Error('nome de pasta vazio');
+    const { error } = await db.from('folders').update({ name: nome }).eq('id', id);
+    if (error) throw new Error(`renomear pasta: ${error.message}`);
+}
+export const renomearPasta = async (id: string, novoNome: string) =>
+    renomearPastaCom(await createClient(), id, novoNome);

@@ -6,6 +6,7 @@ import { ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useWorkspace, tabKey } from '@/components/layout/workspace-context';
+import { moverNotaParaPasta, renomearPastaAction } from '@/modules/workspace/workspace.actions';
 import type { Arvore, NoArvore, NotaItem } from '@/modules/folders/folders.tree';
 
 export interface DailyItem {
@@ -14,12 +15,14 @@ export interface DailyItem {
     title: string;
 }
 
-interface FileExplorerProps {
-    arvore: Arvore;
-    dailies: DailyItem[];
+interface Ops {
+    mover: (slug: string, folderId: string | null) => void;
+    renomearPasta: (id: string, nomeAtual: string) => void;
 }
 
-// Link de uma nota knowledge (abre numa tab).
+const DRAG_TIPO = 'application/x-mem-nota-slug';
+
+// Link de uma nota knowledge (abre numa tab; arrastável para mover de pasta).
 function NotaLink({ nota, depth }: { nota: NotaItem; depth: number }) {
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
@@ -28,6 +31,8 @@ function NotaLink({ nota, depth }: { nota: NotaItem; depth: number }) {
         <Button
             type="button"
             variant="ghost"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData(DRAG_TIPO, nota.slug)}
             onClick={() => {
                 abrirFicheiro({ tipo: 'knowledge', chave: nota.slug, titulo: nota.title });
                 router.push('/chat');
@@ -44,9 +49,10 @@ function NotaLink({ nota, depth }: { nota: NotaItem; depth: number }) {
     );
 }
 
-// Nó de pasta, recursivo (subpastas + notas).
-function FolderNode({ no, depth }: { no: NoArvore; depth: number }) {
+// Nó de pasta, recursivo. Alvo de drop (mover nota para cá) e duplo-clique para renomear.
+function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops }) {
     const [open, setOpen] = useState(true);
+    const [over, setOver] = useState(false);
     const Chevron = open ? ChevronDown : ChevronRight;
     return (
         <div>
@@ -54,9 +60,26 @@ function FolderNode({ no, depth }: { no: NoArvore; depth: number }) {
                 type="button"
                 variant="ghost"
                 onClick={() => setOpen((v) => !v)}
-                title={no.pasta.name}
+                onDoubleClick={() => ops.renomearPasta(no.pasta.id, no.pasta.name)}
+                onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes(DRAG_TIPO)) {
+                        e.preventDefault();
+                        setOver(true);
+                    }
+                }}
+                onDragLeave={() => setOver(false)}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    setOver(false);
+                    const slug = e.dataTransfer.getData(DRAG_TIPO);
+                    if (slug) ops.mover(slug, no.pasta.id);
+                }}
+                title={`${no.pasta.name} (duplo-clique para renomear)`}
                 style={{ paddingLeft: `${depth * 16}px` }}
-                className="flex h-auto w-full items-center justify-start gap-1 rounded-none py-1.5 pr-3 text-sm text-foreground hover:bg-muted"
+                className={cn(
+                    'flex h-auto w-full items-center justify-start gap-1 rounded-none py-1.5 pr-3 text-sm text-foreground hover:bg-muted',
+                    over && 'bg-accent text-accent-foreground',
+                )}
             >
                 <Chevron className="h-3 w-3 shrink-0" />
                 <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -65,7 +88,7 @@ function FolderNode({ no, depth }: { no: NoArvore; depth: number }) {
             {open && (
                 <div>
                     {no.subpastas.map((sub) => (
-                        <FolderNode key={sub.pasta.id} no={sub} depth={depth + 1} />
+                        <FolderNode key={sub.pasta.id} no={sub} depth={depth + 1} ops={ops} />
                     ))}
                     {no.notas.map((nota) => (
                         <NotaLink key={nota.id} nota={nota} depth={depth + 1} />
@@ -77,11 +100,43 @@ function FolderNode({ no, depth }: { no: NoArvore; depth: number }) {
 }
 
 // Secção colapsável de topo (Knowledge / Daily Notes).
-function Seccao({ label, children }: { label: string; children: React.ReactNode }) {
+function Seccao({
+    label,
+    onDropRaiz,
+    children,
+}: {
+    label: string;
+    onDropRaiz?: (slug: string) => void;
+    children: React.ReactNode;
+}) {
     const [open, setOpen] = useState(true);
+    const [over, setOver] = useState(false);
     const Chevron = open ? ChevronDown : ChevronRight;
     return (
-        <div>
+        <div
+            onDragOver={
+                onDropRaiz
+                    ? (e) => {
+                          if (e.dataTransfer.types.includes(DRAG_TIPO)) {
+                              e.preventDefault();
+                              setOver(true);
+                          }
+                      }
+                    : undefined
+            }
+            onDragLeave={onDropRaiz ? () => setOver(false) : undefined}
+            onDrop={
+                onDropRaiz
+                    ? (e) => {
+                          e.preventDefault();
+                          setOver(false);
+                          const slug = e.dataTransfer.getData(DRAG_TIPO);
+                          if (slug) onDropRaiz(slug);
+                      }
+                    : undefined
+            }
+            className={cn(over && 'bg-accent/30')}
+        >
             <Button
                 type="button"
                 variant="ghost"
@@ -119,14 +174,33 @@ function DailyLink({ daily }: { daily: DailyItem }) {
     );
 }
 
+interface FileExplorerProps {
+    arvore: Arvore;
+    dailies: DailyItem[];
+}
+
 export function FileExplorer({ arvore, dailies }: FileExplorerProps) {
+    const router = useRouter();
+
+    const ops: Ops = {
+        mover: (slug, folderId) => {
+            void moverNotaParaPasta(slug, folderId).then(() => router.refresh());
+        },
+        renomearPasta: (id, nomeAtual) => {
+            const novo = window.prompt('Renomear pasta:', nomeAtual);
+            if (novo?.trim() && novo.trim() !== nomeAtual) {
+                void renomearPastaAction(id, novo.trim()).then(() => router.refresh());
+            }
+        },
+    };
+
     const vazioKnowledge = arvore.raizPastas.length === 0 && arvore.raizNotas.length === 0;
     return (
         <nav className="flex h-full flex-col overflow-y-auto">
             <div className="flex-1 overflow-y-auto py-1">
-                <Seccao label="Knowledge">
+                <Seccao label="Knowledge" onDropRaiz={(slug) => ops.mover(slug, null)}>
                     {arvore.raizPastas.map((no) => (
-                        <FolderNode key={no.pasta.id} no={no} depth={1} />
+                        <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
                     ))}
                     {arvore.raizNotas.map((nota) => (
                         <NotaLink key={nota.id} nota={nota} depth={1} />
