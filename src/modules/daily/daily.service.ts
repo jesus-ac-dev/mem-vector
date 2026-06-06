@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
+import { regenerarEdgesCom } from '@/modules/knowledge/edges';
+import { parseWikilinks } from '@/modules/knowledge/knowledge.links';
 
 export interface ResultadoAcrescento {
     dia: string;
@@ -158,6 +160,14 @@ export async function substituirDailyCom(
         source: 'daily',
         contentMd: contentNormalizado,
         metadata: { dia: daily.dia },
+    });
+
+    // Regenerar edges (wikilinks) — liga o daily às notas no grafo.
+    await regenerarEdgesCom(db, {
+        ownerId: user.id,
+        fromType: 'daily',
+        fromId: daily.id,
+        alvos: parseWikilinks(contentNormalizado),
     });
 }
 export const substituirDaily = async (dia: string, contentMd: string, author: 'agent' | 'user') =>
