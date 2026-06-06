@@ -141,7 +141,7 @@ function ChatContent() {
     }
 
     return (
-        <div className="mx-auto flex h-full max-w-2xl flex-col gap-4 p-6">
+        <div className="flex h-full w-full flex-col gap-4 p-6">
             <header>
                 <h1 className="text-xl font-semibold">mem-vector — chat (ping-pong)</h1>
                 <p className="text-sm text-muted-foreground">

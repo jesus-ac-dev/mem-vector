@@ -20,7 +20,6 @@ export function FilePane({ ficheiro }: FilePaneProps) {
     const { fecharFicheiro } = useWorkspace();
     // Estado inicial já inclui o título do item antes do fetch terminar.
     const [estado, setEstado] = useState<PaneEstado>({ tipo: 'carregando' });
-
     useEffect(() => {
         let cancelled = false;
 
@@ -46,10 +45,12 @@ export function FilePane({ ficheiro }: FilePaneProps) {
     const titulo = estado.tipo === 'ok' ? estado.titulo : (ficheiro.titulo ?? ficheiro.chave);
 
     return (
-        <div className="flex h-full flex-col overflow-hidden border-l">
+        <div className="flex h-full flex-col overflow-hidden border-l duration-200 animate-in fade-in slide-in-from-right-2">
             {/* Header */}
-            <div className="flex h-10 shrink-0 items-center justify-between border-b px-4">
-                <span className="truncate text-sm font-medium text-foreground">{titulo}</span>
+            <div className="flex h-10 min-w-0 shrink-0 items-center justify-between border-b px-4">
+                <span className="truncate text-sm font-medium text-foreground" title={titulo}>
+                    {titulo}
+                </span>
                 <Button
                     variant="ghost"
                     size="icon"
