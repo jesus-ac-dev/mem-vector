@@ -1,8 +1,19 @@
+export interface SourceMetadata {
+    entity_type?: string;
+    entity_id?: string;
+    dia?: string;
+    slug?: string;
+    title?: string;
+    [key: string]: unknown;
+}
+
 // Documento recuperado do RAG que alimenta o prompt do chat.
 export interface Source {
+    id?: string;
     content: string;
     source: string | null;
     similarity: number;
+    metadata?: SourceMetadata | null;
 }
 
 // Rede de segurança, não classificador. O e5-small comprime os scores de cosseno

@@ -5,7 +5,8 @@ export function buildDestilarPrompt(question: string, answer: string): string {
     return (
         'És o autor do workspace. Decide se esta troca contém um FACTO, DECISÃO ou CONHECIMENTO ' +
         'novo e DURÁVEL que valha guardar como nota. Critério apertado: NÃO guardes conversa trivial, ' +
-        'saudações, nem o que já é óbvio.\n\n' +
+        'saudações, nem o que já é óbvio. Se o utilizador pedir explicitamente para registar, guardar, ' +
+        'anotar ou lembrar uma decisão/facto durável, isso é intenção forte de escrita: cria ou atualiza a nota.\n\n' +
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Se NÃO valer, responde exatamente a palavra NADA.\n' +
         'Se valer, responde só um bloco ```json``` com: ' +

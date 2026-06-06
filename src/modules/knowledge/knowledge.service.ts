@@ -85,7 +85,12 @@ export async function escreverNotaCom(
         embedding: JSON.stringify(embedding),
         source: 'knowledge',
         owner_id: user.id,
-        metadata: { entity_type: 'knowledge', entity_id: nota.id },
+        metadata: {
+            entity_type: 'knowledge',
+            entity_id: nota.id,
+            slug: nota.slug,
+            title: nota.title,
+        },
     });
     if (iChErr) throw new Error(`inserir chunk: ${iChErr.message}`);
 
