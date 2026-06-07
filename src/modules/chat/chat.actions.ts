@@ -10,12 +10,19 @@ import {
     type TurnoDestilado,
 } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
-import { embedPassage } from '@/lib/embeddings';
 import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
 import { candidatosParaFactoCom, escreverNotaCom } from '@/modules/knowledge/knowledge.service';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { listarConversas, carregarConversa } from './chat.conversas';
+import { indexarMensagensChatCom } from './chat.indexing';
+import {
+    concluirDestilacaoJobCom,
+    criarDestilacaoJobCom,
+    estadoDestilacaoJobCom,
+    falharDestilacaoJobCom,
+    reclamarDestilacaoJobCom,
+} from './chat.jobs';
 
 export async function listarConversasAction() {
     return listarConversas();
@@ -40,7 +47,7 @@ function tituloInicial(pergunta: string): string {
 
 export async function ask(
     input: z.infer<typeof askSchema>,
-): Promise<ChatResult & { conversationId: string }> {
+): Promise<ChatResult & { conversationId: string; distillationJobId: string }> {
     const { question, conversationId } = askSchema.parse(input);
     const db = await createClient();
 
@@ -64,39 +71,70 @@ export async function ask(
     // Bruto guardado sempre (guardrail): mensagem do utilizador antes de gerar.
     const userMsg = await db
         .from('messages')
-        .insert({ conversation_id: convId, role: 'user', content: question });
-    if (userMsg.error) throw new Error(`guardar mensagem falhou: ${userMsg.error.message}`);
+        .insert({ conversation_id: convId, role: 'user', content: question })
+        .select('id, created_at')
+        .single();
+    if (userMsg.error || !userMsg.data) {
+        throw new Error(`guardar mensagem falhou: ${userMsg.error?.message ?? 'sem id'}`);
+    }
 
     const result = await respond(question);
 
-    // Indexa a pergunta DEPOIS de recuperar — senão ela contamina o próprio
-    // retrieval (similaridade ~1.0 consigo mesma) e apareceria como "fonte" da
-    // sua resposta. v1 ingénuo (indexa tudo); julgar o que vale a pena é o próximo degrau.
-    const said = await embedPassage(question);
-    const chunkIns = await db.from('chunks').insert({
-        content: question,
-        embedding: JSON.stringify(said),
-        source: 'chat',
-        owner_id: user.id,
-    });
-    if (chunkIns.error) throw new Error(`indexar chunk falhou: ${chunkIns.error.message}`);
+    const asstMsg = await db
+        .from('messages')
+        .insert({
+            conversation_id: convId,
+            role: 'assistant',
+            content: result.answer,
+            cost_usd: result.costUsd,
+            // Guardar as fontes religa as citações [N] quando a conversa é reaberta.
+            sources: result.sources,
+        })
+        .select('id, created_at')
+        .single();
+    if (asstMsg.error || !asstMsg.data) {
+        throw new Error(`guardar resposta falhou: ${asstMsg.error?.message ?? 'sem id'}`);
+    }
 
-    const asstMsg = await db.from('messages').insert({
-        conversation_id: convId,
-        role: 'assistant',
-        content: result.answer,
-        cost_usd: result.costUsd,
-        // Guardar as fontes religa as citações [N] quando a conversa é reaberta.
-        sources: result.sources,
+    // Indexa o turno DEPOIS do retrieval para a pergunta não contaminar a própria
+    // resposta. O chunk fica ligado à conversa/mensagem real para pruning e auditoria.
+    await indexarMensagensChatCom(db, {
+        ownerId: user.id,
+        conversationId: convId,
+        messages: [
+            {
+                conversationId: convId,
+                messageId: String(userMsg.data.id),
+                role: 'user',
+                content: question,
+                createdAt: String(userMsg.data.created_at),
+            },
+            {
+                conversationId: convId,
+                messageId: String(asstMsg.data.id),
+                role: 'assistant',
+                content: result.answer,
+                createdAt: String(asstMsg.data.created_at),
+            },
+        ],
     });
-    if (asstMsg.error) throw new Error(`guardar resposta falhou: ${asstMsg.error.message}`);
 
-    return { ...result, conversationId: convId };
+    const distillationJobId = await criarDestilacaoJobCom(db, {
+        question,
+        answer: result.answer,
+        conversationId: convId,
+        userMessageId: String(userMsg.data.id),
+        assistantMessageId: String(asstMsg.data.id),
+    });
+
+    return { ...result, conversationId: convId, distillationJobId };
 }
 
-export async function destilarTurno(question: string, answer: string): Promise<TurnoDestilado> {
-    // Autentica antes de destilar — garante que a sessão existe.
-    const db = await createClient();
+async function executarDestilacaoTurnoCom(
+    db: Awaited<ReturnType<typeof createClient>>,
+    question: string,
+    answer: string,
+): Promise<TurnoDestilado> {
     const {
         data: { user },
     } = await db.auth.getUser();
@@ -144,5 +182,48 @@ export async function destilarTurno(question: string, answer: string): Promise<T
     } catch (e) {
         console.error('append daily falhou:', e);
         return { nota, daily: null };
+    }
+}
+
+export async function destilarTurno(question: string, answer: string): Promise<TurnoDestilado> {
+    // Compatibilidade com chamadas antigas. O caminho normal é processar por job.
+    const db = await createClient();
+    return executarDestilacaoTurnoCom(db, question, answer);
+}
+
+const processarJobSchema = z.object({
+    jobId: z.string().uuid(),
+});
+
+function mensagemErro(e: unknown): string {
+    return e instanceof Error ? e.message : 'erro desconhecido';
+}
+
+export async function processarDestilacaoJob(jobIdInput: string): Promise<TurnoDestilado> {
+    const { jobId } = processarJobSchema.parse({ jobId: jobIdInput });
+    const db = await createClient();
+
+    const job = await reclamarDestilacaoJobCom(db, jobId);
+    if (!job) {
+        const estado = await estadoDestilacaoJobCom(db, jobId);
+        if (estado.status === 'done' && estado.result) return estado.result;
+        if (estado.status === 'failed') {
+            throw new Error(estado.error ?? 'job de destilação falhou');
+        }
+        throw new Error('job de destilação já está em processamento');
+    }
+
+    try {
+        const result = await executarDestilacaoTurnoCom(
+            db,
+            job.payload.question,
+            job.payload.answer,
+        );
+        await concluirDestilacaoJobCom(db, job.id, result);
+        return result;
+    } catch (e) {
+        const msg = mensagemErro(e);
+        await falharDestilacaoJobCom(db, job.id, msg);
+        throw new Error(msg);
     }
 }

@@ -43,10 +43,11 @@ export function VersionPicker({
     const value = currentBase ?? defaultBase;
 
     function handleChange(id: string) {
-        const params = new URLSearchParams();
+        const [path, query = ''] = resolvedPath.split('?');
+        const params = new URLSearchParams(query);
         if (keepView) params.set('view', 'history');
         params.set('base', id);
-        router.push(`${resolvedPath}?${params.toString()}`);
+        router.push(`${path}?${params.toString()}`);
     }
 
     return (

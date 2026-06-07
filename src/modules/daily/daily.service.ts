@@ -1,8 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { reindexEntity } from '@/lib/indexing';
-import { regenerarEdgesCom } from '@/modules/knowledge/edges';
-import { parseWikilinks } from '@/modules/knowledge/knowledge.links';
+import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projector';
 
 export interface ResultadoAcrescento {
     dia: string;
@@ -29,6 +27,21 @@ export interface Versao {
     createdAt: string;
 }
 
+interface AppendDailyEntryRow {
+    id: string;
+    dia: string;
+    content_md: string;
+    updated_at: string;
+    criado: boolean;
+}
+
+interface ReplaceDailyEntryByIdRow {
+    id: string;
+    dia: string;
+    content_md: string;
+    updated_at: string;
+}
+
 export function hojeLisboa(date: Date = new Date()): string {
     return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Lisbon' }).format(date);
 }
@@ -47,71 +60,24 @@ export async function acrescentarAoDailyCom(
     const linhaNormalizada = linha.trim();
     if (!linhaNormalizada) throw new Error('daily vazio');
 
-    // Ler o daily existente para este dia (se houver).
-    const existente = await db
-        .from('dailies')
-        .select('id, content_md')
-        .eq('owner_id', user.id)
-        .eq('dia', diaAlvo)
-        .maybeSingle();
-    if (existente.error) throw new Error(`ler daily: ${existente.error.message}`);
-
-    const eraExistente = existente.data !== null;
-    const anterior = existente.data?.content_md.trim() ?? '';
-    const novoContent = anterior ? `${anterior}\n\n${linhaNormalizada}` : linhaNormalizada;
-    const frontmatter = { title: diaAlvo, type: 'daily' };
-
-    // Upsert pela constraint unique(owner_id, dia).
+    // Append atómico no Postgres: serializa por (user,dia), atualiza/cria o daily
+    // e grava a versão imutável no mesmo statement transacional.
     const up = await db
-        .from('dailies')
-        .upsert(
-            {
-                ...(eraExistente ? { id: existente.data!.id } : {}),
-                owner_id: user.id,
-                dia: diaAlvo,
-                content_md: novoContent,
-                frontmatter,
-                updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'owner_id,dia' },
-        )
-        .select('id, dia, content_md, updated_at')
+        .rpc('append_daily_entry', { p_dia: diaAlvo, p_linha: linhaNormalizada })
         .single();
-    if (up.error || !up.data) throw new Error(`upsert daily: ${up.error?.message}`);
-    const daily = up.data;
+    if (up.error || !up.data) throw new Error(`append daily: ${up.error?.message}`);
+    const daily = up.data as AppendDailyEntryRow;
 
     // Versão imutável do conteúdo desta escrita.
-    const { error: vErr } = await db.from('file_versions').insert({
-        owner_id: user.id,
-        entity_type: 'daily',
-        entity_id: daily.id,
-        content_md: novoContent,
-        frontmatter,
-        author: 'agent',
-    });
-    if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
+    // Criada pela RPC `append_daily_entry`, no mesmo statement que atualiza o daily.
 
-    // Regenerar chunks por heading, incremental: o daily cresce a cada turno,
-    // logo só os blocos novos/alterados são re-embedados.
-    await reindexEntity(db, {
-        ownerId: user.id,
+    // Projector retryable: chunks/embeddings/edges ficam num job durável, processado já.
+    await projectarIndicesAposEscritaCom(db, {
         entityType: 'daily',
         entityId: daily.id,
-        source: 'daily',
-        contentMd: novoContent,
-        metadata: { dia: daily.dia },
     });
 
-    // Regenerar edges (wikilinks) — liga o daily às notas no grafo. É o caminho do
-    // agente (append por turno), por isso tem de gerar edges como o substituir.
-    await regenerarEdgesCom(db, {
-        ownerId: user.id,
-        fromType: 'daily',
-        fromId: daily.id,
-        alvos: parseWikilinks(novoContent),
-    });
-
-    return { dia: diaAlvo, criado: !eraExistente };
+    return { dia: daily.dia, criado: Boolean(daily.criado) };
 }
 export const acrescentarAoDaily = async (linha: string, dia?: string) =>
     acrescentarAoDailyCom(await createClient(), linha, dia);
@@ -161,26 +127,48 @@ export async function substituirDailyCom(
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
-    // Regenerar chunks por heading, incremental (mesma lógica do acrescento).
-    await reindexEntity(db, {
-        ownerId: user.id,
+    await projectarIndicesAposEscritaCom(db, {
         entityType: 'daily',
         entityId: daily.id,
-        source: 'daily',
-        contentMd: contentNormalizado,
-        metadata: { dia: daily.dia },
-    });
-
-    // Regenerar edges (wikilinks) — liga o daily às notas no grafo.
-    await regenerarEdgesCom(db, {
-        ownerId: user.id,
-        fromType: 'daily',
-        fromId: daily.id,
-        alvos: parseWikilinks(contentNormalizado),
     });
 }
 export const substituirDaily = async (dia: string, contentMd: string, author: 'agent' | 'user') =>
     substituirDailyCom(await createClient(), dia, contentMd, author);
+
+export async function substituirDailyPorIdCom(
+    db: SupabaseClient,
+    id: string,
+    contentMd: string,
+    author: 'agent' | 'user',
+): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+
+    const contentNormalizado = contentMd.trim();
+    if (!contentNormalizado) throw new Error('daily vazio');
+
+    const up = await db
+        .rpc('replace_daily_entry_by_id', {
+            p_id: id,
+            p_content_md: contentNormalizado,
+            p_author: author,
+        })
+        .single();
+    if (up.error || !up.data) throw new Error(`substituir daily por id: ${up.error?.message}`);
+    const daily = up.data as ReplaceDailyEntryByIdRow;
+
+    await projectarIndicesAposEscritaCom(db, {
+        entityType: 'daily',
+        entityId: daily.id,
+    });
+}
+export const substituirDailyPorId = async (
+    id: string,
+    contentMd: string,
+    author: 'agent' | 'user',
+) => substituirDailyPorIdCom(await createClient(), id, contentMd, author);
 
 // Cor (hex) do grupo daily, guardada no profile do utilizador. null limpa.
 export async function definirCorDailyCom(db: SupabaseClient, cor: string | null): Promise<void> {
@@ -241,6 +229,24 @@ export async function getDailyCom(db: SupabaseClient, dia: string): Promise<Dail
         : null;
 }
 export const getDaily = async (dia: string) => getDailyCom(await createClient(), dia);
+
+export async function getDailyPorIdCom(db: SupabaseClient, id: string): Promise<Daily | null> {
+    const { data, error } = await db
+        .from('dailies')
+        .select('id, dia, content_md, updated_at')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(`get daily por id: ${error.message}`);
+    return data
+        ? {
+              id: data.id,
+              dia: data.dia,
+              contentMd: data.content_md,
+              updatedAt: data.updated_at,
+          }
+        : null;
+}
+export const getDailyPorId = async (id: string) => getDailyPorIdCom(await createClient(), id);
 
 export async function listarVersoesDailyCom(
     db: SupabaseClient,

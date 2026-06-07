@@ -1,17 +1,19 @@
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { alvoParaHref } from '@/modules/knowledge/knowledge.links';
+import { alvoParaHref, partesWikilink } from '@/modules/knowledge/knowledge.links';
 import { Button } from '@/components/ui/button';
 
 /**
  * Pre-processes [[wikilinks]] into standard markdown links so react-markdown
- * handles them via the normal `a` component. Handles simple [[target]] only —
- * aliased [[target|text]] is out of scope.
+ * handles them via the normal `a` component. Supports [[target]] and
+ * [[target|text]], where the alias is display-only.
  */
-function preprocessWikilinks(content: string): string {
-    return content.replace(/\[\[([^\]|]+)\]\]/g, (_match, target: string) => {
-        return `[${target.trim()}](${alvoParaHref(target)})`;
+export function preprocessWikilinks(content: string): string {
+    return content.replace(/\[\[([^\]]+)\]\]/g, (match, inner: string) => {
+        const { target, label } = partesWikilink(inner);
+        if (!target) return match;
+        return `[${label}](${alvoParaHref(target)})`;
     });
 }
 

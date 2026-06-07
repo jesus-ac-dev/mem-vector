@@ -26,6 +26,7 @@ export function WorkspaceHome() {
             const nota = await criarNotaVazia();
             abrirFicheiro({
                 tipo: nota.tipo,
+                id: nota.id,
                 chave: nota.chave,
                 titulo: nota.titulo,
                 vistaInicial: 'editor',

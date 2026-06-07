@@ -39,7 +39,8 @@ describe('escreverNota (integração RLS)', () => {
     });
 
     it('cria nota + versão + chunk; 2ª escrita gera 2ª versão e diff', async () => {
-        const { escreverNotaCom } = await import('@/modules/knowledge/knowledge.service');
+        const { atualizarNotaPorIdCom, escreverNotaCom } =
+            await import('@/modules/knowledge/knowledge.service');
         const r1 = await escreverNotaCom(alice, {
             title: 'E5',
             content_md: 'v1 [[tdd]]',
@@ -70,6 +71,13 @@ describe('escreverNota (integração RLS)', () => {
 
         const chunks2 = await alice.from('chunks').select('id').eq('metadata->>entity_id', r1.id);
         expect(chunks2.data?.length).toBe(1);
+
+        const r3 = await atualizarNotaPorIdCom(alice, r1.id, 'v3 [[tdd]]', 'user');
+        expect(r3.id).toBe(r1.id);
+        expect(r3.slug).toBe('e5');
+        expect(r3.contentMd).toBe('v3 [[tdd]]');
+        const versoes3 = await alice.from('file_versions').select('id').eq('entity_id', r1.id);
+        expect(versoes3.data?.length).toBe(3);
     }, 120_000);
 
     it('lista as notas do dono e lê versões por slug', async () => {
@@ -81,6 +89,62 @@ describe('escreverNota (integração RLS)', () => {
         const versoes = await listarVersoesCom(alice, e5.id);
         expect(versoes.length).toBeGreaterThanOrEqual(2);
     }, 30_000);
+
+    it('permite o mesmo slug em pastas diferentes sem resolver wikilink ambíguo', async () => {
+        const { criarPastaCom } = await import('@/modules/folders/folders.service');
+        const { escreverNotaCom, escreverNotaEmPastaCom, listarKnowledgeCom } =
+            await import('@/modules/knowledge/knowledge.service');
+
+        const suffix = Date.now() % 100000;
+        const titulo = `Duplicado Pasta ${suffix}`;
+        const root = await escreverNotaCom(
+            alice,
+            {
+                title: titulo,
+                content_md: `# ${titulo}\n\nna raiz`,
+                links: [],
+                reason: 'teste slug por pasta',
+            },
+            'user',
+        );
+        const pasta = await criarPastaCom(alice, `Pasta Duplicado ${suffix}`);
+        const naPasta = await escreverNotaEmPastaCom(
+            alice,
+            {
+                title: titulo,
+                content_md: `# ${titulo}\n\nna pasta`,
+                links: [],
+                reason: 'teste slug por pasta',
+            },
+            pasta.id,
+            'user',
+        );
+
+        expect(naPasta.slug).toBe(root.slug);
+        expect(naPasta.id).not.toBe(root.id);
+
+        const notas = await listarKnowledgeCom(alice);
+        const duplicadas = notas.filter((n) => n.slug === root.slug);
+        expect(duplicadas.map((n) => n.folderId ?? null).sort()).toEqual([null, pasta.id].sort());
+
+        const ref = await escreverNotaCom(
+            alice,
+            {
+                title: `Referencia Ambigua ${suffix}`,
+                content_md: `liga a [[${titulo}]]`,
+                links: [],
+                reason: 'teste wikilink ambiguo',
+            },
+            'user',
+        );
+        const { data: edges } = await alice
+            .from('edges')
+            .select('to_slug, to_id')
+            .eq('from_id', ref.id)
+            .eq('to_slug', root.slug);
+        expect(edges?.length).toBe(1);
+        expect(edges?.[0]?.to_id).toBeNull();
+    }, 180_000);
 
     it('Bob não vê dados de Alice (isolamento cross-user)', async () => {
         const { escreverNotaCom } = await import('@/modules/knowledge/knowledge.service');

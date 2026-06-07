@@ -37,7 +37,8 @@ Quatro peças, cada uma num ficheiro:
 ## Geração — `claude` CLI (subscrição, não API)
 
 `src/lib/claude.ts` conduz o binário `claude` (subscrição Max, não a API paga — ver [[claude-agent-sdk-billing]]) com um **contexto mínimo e isolado**:
-- `-p <prompt> --output-format json` → devolve envelope com `result` + `total_cost_usd`.
+- `-p --input-format text --output-format json`, com o prompt enviado por `stdin` → devolve envelope com `result` + `total_cost_usd`.
+- **Fila/semáforo:** `CLAUDE_CONCURRENCY` controla quantos processos Claude podem correr em paralelo; default `1`.
 - **Isolado:** `cwd = tmpdir()` (sem MCP/skills do projeto), `--strict-mcp-config`, `--exclude-dynamic-system-prompt-sections`, **`--disallowedTools`** (Bash/Read/Write/Edit/Glob/Grep/Web*/Task/…) — é um respondedor puro, não um agente.
 - **System prompt próprio:** assistente do MythosEngine, PT-PT, conciso, **só usa o contexto fornecido** (senão di-lo).
 - `CLAUDE_BIN` override por env.

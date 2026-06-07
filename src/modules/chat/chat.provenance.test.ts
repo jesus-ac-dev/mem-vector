@@ -32,7 +32,7 @@ describe('source links', () => {
             metadata: { entity_type: 'daily', entity_id: 'd1', dia: '2026-06-06' },
         };
 
-        expect(sourceHref(source)).toBe('/daily/2026-06-06');
+        expect(sourceHref(source)).toBe('/daily/2026-06-06?id=d1');
         expect(sourceLabel(source, 0)).toBe('[1] Daily 2026-06-06');
     });
 
@@ -47,7 +47,7 @@ describe('source links', () => {
             },
         };
 
-        expect(sourceHref(source)).toBe('/knowledge/daily-notes-do-mem-vector');
+        expect(sourceHref(source)).toBe('/knowledge/daily-notes-do-mem-vector?id=k1');
         expect(sourceLabel(source, 1)).toBe('[2] Daily Notes do mem-vector');
     });
 
@@ -74,12 +74,14 @@ describe('linkCitations', () => {
 
     it('transforma citações numeradas em links internos', () => {
         expect(linkCitations('ver [1][2]', [daily, knowledge])).toBe(
-            'ver [1](/daily/2026-06-06)[2](/knowledge/prova-kernel)',
+            'ver [1](/daily/2026-06-06?id=d1)[2](/knowledge/prova-kernel?id=k1)',
         );
     });
 
     it('deixa citações sem fonte linkável intactas', () => {
-        expect(linkCitations('ver [1][3]', [daily, s()])).toBe('ver [1](/daily/2026-06-06)[3]');
+        expect(linkCitations('ver [1][3]', [daily, s()])).toBe(
+            'ver [1](/daily/2026-06-06?id=d1)[3]',
+        );
     });
 
     it('não religa markdown links já existentes', () => {

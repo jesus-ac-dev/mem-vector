@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { alvoParaHref, parseWikilinks, reescreverWikilinks, slugify } from './knowledge.links';
+import {
+    alvoParaHref,
+    parseWikilinks,
+    partesWikilink,
+    reescreverWikilinks,
+    slugify,
+} from './knowledge.links';
 
 describe('parseWikilinks', () => {
     it('extrai os alvos de [[link]] como slugs, sem duplicados', () => {
@@ -8,8 +14,31 @@ describe('parseWikilinks', () => {
             'tdd',
         ]);
     });
+    it('em [[alvo|texto]], extrai o alvo e ignora o alias', () => {
+        expect(parseWikilinks('ver [[Embeddings E5|a nota de embeddings]]')).toEqual([
+            'embeddings-e5',
+        ]);
+    });
     it('devolve [] quando não há links', () => {
         expect(parseWikilinks('texto sem links')).toEqual([]);
+    });
+});
+
+describe('partesWikilink', () => {
+    it('separa alvo e alias', () => {
+        expect(partesWikilink('Embeddings E5|a nota')).toEqual({
+            target: 'Embeddings E5',
+            label: 'a nota',
+            hasAlias: true,
+        });
+    });
+
+    it('sem alias usa o alvo como label', () => {
+        expect(partesWikilink('Embeddings E5')).toEqual({
+            target: 'Embeddings E5',
+            label: 'Embeddings E5',
+            hasAlias: false,
+        });
     });
 });
 
@@ -24,6 +53,12 @@ describe('reescreverWikilinks', () => {
         const md = 'ver [[Velho Nome]] e [[outra]]';
         expect(reescreverWikilinks(md, 'velho-nome', 'Novo Nome')).toBe(
             'ver [[Novo Nome]] e [[outra]]',
+        );
+    });
+    it('preserva alias explícito ao reapontar o alvo', () => {
+        const md = 'ver [[Velho Nome|texto visível]]';
+        expect(reescreverWikilinks(md, 'velho-nome', 'Novo Nome')).toBe(
+            'ver [[Novo Nome|texto visível]]',
         );
     });
     it('não mexe quando nenhum link bate', () => {

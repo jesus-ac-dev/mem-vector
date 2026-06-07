@@ -32,7 +32,7 @@ interface NoGrafo {
 // o grupo 'knowledge', colorir um grupo só não acrescenta).
 export function WorkspaceGraph() {
     const router = useRouter();
-    const { abrirFicheiro } = useWorkspace();
+    const { abrirFicheiro, workspaceVersion } = useWorkspace();
     const containerRef = useRef<HTMLDivElement>(null);
     const [dim, setDim] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
     const [dados, setDados] = useState<GrafoDados | null>(null);
@@ -48,7 +48,7 @@ export function WorkspaceGraph() {
         return () => {
             cancelado = true;
         };
-    }, []);
+    }, [workspaceVersion]);
 
     // Mede o contentor do grafo (o force-graph precisa de width/height numéricos).
     // O ResizeObserver entrega a medição inicial → sem setState síncrono no effect.
@@ -63,9 +63,9 @@ export function WorkspaceGraph() {
     function abrirNo(node: object) {
         const n = node as NoGrafo;
         if (n.group === 'daily') {
-            abrirFicheiro({ tipo: 'daily', chave: n.slug, titulo: n.title });
+            abrirFicheiro({ tipo: 'daily', id: n.id, chave: n.slug, titulo: n.title });
         } else {
-            abrirFicheiro({ tipo: 'knowledge', chave: n.slug, titulo: n.title });
+            abrirFicheiro({ tipo: 'knowledge', id: n.id, chave: n.slug, titulo: n.title });
         }
         router.push('/chat');
     }

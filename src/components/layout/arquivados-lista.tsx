@@ -32,7 +32,12 @@ export function ArquivadosLista({ arquivados, onMudou }: ArquivadosListaProps) {
                         type="button"
                         variant="ghost"
                         onClick={() => {
-                            abrirFicheiro({ tipo: 'knowledge', chave: n.slug, titulo: n.title });
+                            abrirFicheiro({
+                                tipo: 'knowledge',
+                                id: n.id,
+                                chave: n.slug,
+                                titulo: n.title,
+                            });
                             router.push('/chat');
                         }}
                         title={n.title}

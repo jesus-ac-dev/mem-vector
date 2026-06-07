@@ -7,14 +7,16 @@ import { createContext, useContext, useState } from 'react';
 // ──────────────────────────────────────────────
 export interface FicheiroAberto {
     tipo: 'knowledge' | 'daily';
+    id?: string;
     chave: string;
     titulo?: string;
     vistaInicial?: 'editor'; // abrir já em modo edição (ex.: "Criar Nota")
 }
 
-// Identidade única da tab: tipo+chave (um knowledge e um daily podem partilhar chave).
-export function tabKey(f: Pick<FicheiroAberto, 'tipo' | 'chave'>): string {
-    return `${f.tipo}:${f.chave}`;
+// Identidade única da tab: tipo+id quando disponível; chave é fallback para links
+// quebrados/rotas antigas.
+export function tabKey(f: Pick<FicheiroAberto, 'tipo' | 'chave' | 'id'>): string {
+    return `${f.tipo}:${f.id ?? f.chave}`;
 }
 
 interface WorkspaceContextValue {
@@ -31,6 +33,9 @@ interface WorkspaceContextValue {
     // ── conversa ativa ──
     conversaAberta: string | null;
     abrirConversa: (id: string | null) => void;
+    // ── invalidação leve de dados derivados (explorer/sidebar/grafo) ──
+    workspaceVersion: number;
+    notificarWorkspaceMudou: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -40,6 +45,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [ficheiroAtivo, setFicheiroAtivo] = useState<string | null>(null);
     const [chatAberto, setChatAberto] = useState(true);
     const [conversaAberta, setConversaAberta] = useState<string | null>(null);
+    const [workspaceVersion, setWorkspaceVersion] = useState(0);
 
     function abrirFicheiro(f: FicheiroAberto) {
         const key = tabKey(f);
@@ -81,6 +87,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         if (id !== null) setChatAberto(true);
     }
 
+    function notificarWorkspaceMudou() {
+        setWorkspaceVersion((v) => v + 1);
+    }
+
     return (
         <WorkspaceContext.Provider
             value={{
@@ -94,6 +104,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
                 fecharChat,
                 conversaAberta,
                 abrirConversa,
+                workspaceVersion,
+                notificarWorkspaceMudou,
             }}
         >
             {children}

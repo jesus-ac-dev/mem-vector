@@ -30,18 +30,31 @@ export async function regenerarEdgesCom(
         .select('id, slug')
         .eq('owner_id', ownerId)
         .in('slug', unicos);
-    const idPorSlug = new Map((existentes ?? []).map((r) => [r.slug, r.id]));
+    const idsPorSlug = new Map<string, string[]>();
+    for (const r of existentes ?? []) {
+        const ids = idsPorSlug.get(r.slug);
+        if (ids) ids.push(r.id);
+        else idsPorSlug.set(r.slug, [r.id]);
+    }
+
+    function idResolvido(slug: string): string | null {
+        const ids = idsPorSlug.get(slug) ?? [];
+        return ids.length === 1 ? ids[0] : null;
+    }
 
     const { error: iErr } = await db.from('edges').insert(
-        unicos.map((to_slug) => ({
-            owner_id: ownerId,
-            from_type: fromType,
-            from_id: fromId,
-            to_type: idPorSlug.has(to_slug) ? 'knowledge' : null,
-            to_slug,
-            to_id: idPorSlug.get(to_slug) ?? null,
-            kind: 'wikilink',
-        })),
+        unicos.map((to_slug) => {
+            const to_id = idResolvido(to_slug);
+            return {
+                owner_id: ownerId,
+                from_type: fromType,
+                from_id: fromId,
+                to_type: to_id ? 'knowledge' : null,
+                to_slug,
+                to_id,
+                kind: 'wikilink',
+            };
+        }),
     );
     if (iErr) throw new Error(`inserir edges: ${iErr.message}`);
 }

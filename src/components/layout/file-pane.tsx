@@ -21,6 +21,7 @@ import {
     guardarFicheiro,
     abrirOuCriarNota,
     arquivarNotaAction,
+    type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
@@ -99,7 +100,7 @@ type HistoryEstado = { tipo: 'carregando' } | { tipo: 'ok'; versoes: Versao[] };
 // ──────────────────────────────────────────────
 function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     const router = useRouter();
-    const { abrirFicheiro, fecharFicheiro } = useWorkspace();
+    const { abrirFicheiro, fecharFicheiro, notificarWorkspaceMudou } = useWorkspace();
     // ── conteúdo ──
     const [estado, setEstado] = useState<PaneEstado>({ tipo: 'carregando' });
     // ── vista (arranca em editor se pedido, ex.: "Criar Nota") ──
@@ -113,11 +114,15 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     const [rascunho, setRascunho] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [erroGuardar, setErroGuardar] = useState<string | null>(null);
+    const [wikilinkAmbiguo, setWikilinkAmbiguo] = useState<{
+        slug: string;
+        opcoes: NotaResolvidaWikilink[];
+    } | null>(null);
 
     // Carrega o conteúdo. Se arrancar em editor, semeia já o rascunho.
     useEffect(() => {
         let cancelled = false;
-        lerFicheiro(ficheiro.tipo, ficheiro.chave)
+        lerFicheiro(ficheiro.tipo, ficheiro.chave, ficheiro.id)
             .then((res) => {
                 if (cancelled) return;
                 if (!res) {
@@ -133,13 +138,13 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         return () => {
             cancelled = true;
         };
-    }, [ficheiro.tipo, ficheiro.chave, ficheiro.vistaInicial]);
+    }, [ficheiro.tipo, ficheiro.chave, ficheiro.id, ficheiro.vistaInicial]);
 
     // Carrega versões ao entrar no histórico.
     useEffect(() => {
         if (vista !== 'history') return;
         let cancelled = false;
-        versoesFicheiro(ficheiro.tipo, ficheiro.chave)
+        versoesFicheiro(ficheiro.tipo, ficheiro.chave, ficheiro.id)
             .then((versoes) => {
                 if (cancelled) return;
                 setHistoryEstado({ tipo: 'ok', versoes });
@@ -151,7 +156,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         return () => {
             cancelled = true;
         };
-    }, [vista, ficheiro.tipo, ficheiro.chave]);
+    }, [vista, ficheiro.tipo, ficheiro.chave, ficheiro.id]);
 
     const diff = (() => {
         if (historyEstado.tipo !== 'ok' || historyEstado.versoes.length < 2) return null;
@@ -167,7 +172,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         setGuardando(true);
         setErroGuardar(null);
         try {
-            const res = await guardarFicheiro(ficheiro.tipo, ficheiro.chave, rascunho);
+            const res = await guardarFicheiro(ficheiro.tipo, ficheiro.chave, rascunho, ficheiro.id);
             setGuardando(false);
             if (!res.ok) {
                 setErroGuardar(res.erro);
@@ -177,6 +182,8 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                 estado.tipo === 'ok' ? estado.titulo : (ficheiro.titulo ?? ficheiro.chave);
             setEstado({ tipo: 'ok', titulo, contentMd: rascunho });
             setVista('conteudo');
+            notificarWorkspaceMudou();
+            router.refresh();
         } catch (e) {
             setGuardando(false);
             setErroGuardar(e instanceof Error ? e.message : 'erro ao guardar');
@@ -190,15 +197,37 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         if (mKnow) {
             const slug = decodeURIComponent(mKnow[1]);
             const nota = await abrirOuCriarNota(slug);
-            abrirFicheiro({ tipo: 'knowledge', chave: nota.chave, titulo: nota.titulo });
+            if (nota.estado === 'ambiguo') {
+                setWikilinkAmbiguo({ slug: nota.slug, opcoes: nota.opcoes });
+                return;
+            }
+            setWikilinkAmbiguo(null);
+            abrirFicheiro({
+                tipo: 'knowledge',
+                id: nota.id,
+                chave: nota.chave,
+                titulo: nota.titulo,
+            });
             if (nota.criada) router.refresh();
             return;
         }
         const mDaily = /^\/daily\/(.+)$/.exec(href);
         if (mDaily) {
+            setWikilinkAmbiguo(null);
             const dia = decodeURIComponent(mDaily[1]);
             abrirFicheiro({ tipo: 'daily', chave: dia, titulo: dia });
         }
+    }
+
+    function abrirEscolhaWikilink(nota: NotaResolvidaWikilink) {
+        setWikilinkAmbiguo(null);
+        abrirFicheiro({
+            tipo: 'knowledge',
+            id: nota.id,
+            chave: nota.chave,
+            titulo: nota.titulo,
+        });
+        router.push('/chat');
     }
 
     return (
@@ -253,7 +282,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                             variant="ghost"
                             size="icon"
                             onClick={() => {
-                                void arquivarNotaAction(ficheiro.chave).then(() => {
+                                void arquivarNotaAction(ficheiro.chave, ficheiro.id).then(() => {
                                     fecharFicheiro(tabKey(ficheiro));
                                     router.refresh();
                                 });
@@ -270,6 +299,39 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
 
             {/* Corpo */}
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 text-sm">
+                {wikilinkAmbiguo && (
+                    <div className="mb-4 space-y-2 border-l-2 border-border pl-3">
+                        <div className="flex items-start justify-between gap-3">
+                            <p className="text-xs text-muted-foreground">
+                                `[[{wikilinkAmbiguo.slug}]]` tem vários destinos. Escolhe um:
+                            </p>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setWikilinkAmbiguo(null)}
+                                className="h-6 px-2 text-xs"
+                            >
+                                Fechar
+                            </Button>
+                        </div>
+                        <div className="space-y-1">
+                            {wikilinkAmbiguo.opcoes.map((opcao) => (
+                                <Button
+                                    key={opcao.id}
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => abrirEscolhaWikilink(opcao)}
+                                    className="h-auto w-full justify-start px-2 py-1 text-left text-xs"
+                                >
+                                    <span className="truncate">{opcao.titulo}</span>
+                                    <span className="ml-2 shrink-0 text-muted-foreground">
+                                        {opcao.pasta}
+                                    </span>
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {vista === 'conteudo' && (
                     <>
                         {estado.tipo === 'carregando' && (

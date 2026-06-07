@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
-import { ask, destilarTurno, carregarConversaAction } from '@/modules/chat/chat.actions';
+import { ask, processarDestilacaoJob, carregarConversaAction } from '@/modules/chat/chat.actions';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
@@ -24,6 +24,7 @@ interface Message {
     escrita?: NotaEscrita | null;
     daily?: DailyEscrito | null;
     destilando?: boolean;
+    destilacaoErro?: boolean;
 }
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
@@ -157,8 +158,8 @@ function ChatContent() {
             ]);
             setPending(false);
 
-            // Step 2: distil in the background; update the message when done.
-            destilarTurno(question, res.answer)
+            // Step 2: process the already-persisted distillation job in the background.
+            processarDestilacaoJob(res.distillationJobId)
                 .then(({ nota, daily }) => {
                     setMessages((prev) =>
                         prev.map((m) =>
@@ -170,9 +171,13 @@ function ChatContent() {
                     if (nota || daily) router.refresh();
                 })
                 .catch(() => {
-                    // distillation failure is silent — just clear the hint
+                    // The job is durable in agent_jobs; this only reflects the current UI attempt.
                     setMessages((prev) =>
-                        prev.map((m) => (m.id === asstMsgId ? { ...m, destilando: false } : m)),
+                        prev.map((m) =>
+                            m.id === asstMsgId
+                                ? { ...m, destilando: false, destilacaoErro: true }
+                                : m,
+                        ),
                     );
                 });
         } catch (e) {
@@ -224,6 +229,11 @@ function ChatContent() {
                             )}
                             {m.role === 'assistant' && m.destilando && (
                                 <p className="mt-1 text-xs text-muted-foreground">a destilar…</p>
+                            )}
+                            {m.role === 'assistant' && m.destilacaoErro && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    destilação pendente — job guardado
+                                </p>
                             )}
                             {m.role === 'assistant' && m.escrita && (
                                 <div>

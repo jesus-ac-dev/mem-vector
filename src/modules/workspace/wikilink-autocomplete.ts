@@ -1,5 +1,6 @@
 export interface NotaLinkavel {
     tipo: 'knowledge' | 'daily';
+    id?: string;
     titulo: string; // texto mostrado e inserido entre [[ ]]
     chave: string; // slug (knowledge) ou dia (daily)
 }

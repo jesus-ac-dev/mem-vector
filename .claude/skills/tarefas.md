@@ -29,7 +29,7 @@ Ultima atualizacao: AAAA-MM-DD
 ```
 
 - Tarefa: `- [ ] **Titulo curto** — contexto. Ref: \`path/file.ts\`.`
-- Estados: `[ ]` pendente · `[d]` em progresso · `[?]` testing · `[x]` feito · `[-]` cancelado.
+- Estados: `[ ]` pendente · `[B]` analysis/decidir/clarificar escopo antes de implementar · `[d]` em progresso · `[?]` testing · `[x]` feito · `[-]` cancelado.
 - Prioridade: **Alta** (perda de memória, bug de utilizador, RLS/isolamento, dados inconsistentes, bloqueante) · **Media** (robustez, arquitetura, performance, DX, testes) · **Baixa** (polish, copy, docs, nice-to-have).
 
 ## Fluxo

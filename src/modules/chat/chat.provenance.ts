@@ -18,10 +18,12 @@ export function provenance(sources: Source[]): Provenance {
 export function sourceHref(source: Source): string | null {
     const metadata = source.metadata;
     if (metadata?.entity_type === 'daily' && metadata.dia) {
-        return `/daily/${encodeURIComponent(metadata.dia)}`;
+        const href = `/daily/${encodeURIComponent(metadata.dia)}`;
+        return metadata.entity_id ? `${href}?id=${encodeURIComponent(metadata.entity_id)}` : href;
     }
     if (metadata?.entity_type === 'knowledge' && metadata.slug) {
-        return `/knowledge/${encodeURIComponent(metadata.slug)}`;
+        const href = `/knowledge/${encodeURIComponent(metadata.slug)}`;
+        return metadata.entity_id ? `${href}?id=${encodeURIComponent(metadata.entity_id)}` : href;
     }
     return null;
 }

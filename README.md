@@ -43,4 +43,4 @@ Clean architecture com fronteiras validadas por ESLint (`eslint-plugin-boundarie
 
 ## Forçar GIT
 
- git push --no-verify --set-upstream origin feat/rag-chunking-hybrid
+git push --no-verify --set-upstream origin feat/rag-chunking-hybrid

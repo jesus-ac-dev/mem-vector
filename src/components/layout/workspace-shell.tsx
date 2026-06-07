@@ -38,6 +38,7 @@ import {
     dadosBarraDireita,
     listarArquivadosAction,
     type DadosBarraDireita,
+    type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
 import { tabKey } from '@/components/layout/workspace-context';
 import type { Arvore } from '@/modules/folders/folders.tree';
@@ -180,6 +181,7 @@ function LeftSidebar({
         const nota = await criarNotaNaPasta(pastaSelecionada);
         abrirFicheiro({
             tipo: nota.tipo,
+            id: nota.id,
             chave: nota.chave,
             titulo: nota.titulo,
             vistaInicial: 'editor',
@@ -394,8 +396,12 @@ function RightSidebar({
     diasComDaily: string[];
 }) {
     const router = useRouter();
-    const { ficheiroAtivo, ficheirosAbertos, abrirFicheiro } = useWorkspace();
+    const { ficheiroAtivo, ficheirosAbertos, abrirFicheiro, workspaceVersion } = useWorkspace();
     const [activeTab, setActiveTab] = useState<RightTab>('outline');
+    const [wikilinkAmbiguo, setWikilinkAmbiguo] = useState<{
+        slug: string;
+        opcoes: NotaResolvidaWikilink[];
+    } | null>(null);
     // Dados carregados, marcados com a tabKey a que pertencem — assim, ao trocar de
     // ficheiro, os dados antigos não aparecem (evita flash) e não há setState síncrono.
     const [dados, setDados] = useState<{ key: string; d: DadosBarraDireita } | null>(null);
@@ -403,33 +409,45 @@ function RightSidebar({
     const ativo = ficheirosAbertos.find((f) => tabKey(f) === ficheiroAtivo) ?? null;
     const ativoTipo = ativo?.tipo ?? null;
     const ativoChave = ativo?.chave ?? null;
+    const ativoId = ativo?.id ?? null;
 
     useEffect(() => {
         if (!ativoTipo || !ativoChave) return;
-        const key = `${ativoTipo}:${ativoChave}`;
+        const key = tabKey({ tipo: ativoTipo, chave: ativoChave, id: ativoId ?? undefined });
         let cancelado = false;
-        void dadosBarraDireita(ativoTipo, ativoChave).then((d) => {
+        void dadosBarraDireita(ativoTipo, ativoChave, ativoId ?? undefined).then((d) => {
             if (!cancelado) setDados({ key, d });
         });
         return () => {
             cancelado = true;
         };
-    }, [ativoTipo, ativoChave]);
+    }, [ativoTipo, ativoChave, ativoId, workspaceVersion]);
 
     const dadosAtivos = ativo && dados?.key === ficheiroAtivo ? dados.d : null;
 
-    function abrirNotaPorSlug(slug: string, titulo: string, existe: boolean) {
-        if (existe) {
-            abrirFicheiro({ tipo: 'knowledge', chave: slug, titulo });
+    function abrirNotaPorSlug(slug: string, titulo: string, existe: boolean, id?: string) {
+        if (existe && id) {
+            abrirFicheiro({ tipo: 'knowledge', id, chave: slug, titulo });
             router.push('/chat');
             return;
         }
         // Link quebrado: materializa a nota ao clicar (comportamento Obsidian).
         void abrirOuCriarNota(slug).then((r) => {
-            abrirFicheiro({ tipo: 'knowledge', chave: r.chave, titulo: r.titulo });
+            if (r.estado === 'ambiguo') {
+                setWikilinkAmbiguo({ slug: r.slug, opcoes: r.opcoes });
+                return;
+            }
+            setWikilinkAmbiguo(null);
+            abrirFicheiro({ tipo: 'knowledge', id: r.id, chave: r.chave, titulo: r.titulo });
             router.push('/chat');
-            router.refresh();
+            if (r.criada) router.refresh();
         });
+    }
+
+    function abrirEscolhaWikilink(nota: NotaResolvidaWikilink) {
+        setWikilinkAmbiguo(null);
+        abrirFicheiro({ tipo: 'knowledge', id: nota.id, chave: nota.chave, titulo: nota.titulo });
+        router.push('/chat');
     }
 
     if (collapsed) {
@@ -472,7 +490,39 @@ function RightSidebar({
 
             {/* Active tab panel */}
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                {!ativo ? (
+                {wikilinkAmbiguo ? (
+                    <div className="space-y-2 border-l-2 border-border pl-2">
+                        <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs text-muted-foreground">
+                                `[[{wikilinkAmbiguo.slug}]]` tem vários destinos.
+                            </p>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setWikilinkAmbiguo(null)}
+                                className="h-6 px-2 text-xs"
+                            >
+                                Fechar
+                            </Button>
+                        </div>
+                        <div className="space-y-1">
+                            {wikilinkAmbiguo.opcoes.map((opcao) => (
+                                <Button
+                                    key={opcao.id}
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => abrirEscolhaWikilink(opcao)}
+                                    className="h-auto w-full justify-start px-2 py-1 text-left text-xs"
+                                >
+                                    <span className="truncate">{opcao.titulo}</span>
+                                    <span className="ml-2 shrink-0 text-muted-foreground">
+                                        {opcao.pasta}
+                                    </span>
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                ) : !ativo ? (
                     vazio('Selecciona um ficheiro')
                 ) : !dadosAtivos ? (
                     vazio('A carregar…')
@@ -500,7 +550,9 @@ function RightSidebar({
                                 <li key={n.slug}>
                                     <NotaLink
                                         titulo={n.title}
-                                        onClick={() => abrirNotaPorSlug(n.slug, n.title, true)}
+                                        onClick={() =>
+                                            abrirNotaPorSlug(n.slug, n.title, true, n.id)
+                                        }
                                     />
                                 </li>
                             ))}
@@ -516,7 +568,9 @@ function RightSidebar({
                                     <NotaLink
                                         titulo={l.title}
                                         existe={l.existe}
-                                        onClick={() => abrirNotaPorSlug(l.slug, l.title, l.existe)}
+                                        onClick={() =>
+                                            abrirNotaPorSlug(l.slug, l.title, l.existe, l.id)
+                                        }
                                     />
                                 </li>
                             ))}

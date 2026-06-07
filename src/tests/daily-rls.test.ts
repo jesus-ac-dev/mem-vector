@@ -17,6 +17,8 @@ async function userClient(email: string, password: string) {
 }
 
 const DIA_TESTE = '2026-01-15';
+const DIA_CONCORRENTE = '2026-01-16';
+const DIA_POR_ID = '2026-01-17';
 
 describe('acrescentarAoDaily (integração RLS)', () => {
     let alice: Awaited<ReturnType<typeof userClient>>;
@@ -26,17 +28,19 @@ describe('acrescentarAoDaily (integração RLS)', () => {
         // Limpar estado de runs anteriores para o dia de teste.
         const admin = getSupabaseAdmin();
         const aliceUser = (await alice.auth.getUser()).data.user!;
-        const existing = await admin
-            .from('dailies')
-            .select('id')
-            .eq('owner_id', aliceUser.id)
-            .eq('dia', DIA_TESTE)
-            .maybeSingle();
-        if (existing.data?.id) {
-            const dailyId = existing.data.id;
-            await admin.from('file_versions').delete().eq('entity_id', dailyId);
-            await admin.from('chunks').delete().eq('metadata->>entity_id', dailyId);
-            await admin.from('dailies').delete().eq('id', dailyId);
+        for (const dia of [DIA_TESTE, DIA_CONCORRENTE, DIA_POR_ID]) {
+            const existing = await admin
+                .from('dailies')
+                .select('id')
+                .eq('owner_id', aliceUser.id)
+                .eq('dia', dia)
+                .maybeSingle();
+            if (existing.data?.id) {
+                const dailyId = existing.data.id;
+                await admin.from('file_versions').delete().eq('entity_id', dailyId);
+                await admin.from('chunks').delete().eq('metadata->>entity_id', dailyId);
+                await admin.from('dailies').delete().eq('id', dailyId);
+            }
         }
     });
 
@@ -98,6 +102,57 @@ describe('acrescentarAoDaily (integração RLS)', () => {
             .select('id')
             .eq('metadata->>entity_id', daily!.id);
         expect(chunks?.length).toBe(1);
+    }, 120_000);
+
+    it('acrescentos concorrentes ao mesmo dia não perdem linhas', async () => {
+        const { acrescentarAoDailyCom, listarVersoesDailyCom } =
+            await import('@/modules/daily/daily.service');
+
+        const [a, b] = await Promise.all([
+            acrescentarAoDailyCom(alice, 'linha concorrente A', DIA_CONCORRENTE),
+            acrescentarAoDailyCom(alice, 'linha concorrente B', DIA_CONCORRENTE),
+        ]);
+
+        expect([a.criado, b.criado].filter(Boolean).length).toBe(1);
+
+        const { data: daily } = await alice
+            .from('dailies')
+            .select('id, content_md')
+            .eq('dia', DIA_CONCORRENTE)
+            .maybeSingle();
+        expect(daily).not.toBeNull();
+        expect(daily!.content_md).toContain('linha concorrente A');
+        expect(daily!.content_md).toContain('linha concorrente B');
+
+        const versoes = await listarVersoesDailyCom(alice, daily!.id);
+        expect(versoes.length).toBe(2);
+    }, 120_000);
+
+    it('substitui daily por id sem depender da data como chave operacional', async () => {
+        const { acrescentarAoDailyCom, getDailyPorIdCom, substituirDailyPorIdCom } =
+            await import('@/modules/daily/daily.service');
+
+        await acrescentarAoDailyCom(alice, 'linha inicial por id', DIA_POR_ID);
+        const { data: row } = await alice
+            .from('dailies')
+            .select('id')
+            .eq('dia', DIA_POR_ID)
+            .maybeSingle();
+        expect(row).not.toBeNull();
+
+        await substituirDailyPorIdCom(alice, row!.id, 'linha substituida por id', 'user');
+
+        const daily = await getDailyPorIdCom(alice, row!.id);
+        expect(daily).not.toBeNull();
+        expect(daily!.dia).toBe(DIA_POR_ID);
+        expect(daily!.contentMd).toBe('linha substituida por id');
+
+        const versoes = await alice
+            .from('file_versions')
+            .select('id')
+            .eq('entity_type', 'daily')
+            .eq('entity_id', row!.id);
+        expect(versoes.data?.length).toBe(2);
     }, 120_000);
 
     it('listar e get daily funcionam', async () => {

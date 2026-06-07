@@ -21,14 +21,15 @@ export interface DailyItem {
 }
 
 interface Ops {
-    mover: (slug: string, folderId: string | null) => void;
+    mover: (slug: string, folderId: string | null, id?: string) => void;
     renomearPasta: (id: string, nomeAtual: string) => void;
-    renomearNota: (slug: string, tituloAtual: string) => void;
+    renomearNota: (slug: string, tituloAtual: string, id?: string) => void;
     selecionarPasta: (id: string | null) => void;
     selecionadaId: string | null;
 }
 
 const DRAG_TIPO = 'application/x-mem-nota-slug';
+const DRAG_ID = 'application/x-mem-nota-id';
 
 // Input inline para criar/renomear na própria árvore (substitui window.prompt).
 // Autofocus + seleciona o texto; Enter confirma, Esc cancela, blur confirma.
@@ -82,7 +83,7 @@ function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Op
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
     const [editando, setEditando] = useState(false);
-    const isActive = ficheiroAtivo === tabKey({ tipo: 'knowledge', chave: nota.slug });
+    const isActive = ficheiroAtivo === tabKey({ tipo: 'knowledge', id: nota.id, chave: nota.slug });
 
     if (editando) {
         return (
@@ -91,7 +92,7 @@ function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Op
                 depth={depth}
                 onConfirm={(titulo) => {
                     setEditando(false);
-                    if (titulo !== nota.title) ops.renomearNota(nota.slug, titulo);
+                    if (titulo !== nota.title) ops.renomearNota(nota.slug, titulo, nota.id);
                 }}
                 onCancel={() => setEditando(false)}
             />
@@ -103,9 +104,17 @@ function NotaLink({ nota, depth, ops }: { nota: NotaItem; depth: number; ops: Op
             type="button"
             variant="ghost"
             draggable
-            onDragStart={(e) => e.dataTransfer.setData(DRAG_TIPO, nota.slug)}
+            onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_TIPO, nota.slug);
+                e.dataTransfer.setData(DRAG_ID, nota.id);
+            }}
             onClick={() => {
-                abrirFicheiro({ tipo: 'knowledge', chave: nota.slug, titulo: nota.title });
+                abrirFicheiro({
+                    tipo: 'knowledge',
+                    id: nota.id,
+                    chave: nota.slug,
+                    titulo: nota.title,
+                });
                 router.push('/chat');
             }}
             onDoubleClick={() => setEditando(true)}
@@ -159,7 +168,8 @@ function FolderNode({ no, depth, ops }: { no: NoArvore; depth: number; ops: Ops 
                         e.preventDefault();
                         setOver(false);
                         const slug = e.dataTransfer.getData(DRAG_TIPO);
-                        if (slug) ops.mover(slug, no.pasta.id);
+                        const id = e.dataTransfer.getData(DRAG_ID) || undefined;
+                        if (slug) ops.mover(slug, no.pasta.id, id);
                     }}
                     title={`${no.pasta.name} (clique seleciona, duplo-clique renomeia)`}
                     style={{ paddingLeft: `${depth * 16}px` }}
@@ -204,7 +214,7 @@ function Seccao({
     children,
 }: {
     label: string;
-    onDropRaiz?: (slug: string) => void;
+    onDropRaiz?: (slug: string, id?: string) => void;
     onClickLabel?: () => void;
     children: React.ReactNode;
 }) {
@@ -230,7 +240,8 @@ function Seccao({
                           e.preventDefault();
                           setOver(false);
                           const slug = e.dataTransfer.getData(DRAG_TIPO);
-                          if (slug) onDropRaiz(slug);
+                          const id = e.dataTransfer.getData(DRAG_ID) || undefined;
+                          if (slug) onDropRaiz(slug, id);
                       }
                     : undefined
             }
@@ -256,13 +267,18 @@ function Seccao({
 function DailyLink({ daily }: { daily: DailyItem }) {
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
-    const isActive = ficheiroAtivo === tabKey({ tipo: 'daily', chave: daily.slug });
+    const isActive = ficheiroAtivo === tabKey({ tipo: 'daily', id: daily.id, chave: daily.slug });
     return (
         <Button
             type="button"
             variant="ghost"
             onClick={() => {
-                abrirFicheiro({ tipo: 'daily', chave: daily.slug, titulo: daily.title });
+                abrirFicheiro({
+                    tipo: 'daily',
+                    id: daily.id,
+                    chave: daily.slug,
+                    titulo: daily.title,
+                });
                 router.push('/chat');
             }}
             title={daily.title}
@@ -298,14 +314,14 @@ export function FileExplorer({
     const router = useRouter();
 
     const ops: Ops = {
-        mover: (slug, folderId) => {
-            void moverNotaParaPasta(slug, folderId).then(() => router.refresh());
+        mover: (slug, folderId, id) => {
+            void moverNotaParaPasta(slug, folderId, id).then(() => router.refresh());
         },
         renomearPasta: (id, novoNome) => {
             void renomearPastaAction(id, novoNome).then(() => router.refresh());
         },
-        renomearNota: (slug, novoTitulo) => {
-            void renomearNotaAction(slug, novoTitulo).then(() => router.refresh());
+        renomearNota: (slug, novoTitulo, id) => {
+            void renomearNotaAction(slug, novoTitulo, id).then(() => router.refresh());
         },
         selecionarPasta: onSelecionarPasta,
         selecionadaId: pastaSelecionada,
@@ -317,7 +333,7 @@ export function FileExplorer({
             <div className="flex-1 overflow-y-auto py-1">
                 <Seccao
                     label="Knowledge"
-                    onDropRaiz={(slug) => ops.mover(slug, null)}
+                    onDropRaiz={(slug, id) => ops.mover(slug, null, id)}
                     onClickLabel={() => onSelecionarPasta(null)}
                 >
                     {criandoPasta && (
