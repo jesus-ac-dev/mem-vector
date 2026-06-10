@@ -19,6 +19,7 @@ import {
     arquivarNotaPorId,
     reporNota,
     listarArquivados,
+    atualizarPropriedadesNota,
     type LinkNota,
     type ForwardLink,
     type GrafoDados,
@@ -43,7 +44,12 @@ import {
 } from '@/modules/folders/folders.service';
 import type { Pasta } from '@/modules/folders/folders.tree';
 import { extrairOutline, type OutlineItem } from '@/lib/outline';
-import type { Versao, NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
+import type {
+    Versao,
+    NotaKnowledge,
+    AtualizarPropriedades,
+} from '@/modules/knowledge/knowledge.schema';
+import type { PropriedadesNota } from '@/modules/knowledge/knowledge.props';
 import {
     primeiroTituloMarkdown,
     substituirPrimeiroTituloMarkdown,
@@ -497,4 +503,12 @@ export async function definirCorDailyAction(cor: string | null): Promise<void> {
 /** Cor atual do grupo daily (ou null). */
 export async function corDailyAction(): Promise<string | null> {
     return corDaily();
+}
+
+/** Atualiza propriedades de uma nota (tags/summary no frontmatter, visibility). */
+export async function atualizarPropriedadesAction(
+    id: string,
+    input: AtualizarPropriedades,
+): Promise<PropriedadesNota> {
+    return atualizarPropriedadesNota(id, input);
 }

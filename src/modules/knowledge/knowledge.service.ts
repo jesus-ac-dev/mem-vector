@@ -5,10 +5,13 @@ import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projec
 import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
+import { normalizarTags, propriedadesDoRow, type PropriedadesNota } from './knowledge.props';
 import { montarArestasGrafo } from './knowledge.grafo';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
+    AtualizarPropriedadesSchema,
     EscritaKnowledgeSchema,
+    type AtualizarPropriedades,
     type EscritaKnowledge,
     type NotaCandidata,
     type NotaKnowledge,
@@ -126,7 +129,9 @@ export async function escreverNotaCom(
     if (!user) throw new Error('sem sessão');
 
     const slug = slugify(dados.title);
-    const frontmatter = { title: dados.title, tags: [] as string[] };
+    // Só o título: o RPC faz merge com o frontmatter existente, preservando
+    // propriedades (tags/summary) definidas pelo utilizador.
+    const frontmatter = { title: dados.title };
 
     // Escrita transacional no Postgres: nota viva + file_version no mesmo
     // statement, serializada por (user,slug). A RPC devolve o conteúdo anterior
@@ -182,7 +187,7 @@ export async function escreverNotaEmPastaCom(
     if (!user) throw new Error('sem sessão');
 
     const slug = slugify(dados.title);
-    const frontmatter = { title: dados.title, tags: [] as string[] };
+    const frontmatter = { title: dados.title };
 
     const up = await db
         .rpc('write_knowledge_entry_in_folder', {
@@ -220,7 +225,9 @@ export const escreverNotaEmPasta = async (
 export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
     const { data, error } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md, updated_at, folder_id')
+        .select(
+            'id, slug, title, content_md, updated_at, folder_id, frontmatter, visibility, created_at',
+        )
         .eq('archived', false)
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar knowledge: ${error.message}`);
@@ -231,6 +238,7 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
         contentMd: r.content_md,
         updatedAt: r.updated_at,
         folderId: r.folder_id ?? null,
+        tags: propriedadesDoRow(r).tags,
     }));
 }
 export const listarKnowledge = async () => listarKnowledgeCom(await createClient());
@@ -363,6 +371,55 @@ export async function getNotaPorIdCom(
         : null;
 }
 export const getNotaPorId = async (id: string) => getNotaPorIdCom(await createClient(), id);
+
+// Propriedades da nota (tags/summary do frontmatter + visibility + created).
+export async function getPropriedadesNotaPorIdCom(
+    db: SupabaseClient,
+    id: string,
+): Promise<PropriedadesNota | null> {
+    const { data, error } = await db
+        .from('knowledge')
+        .select('id, frontmatter, visibility, created_at')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(`propriedades da nota: ${error.message}`);
+    return data ? propriedadesDoRow(data) : null;
+}
+export const getPropriedadesNotaPorId = async (id: string) =>
+    getPropriedadesNotaPorIdCom(await createClient(), id);
+
+interface UpdateKnowledgePropertiesRow {
+    id: string;
+    frontmatter: unknown;
+    visibility: string;
+    created_at: string;
+}
+
+// Edita propriedades sem tocar no conteúdo: tags/summary fazem merge no
+// frontmatter, visibility muda a coluna. Versão registada no RPC.
+export async function atualizarPropriedadesNotaCom(
+    db: SupabaseClient,
+    id: string,
+    input: AtualizarPropriedades,
+): Promise<PropriedadesNota> {
+    const dados = AtualizarPropriedadesSchema.parse(input);
+
+    const patch: Record<string, unknown> = {};
+    if (dados.tags !== undefined) patch.tags = normalizarTags(dados.tags);
+    if (dados.summary !== undefined) patch.summary = dados.summary.trim();
+
+    const up = await db
+        .rpc('update_knowledge_properties', {
+            p_id: id,
+            p_patch: patch,
+            p_visibility: dados.visibility ?? null,
+        })
+        .single();
+    if (up.error || !up.data) throw new Error(`atualizar propriedades: ${up.error?.message}`);
+    return propriedadesDoRow(up.data as UpdateKnowledgePropertiesRow);
+}
+export const atualizarPropriedadesNota = async (id: string, input: AtualizarPropriedades) =>
+    atualizarPropriedadesNotaCom(await createClient(), id, input);
 
 export async function atualizarNotaPorIdCom(
     db: SupabaseClient,

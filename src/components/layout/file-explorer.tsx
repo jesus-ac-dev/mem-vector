@@ -14,7 +14,13 @@ import {
     renomearNotaPorH1Action,
     renomearPastaAction,
 } from '@/modules/workspace/workspace.actions';
-import type { Arvore, NoArvore, NotaItem } from '@/modules/folders/folders.tree';
+import {
+    tagsDaArvore,
+    filtrarArvorePorTag,
+    type Arvore,
+    type NoArvore,
+    type NotaItem,
+} from '@/modules/folders/folders.tree';
 
 export interface DailyItem {
     id: string;
@@ -451,9 +457,40 @@ export function FileExplorer({
         onFolderManualToggle,
     };
 
-    const vazioKnowledge = arvore.raizPastas.length === 0 && arvore.raizNotas.length === 0;
+    // Filtro por tag (propriedades das notas): clicar numa tag mostra só as
+    // notas com essa tag; pastas sem match são podadas.
+    const [tagAtiva, setTagAtiva] = useState<string | null>(null);
+    const tags = tagsDaArvore(arvore);
+    const arvoreVisivel = tagAtiva ? filtrarArvorePorTag(arvore, tagAtiva) : arvore;
+
+    const vazioKnowledge =
+        arvoreVisivel.raizPastas.length === 0 && arvoreVisivel.raizNotas.length === 0;
     return (
         <nav className="flex h-full flex-col overflow-y-auto">
+            {tags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 border-b px-3 py-1.5">
+                    {tags.map((tag) => {
+                        const ativa = tagAtiva?.toLowerCase() === tag.toLowerCase();
+                        return (
+                            <Button
+                                key={tag}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setTagAtiva(ativa ? null : tag)}
+                                title={ativa ? 'Limpar filtro' : `Filtrar por ${tag}`}
+                                className={cn(
+                                    'h-5 rounded-full px-2 text-xs font-normal',
+                                    ativa
+                                        ? 'bg-accent text-accent-foreground'
+                                        : 'text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                #{tag}
+                            </Button>
+                        );
+                    })}
+                </div>
+            )}
             <div className="flex-1 overflow-y-auto py-1">
                 <Seccao
                     label="Knowledge"
@@ -472,10 +509,10 @@ export function FileExplorer({
                             onCancel={onCancelarCriarPasta}
                         />
                     )}
-                    {arvore.raizPastas.map((no) => (
+                    {arvoreVisivel.raizPastas.map((no) => (
                         <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
                     ))}
-                    {arvore.raizNotas.map((nota) => (
+                    {arvoreVisivel.raizNotas.map((nota) => (
                         <NotaLink key={nota.id} nota={nota} depth={1} ops={ops} />
                     ))}
                     {vazioKnowledge && (
