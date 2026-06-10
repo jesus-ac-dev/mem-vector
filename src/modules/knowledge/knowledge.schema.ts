@@ -28,6 +28,7 @@ export interface NotaKnowledge {
 // Nota existente oferecida ao agente-autor como candidata a CONTINUAR (UPDATE-bias),
 // em vez de criar uma nota nova por facto.
 export interface NotaCandidata {
+    id: string;
     slug: string;
     title: string;
     contentMd: string;

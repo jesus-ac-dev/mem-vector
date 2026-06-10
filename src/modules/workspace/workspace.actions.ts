@@ -36,17 +36,24 @@ import {
 import {
     criarPasta,
     renomearPasta,
+    moverPasta,
+    arquivarPasta,
     definirCorPasta,
     listarPastas,
 } from '@/modules/folders/folders.service';
 import type { Pasta } from '@/modules/folders/folders.tree';
 import { extrairOutline, type OutlineItem } from '@/lib/outline';
 import type { Versao, NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
+import {
+    primeiroTituloMarkdown,
+    substituirPrimeiroTituloMarkdown,
+} from '@/modules/knowledge/knowledge.title';
 import type { NotaLinkavel } from '@/modules/workspace/wikilink-autocomplete';
+import { lerConteudoFicheiro, type ConteudoFicheiro } from '@/modules/workspace/workspace.files';
 
-/** Cria uma pasta nova na raiz (usada pelo botão "Nova pasta" do explorer). */
-export async function novaPasta(name: string): Promise<void> {
-    await criarPasta(name);
+/** Cria uma pasta nova (na raiz ou dentro da pasta selecionada no explorer). */
+export async function novaPasta(name: string, parentId: string | null = null): Promise<void> {
+    await criarPasta(name, parentId);
 }
 
 /** Move uma nota para uma pasta (folderId null = raiz). Drag-drop. */
@@ -59,6 +66,16 @@ export async function moverNotaParaPasta(
     else await moverNota(slug, folderId);
 }
 
+/** Move uma pasta para outra pasta (parentId null = raiz). Drag-drop. */
+export async function moverPastaParaPasta(id: string, parentId: string | null): Promise<void> {
+    await moverPasta(id, parentId);
+}
+
+/** Arquiva recursivamente as notas de uma pasta e remove a pasta da árvore ativa. */
+export async function arquivarPastaAction(id: string): Promise<void> {
+    await arquivarPasta(id);
+}
+
 /** Renomeia uma pasta. */
 export async function renomearPastaAction(id: string, novoNome: string): Promise<void> {
     await renomearPasta(id, novoNome);
@@ -69,35 +86,39 @@ export async function renomearNotaAction(
     slug: string,
     novoTitulo: string,
     id?: string,
-): Promise<void> {
-    if (id) await renomearNotaPorId(id, novoTitulo, slug);
-    else await renomearNota(slug, novoTitulo);
+): Promise<{ novoSlug: string }> {
+    if (id) return renomearNotaPorId(id, novoTitulo, slug);
+    return renomearNota(slug, novoTitulo);
 }
 
-export interface ConteudoFicheiro {
-    titulo: string;
-    contentMd: string;
+/** Renomeia uma nota alterando o primeiro H1 do markdown e guardando por id. */
+export async function renomearNotaPorH1Action(
+    slug: string,
+    novoTitulo: string,
+    id?: string,
+): Promise<{ titulo: string; chave: string }> {
+    const titulo = novoTitulo.trim();
+    if (!titulo) throw new Error('título vazio');
+
+    const nota = id ? await getNotaPorId(id) : await getNota(slug);
+    if (!nota) throw new Error('nota não encontrada');
+
+    const contentMd = substituirPrimeiroTituloMarkdown(nota.contentMd, titulo);
+    const res = await guardarFicheiro('knowledge', nota.slug, contentMd, nota.id);
+    if (!res.ok) throw new Error(res.erro);
+    return { titulo: res.titulo ?? titulo, chave: res.chave ?? nota.slug };
 }
 
 /**
  * Carrega o conteúdo de um ficheiro (knowledge ou daily) pelo tipo e chave.
- * Usado pelo FilePane via useEffect.
+ * Mantido como Server Action para compatibilidade; o FilePane usa /api/file para leitura.
  */
 export async function lerFicheiro(
     tipo: 'knowledge' | 'daily',
     chave: string,
     id?: string,
 ): Promise<ConteudoFicheiro | null> {
-    if (tipo === 'knowledge') {
-        const nota = id ? await getNotaPorId(id) : await getNota(chave);
-        if (!nota) return null;
-        return { titulo: nota.title, contentMd: nota.contentMd };
-    }
-
-    // tipo === 'daily'
-    const daily = id ? await getDailyPorId(id) : await getDaily(chave);
-    if (!daily) return null;
-    return { titulo: daily.dia, contentMd: daily.contentMd };
+    return lerConteudoFicheiro(tipo, chave, id);
 }
 
 /**
@@ -109,25 +130,43 @@ export async function guardarFicheiro(
     chave: string,
     contentMd: string,
     id?: string,
-): Promise<{ ok: true } | { ok: false; erro: string }> {
+): Promise<{ ok: true; titulo?: string; chave?: string } | { ok: false; erro: string }> {
     try {
         if (tipo === 'knowledge') {
+            const tituloH1 = primeiroTituloMarkdown(contentMd);
+            if (!tituloH1) {
+                return {
+                    ok: false,
+                    erro: 'o primeiro título # define o nome do ficheiro',
+                };
+            }
+
             if (id) {
+                const nota = await getNotaPorId(id);
+                if (!nota) return { ok: false, erro: 'nota não encontrada' };
+                const renamed =
+                    tituloH1 === nota.title
+                        ? { novoSlug: nota.slug }
+                        : await renomearNotaPorId(id, tituloH1, nota.slug);
                 await atualizarNotaPorId(id, contentMd, 'user');
-                return { ok: true };
+                return { ok: true, titulo: tituloH1, chave: renamed.novoSlug };
             }
             const nota = await getNota(chave);
             if (!nota) return { ok: false, erro: 'nota não encontrada' };
+            const renamed =
+                tituloH1 === nota.title
+                    ? { novoSlug: nota.slug }
+                    : await renomearNota(nota.slug, tituloH1);
             await escreverNota(
                 {
-                    title: nota.title,
+                    title: tituloH1,
                     content_md: contentMd,
                     links: [],
                     reason: 'edição pelo utilizador',
                 },
                 'user',
             );
-            return { ok: true };
+            return { ok: true, titulo: tituloH1, chave: renamed.novoSlug };
         }
 
         // tipo === 'daily'
@@ -232,7 +271,7 @@ export async function dadosBarraDireita(
         const nota = id ? await getNotaPorId(id) : await getNota(chave);
         if (!nota) return vazio;
         const [backlinks, forwardLinks] = await Promise.all([
-            backlinksDe(nota.slug),
+            backlinksDe(nota.slug, nota.id),
             forwardLinksDe(nota.id),
         ]);
         return { outline: extrairOutline(nota.contentMd), backlinks, forwardLinks };
@@ -258,6 +297,7 @@ export interface NotaResolvidaWikilink {
     chave: string;
     titulo: string;
     pasta: string;
+    caminho: string;
 }
 
 export type AbrirOuCriarNotaResultado =
@@ -270,18 +310,48 @@ export type AbrirOuCriarNotaResultado =
  * Obsidian — clicar num link quebrado materializa a nota. Se houver vários
  * alvos com o mesmo slug em pastas diferentes, devolve escolha explícita.
  */
-export async function abrirOuCriarNota(slug: string): Promise<AbrirOuCriarNotaResultado> {
+function caminhoDasPastas(pastas: Pasta[]): Map<string, string> {
+    const porId = new Map(pastas.map((p) => [p.id, p]));
+    const memo = new Map<string, string>();
+
+    function path(id: string): string {
+        const cached = memo.get(id);
+        if (cached) return cached;
+        const pasta = porId.get(id);
+        if (!pasta) return 'Pasta';
+        const prefixo = pasta.parentId ? `${path(pasta.parentId)}/` : '';
+        const valor = `${prefixo}${pasta.name}`;
+        memo.set(id, valor);
+        return valor;
+    }
+
+    for (const p of pastas) path(p.id);
+    return memo;
+}
+
+export async function abrirOuCriarNota(
+    slug: string,
+    caminho?: string | null,
+): Promise<AbrirOuCriarNotaResultado> {
     const [notas, pastas] = await Promise.all([listarKnowledge(), listarPastas()]);
     const matches = notas.filter((n) => n.slug === slug);
-    const pastaPorId = new Map(pastas.map((p) => [p.id, p.name]));
+    const pathPorPasta = caminhoDasPastas(pastas);
 
     function mapNota(n: NotaKnowledge): NotaResolvidaWikilink {
+        const pasta = n.folderId ? (pathPorPasta.get(n.folderId) ?? 'Pasta') : 'Raiz';
         return {
             id: n.id,
             chave: n.slug,
             titulo: n.title,
-            pasta: n.folderId ? (pastaPorId.get(n.folderId) ?? 'Pasta') : 'Raiz',
+            pasta,
+            caminho: pasta === 'Raiz' ? n.title : `${pasta}/${n.title}`,
         };
+    }
+
+    if (caminho) {
+        const alvo = caminho.trim().replace(/^\/+|\/+$/g, '');
+        const matchPorCaminho = matches.map(mapNota).find((n) => n.caminho === alvo);
+        if (matchPorCaminho) return { ...matchPorCaminho, estado: 'existente', criada: false };
     }
 
     if (matches.length === 1) {
@@ -311,6 +381,7 @@ export async function abrirOuCriarNota(slug: string): Promise<AbrirOuCriarNotaRe
         chave: res.slug,
         titulo: res.title,
         pasta: 'Raiz',
+        caminho: res.title,
         estado: 'criada',
         criada: true,
     };
@@ -342,14 +413,32 @@ export async function versoesFicheiro(
  * + dailies. Fonte única do autocomplete; tipos futuros entram aqui.
  */
 export async function listarNotasLinkaveis(): Promise<NotaLinkavel[]> {
-    const [notas, dailies] = await Promise.all([listarKnowledge(), listarDailies()]);
+    const [notas, dailies, pastas] = await Promise.all([
+        listarKnowledge(),
+        listarDailies(),
+        listarPastas(),
+    ]);
+    const pathPorPasta = caminhoDasPastas(pastas);
+    const contagemPorTitulo = new Map<string, number>();
+    for (const n of notas) {
+        const chaveTitulo = n.title.toLocaleLowerCase('pt');
+        contagemPorTitulo.set(chaveTitulo, (contagemPorTitulo.get(chaveTitulo) ?? 0) + 1);
+    }
+
     return [
-        ...notas.map((n) => ({
-            tipo: 'knowledge' as const,
-            id: n.id,
-            titulo: n.title,
-            chave: n.slug,
-        })),
+        ...notas.map((n) => {
+            const pasta = n.folderId ? (pathPorPasta.get(n.folderId) ?? 'Pasta') : null;
+            const caminho = pasta ? `${pasta}/${n.title}` : n.title;
+            const duplicado = (contagemPorTitulo.get(n.title.toLocaleLowerCase('pt')) ?? 0) > 1;
+            return {
+                tipo: 'knowledge' as const,
+                id: n.id,
+                titulo: n.title,
+                chave: n.slug,
+                caminho,
+                linkTarget: duplicado && pasta ? caminho : n.title,
+            };
+        }),
         ...dailies.map((d) => ({ tipo: 'daily' as const, id: d.id, titulo: d.dia, chave: d.dia })),
     ];
 }
@@ -360,16 +449,17 @@ export async function listarNotasLinkaveis(): Promise<NotaLinkavel[]> {
  */
 export async function criarNotaComTitulo(
     titulo: string,
+    folderId: string | null = null,
 ): Promise<{ id: string; chave: string; titulo: string }> {
-    const res = await escreverNota(
-        {
-            title: titulo,
-            content_md: `# ${titulo}\n\n`,
-            links: [],
-            reason: 'nota criada pelo [[ autocomplete',
-        },
-        'user',
-    );
+    const input = {
+        title: titulo,
+        content_md: `# ${titulo}\n\n`,
+        links: [],
+        reason: 'nota criada pelo [[ autocomplete',
+    };
+    const res = folderId
+        ? await escreverNotaEmPasta(input, folderId, 'user')
+        : await escreverNota(input, 'user');
     return { id: res.id, chave: res.slug, titulo: res.title };
 }
 

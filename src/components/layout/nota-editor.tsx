@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, CalendarDays, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
+    chaveNotaLinkavel,
     detetarGatilho,
     filtrarNotasParaLink,
     type NotaLinkavel,
@@ -16,25 +18,35 @@ import { listarNotasLinkaveis, criarNotaComTitulo } from '@/modules/workspace/wo
 interface NotaEditorProps {
     value: string;
     onChange: (v: string) => void;
+    folderId?: string | null;
+    onCancel?: () => void;
     placeholder?: string;
 }
 
 // Editor de Markdown com autocomplete de [[wikilinks]]. A lógica de deteção e
 // filtro é pura (wikilink-autocomplete); aqui fica só o estado e o teclado.
-export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
+export function NotaEditor({
+    value,
+    onChange,
+    folderId = null,
+    onCancel,
+    placeholder,
+}: NotaEditorProps) {
     const router = useRouter();
     const taRef = useRef<HTMLTextAreaElement>(null);
     const [notas, setNotas] = useState<NotaLinkavel[]>([]);
     const [termo, setTermo] = useState<string | null>(null); // null = dropdown fechado
     const [sel, setSel] = useState(0);
+    const [menuPos, setMenuPos] = useState({ top: 32, left: 8 });
 
     useEffect(() => {
         let cancelled = false;
-        listarNotasLinkaveis()
-            .then((ns) => {
-                if (!cancelled) setNotas(ns);
-            })
-            .catch(() => {});
+        void runClientAction(
+            { area: 'nota-editor', action: 'listarNotasLinkaveis' },
+            listarNotasLinkaveis,
+        ).then((ns) => {
+            if (!cancelled && ns) setNotas(ns);
+        });
         return () => {
             cancelled = true;
         };
@@ -44,10 +56,23 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
     const podeCriar = termo !== null && termo.trim().length > 0;
     const totalOpcoes = sugestoes.length + (podeCriar ? 1 : 0);
 
+    function calcularMenuPos(cursor: number) {
+        const ta = taRef.current;
+        if (!ta) return;
+        const antes = ta.value.slice(0, cursor);
+        const linha = antes.split('\n').length - 1;
+        const coluna = antes.length - (antes.lastIndexOf('\n') + 1);
+        const top = Math.max(8, linha * 20 + 28 - ta.scrollTop);
+        const maxLeft = Math.max(8, ta.clientWidth - 288);
+        const left = Math.min(Math.max(8, coluna * 8 + 8 - ta.scrollLeft), maxLeft);
+        setMenuPos({ top, left });
+    }
+
     function recalcular(texto: string, cursor: number) {
         const g = detetarGatilho(texto, cursor);
         setTermo(g ? g.termo : null);
         setSel(0);
+        if (g) calcularMenuPos(cursor);
     }
 
     function fechar() {
@@ -76,18 +101,28 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
 
     async function escolher(i: number) {
         if (i < sugestoes.length) {
-            inserir(sugestoes[i].titulo);
+            const nota = sugestoes[i];
+            const target = nota.linkTarget ?? nota.titulo;
+            inserir(target === nota.titulo ? target : `${target}|${nota.titulo}`);
             return;
         }
         // Última opção: criar nota nova com o termo.
         const t = (termo ?? '').trim();
         if (!t) return;
         inserir(t);
-        await criarNotaComTitulo(t);
+        await runClientAction(
+            { area: 'nota-editor', action: 'criarNotaComTitulo', meta: { titulo: t, folderId } },
+            () => criarNotaComTitulo(t, folderId),
+        );
         router.refresh();
     }
 
     function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+        if (e.key === 'Escape' && (termo === null || totalOpcoes === 0)) {
+            e.preventDefault();
+            onCancel?.();
+            return;
+        }
         if (termo === null || totalOpcoes === 0) return;
         if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -97,7 +132,10 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
             setSel((s) => (s - 1 + totalOpcoes) % totalOpcoes);
         } else if (e.key === 'Enter' || e.key === 'Tab') {
             e.preventDefault();
-            void escolher(sel);
+            void runClientAction(
+                { area: 'nota-editor', action: 'escolherTeclado', meta: { sel } },
+                () => escolher(sel),
+            );
         } else if (e.key === 'Escape') {
             e.preventDefault();
             fechar();
@@ -125,16 +163,28 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
                 placeholder={placeholder}
             />
             {termo !== null && totalOpcoes > 0 && (
-                <ul className="absolute bottom-2 left-2 z-20 max-h-60 w-72 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                <ul
+                    className="absolute z-20 max-h-60 w-72 overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
+                    style={{ top: menuPos.top, left: menuPos.left }}
+                >
                     {sugestoes.map((n, i) => {
                         const Icon = n.tipo === 'daily' ? CalendarDays : FileText;
                         return (
-                            <li key={`${n.tipo}:${n.chave}`}>
+                            <li key={chaveNotaLinkavel(n)}>
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => void escolher(i)}
+                                    onClick={() =>
+                                        void runClientAction(
+                                            {
+                                                area: 'nota-editor',
+                                                action: 'escolherSugestao',
+                                                meta: { i },
+                                            },
+                                            () => escolher(i),
+                                        )
+                                    }
                                     className={cn(
                                         'h-auto w-full justify-start gap-2 rounded px-2 py-1.5 text-left text-sm font-normal',
                                         i === sel
@@ -143,7 +193,14 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
                                     )}
                                 >
                                     <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                    <span className="truncate">{n.titulo}</span>
+                                    <span className="min-w-0">
+                                        <span className="block truncate">{n.titulo}</span>
+                                        {n.caminho && n.caminho !== n.titulo && (
+                                            <span className="block truncate text-[0.7rem] text-muted-foreground">
+                                                {n.caminho}
+                                            </span>
+                                        )}
+                                    </span>
                                 </Button>
                             </li>
                         );
@@ -154,7 +211,16 @@ export function NotaEditor({ value, onChange, placeholder }: NotaEditorProps) {
                                 type="button"
                                 variant="ghost"
                                 onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => void escolher(sugestoes.length)}
+                                onClick={() =>
+                                    void runClientAction(
+                                        {
+                                            area: 'nota-editor',
+                                            action: 'criarPorSugestao',
+                                            meta: { index: sugestoes.length },
+                                        },
+                                        () => escolher(sugestoes.length),
+                                    )
+                                }
                                 className={cn(
                                     'h-auto w-full justify-start gap-2 rounded px-2 py-1.5 text-left text-sm font-normal',
                                     sel === sugestoes.length

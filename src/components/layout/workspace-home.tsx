@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageSquarePlus, FilePlus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { logClientError, runClientAction } from '@/lib/client-error-log';
 import { useWorkspace } from '@/components/layout/workspace-context';
 import { criarNotaVazia } from '@/modules/workspace/workspace.actions';
 
@@ -32,6 +33,8 @@ export function WorkspaceHome() {
                 vistaInicial: 'editor',
             });
             router.refresh(); // atualiza o file-explorer (server) com a nota nova
+        } catch (error) {
+            logClientError({ area: 'workspace-home', action: 'criarNota' }, error);
         } finally {
             setCriando(false);
         }
@@ -55,7 +58,12 @@ export function WorkspaceHome() {
                 </Button>
                 <Button
                     variant="outline"
-                    onClick={() => void handleCriarNota()}
+                    onClick={() =>
+                        void runClientAction(
+                            { area: 'workspace-home', action: 'handleCriarNota' },
+                            handleCriarNota,
+                        )
+                    }
                     disabled={criando}
                     className="justify-start gap-2"
                 >

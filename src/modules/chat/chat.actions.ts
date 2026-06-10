@@ -11,11 +11,15 @@ import {
 } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
-import { candidatosParaFactoCom, escreverNotaCom } from '@/modules/knowledge/knowledge.service';
+import { classificarIntencao } from './chat.intencao';
+import type { MensagemConversa } from './chat.prompt';
+import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
+import { escreverOuContinuarNotaCom } from '@/modules/knowledge/knowledge.continuar';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
-import { listarConversas, carregarConversa } from './chat.conversas';
+import { listarConversas, carregarConversa, ultimasMensagensCom } from './chat.conversas';
 import { indexarMensagensChatCom } from './chat.indexing';
+import { tituloInicialConversa } from './chat.titulo';
 import {
     concluirDestilacaoJobCom,
     criarDestilacaoJobCom,
@@ -37,14 +41,6 @@ const askSchema = z.object({
     conversationId: z.string().uuid().optional(),
 });
 
-// Título da conversa = a primeira pergunta, numa linha e cortada.
-// Sem chamada extra ao CLI (a dívida já são 3 chamadas/turno); barato e previsível.
-function tituloInicial(pergunta: string): string {
-    const limpo = pergunta.replace(/\s+/g, ' ').trim();
-    if (!limpo) return 'Conversa';
-    return limpo.length > 80 ? `${limpo.slice(0, 77)}…` : limpo;
-}
-
 export async function ask(
     input: z.infer<typeof askSchema>,
 ): Promise<ChatResult & { conversationId: string; distillationJobId: string }> {
@@ -61,12 +57,16 @@ export async function ask(
         if (conversationId) return conversationId;
         const { data, error } = await db
             .from('conversations')
-            .insert({ title: tituloInicial(question), owner_id: user.id })
+            .insert({ title: tituloInicialConversa(question), owner_id: user.id })
             .select('id')
             .single();
         if (error || !data) throw new Error(`criar conversa falhou: ${error?.message ?? 'sem id'}`);
         return data.id as string;
     })();
+
+    // Janela de conversa ANTES de inserir a mensagem atual (anáfora: "eles",
+    // "deles" resolvem-se pelo fio; a mensagem atual vai explícita no prompt).
+    const historico = await ultimasMensagensCom(db, convId, 10);
 
     // Bruto guardado sempre (guardrail): mensagem do utilizador antes de gerar.
     const userMsg = await db
@@ -78,7 +78,7 @@ export async function ask(
         throw new Error(`guardar mensagem falhou: ${userMsg.error?.message ?? 'sem id'}`);
     }
 
-    const result = await respond(question);
+    const result = await respond(question, historico);
 
     const asstMsg = await db
         .from('messages')
@@ -130,15 +130,36 @@ export async function ask(
     return { ...result, conversationId: convId, distillationJobId };
 }
 
+interface ContextoConversaJob {
+    conversationId: string;
+    excluirIds: string[]; // o par pergunta/resposta atual, que já vai explícito
+}
+
 async function executarDestilacaoTurnoCom(
     db: Awaited<ReturnType<typeof createClient>>,
     question: string,
     answer: string,
+    contexto?: ContextoConversaJob,
 ): Promise<TurnoDestilado> {
     const {
         data: { user },
     } = await db.auth.getUser();
     if (!user) return { nota: null, daily: null };
+
+    // Janela de conversa para a destilação resolver pronomes (não-fatal).
+    let historico: MensagemConversa[] = [];
+    if (contexto) {
+        try {
+            historico = await ultimasMensagensCom(
+                db,
+                contexto.conversationId,
+                10,
+                contexto.excluirIds,
+            );
+        } catch (e) {
+            console.error('janela de conversa falhou:', e);
+        }
+    }
 
     // UPDATE-bias: procura notas existentes relacionadas para o agente CONTINUAR
     // a certa em vez de criar uma nova por facto. Não-fatal: sem candidatos, cai
@@ -151,9 +172,17 @@ async function executarDestilacaoTurnoCom(
     }
 
     // Uma só chamada ao CLI para o pós-turno (resumo do daily + decisão de nota).
+    // A intenção é re-derivada da question (função determinística — mesma
+    // classificação que guiou a resposta do chat, sem viajar no payload).
     let turno: TurnoDestiladoRaw;
     try {
-        turno = await destilarResumirTurno(question, answer, candidatos);
+        turno = await destilarResumirTurno(
+            question,
+            answer,
+            candidatos,
+            classificarIntencao(question),
+            historico,
+        );
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);
         return { nota: null, daily: null };
@@ -167,7 +196,9 @@ async function executarDestilacaoTurnoCom(
     try {
         nota = await aplicarDestilacao(question, answer, {
             destilar: async () => notaProposta,
-            escrever: (input) => escreverNotaCom(db, input),
+            // "Continuar" uma candidata aterra NELA (update por id): o upsert por
+            // slug escreve na raiz e duplicava candidatas dentro de pastas.
+            escrever: (input) => escreverOuContinuarNotaCom(db, input, candidatos),
         });
     } catch (e) {
         console.error('escrita da nota destilada falhou:', e);
@@ -218,6 +249,12 @@ export async function processarDestilacaoJob(jobIdInput: string): Promise<TurnoD
             db,
             job.payload.question,
             job.payload.answer,
+            {
+                conversationId: job.payload.conversationId,
+                excluirIds: [job.payload.userMessageId, job.payload.assistantMessageId].filter(
+                    (id): id is string => Boolean(id),
+                ),
+            },
         );
         await concluirDestilacaoJobCom(db, job.id, result);
         return result;

@@ -5,16 +5,12 @@ o Daily fica de fora (grupo à parte no explorer).
 
 ## Dados
 
-- **`folders`** (`migrations/20260606160000_folders.sql`): `id`, `owner_id`,
-  `name`, `parent_id` (null = raiz, FK self, `on delete cascade`), `color` (para
-  as cores do grafo, ainda não usada na UI), `created_at`. RLS por dono. Nome
-  único por nível (`owner_id` + `parent_id` + `lower(name)`).
-- **`knowledge.folder_id`** (uuid null → raiz; FK `folders`, `on delete set
-null`): apagar uma pasta devolve as notas à raiz.
+- **`folders`** (`migrations/20260606160000_folders.sql` + `20260609162000_archive_folders.sql`): `id`, `owner_id`, `name`, `parent_id` (null = raiz, FK self, `on delete cascade`), `color`, `archived`, `created_at`. RLS por dono. Nome único por nível (`owner_id` + `parent_id` + `lower(name)`). `listarPastas` filtra `archived=false`.
+- **`knowledge.folder_id`** (uuid null → raiz; FK `folders`, `on delete set null`). Archive de pasta não faz delete físico: marca pasta/subpastas como `archived=true`, arquiva as notas descendentes e preserva `folder_id` para evitar colisões de homónimos na raiz.
 
 ## Código
 
-- `src/modules/folders/folders.service.ts` — `criarPasta`/`listarPasta` (+ `Com`
+- `src/modules/folders/folders.service.ts` — `criarPasta`/`listarPastas`/`arquivarPasta` (+ `Com`
   para sessão injetada). Server action `novaPasta` em `workspace.actions.ts`.
 - `src/modules/folders/folders.tree.ts` — **`construirArvore(pastas, notas)`**:
   função pura que monta a árvore (pastas aninhadas por `parent_id`, notas por
@@ -41,15 +37,12 @@ abre um dropdown que filtra notas enquanto escreves.
 
 ## F5 — arquivar (fatia 3)
 
-- **Schema:** `knowledge.archived` (`migrations/20260606170000_knowledge_archived.sql`),
-  `boolean not null default false` + índice parcial `where archived = false`.
+- **Schema:** `knowledge.archived` (`migrations/20260606170000_knowledge_archived.sql`) e `folders.archived` (`migrations/20260609162000_archive_folders.sql`).
 - **Sair da memória ativa:** `arquivarNota` marca `archived=true` e **apaga os
   chunks** (sai do RAG); `reporNota` põe `archived=false` e **reindexa** (volta).
   `listarKnowledge` filtra `archived=false` (explorer + dropdown do `[[`);
   `listarArquivados` traz só as arquivadas. Versões e edges mantêm-se (auditoria).
-- **UI:** botão Arquivar no `file-pane.tsx` (arquiva + fecha a tab); toggle no
-  header do explorer (`workspace-shell.tsx`) que troca a árvore pela
-  `ArquivadosLista` (cada nota com **Repor**).
+- **UI:** botão Arquivar no `file-pane.tsx` (arquiva + fecha a tab); toggle no header do explorer (`workspace-shell.tsx`) troca a árvore pela `ArquivadosLista` (cada nota com **Repor**). Arrastar uma pasta para o ícone Archive arquiva logicamente pasta/subpastas e notas descendentes; a UI remove a subárvore sem mover ficheiros para a raiz.
 - **Prova:** `npm run arquivo` (headless, 6 eixos).
 - **Esconder do grafo:** `grafoDadosCom` filtra `.eq('archived', false)` — aplicado
   na integração da stack (branch `integra/file-explorer-stack`), onde o grafo (#16)
@@ -92,7 +85,7 @@ Dar significado visual aos nós do grafo por categoria. Spec:
       clicar num nó daily abre o daily.
 - **Modal** `grafo-config.tsx` (ícone Palette no grafo): paleta por pasta + "Daily
   Notes"; grava via `definirCorPastaAction`/`definirCorDailyAction`.
-- **Explorer:** a pasta com cor mostra uma bolinha (em vez do ícone Folder).
+- **Explorer:** a pasta com cor aplica a cor ao texto da pasta.
 - **Prova:** `npm run cores` (headless, 3 eixos).
 
 ## Estado
@@ -100,6 +93,5 @@ Dar significado visual aos nós do grafo por categoria. Spec:
 Feito: modelo, criar pasta, **criar nota dentro de pasta** (pasta selecionada +
 Nova nota), explorer em árvore, **drag-drop** (`moverNota`), **renomear
 pasta/nota** (com reaponte de `[[links]]`), **`[[` autocomplete** (F4),
-**arquivar** (F5) e **cores de pasta + dailies no grafo**. As 5 funcionalidades do
-file explorer estão fechadas + cores. Ver as specs em
+**arquivar** (F5, incluindo archive lógico de pastas) e **cores de pasta + dailies no grafo**. As funcionalidades de Explorer e `[[` estão fechadas nesta ronda + cores. Ver as specs em
 `docs/superpowers/specs/2026-06-06-*`.

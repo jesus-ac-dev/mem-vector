@@ -20,4 +20,9 @@ describe('preprocessWikilinks', () => {
             'ver [hoje](/daily/2026-06-07)',
         );
     });
+    it('mantem caminho de pasta no href para resolver notas homónimas', () => {
+        expect(preprocessWikilinks('ver [[Pasta/Teste|Teste]]')).toBe(
+            'ver [Teste](/knowledge/teste?path=Pasta%2FTeste)',
+        );
+    });
 });

@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { reindexEntity } from '@/lib/indexing';
 import { regenerarEdgesCom } from '@/modules/knowledge/edges';
-import { parseWikilinks } from '@/modules/knowledge/knowledge.links';
+import { parseWikilinkTargets } from '@/modules/knowledge/knowledge.links';
 
 export const derivedIndexPayloadSchema = z.object({
     entityType: z.enum(['knowledge', 'daily']),
@@ -153,7 +153,7 @@ export async function projectarIndicesEntityCom(
             ownerId: user.id,
             fromType: 'knowledge',
             fromId: nota.id,
-            alvos: parseWikilinks(nota.content_md),
+            alvos: parseWikilinkTargets(nota.content_md),
         });
         return { ...payload, skipped: null };
     }
@@ -179,7 +179,7 @@ export async function projectarIndicesEntityCom(
         ownerId: user.id,
         fromType: 'daily',
         fromId: daily.id,
-        alvos: parseWikilinks(daily.content_md),
+        alvos: parseWikilinkTargets(daily.content_md),
     });
     return { ...payload, skipped: null };
 }

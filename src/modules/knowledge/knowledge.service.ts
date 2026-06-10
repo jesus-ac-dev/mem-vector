@@ -5,6 +5,7 @@ import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projec
 import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
+import { montarArestasGrafo } from './knowledge.grafo';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
     EscritaKnowledgeSchema,
@@ -52,6 +53,64 @@ interface RenameKnowledgeEntryRow {
     content_md: string;
     updated_at: string;
     referencing_ids: string[] | null;
+}
+
+interface ForwardEdgeRow {
+    to_slug: string;
+    to_id: string | null;
+}
+
+interface BacklinkEdgeRow {
+    from_id: string;
+    to_id: string | null;
+}
+
+interface FolderPathRow {
+    id: string;
+    name: string;
+    parent_id: string | null;
+}
+
+interface KnowledgePathRow {
+    title: string;
+    folder_id: string | null;
+}
+
+function caminhoDasPastas(pastas: FolderPathRow[]): Map<string, string> {
+    const porId = new Map(pastas.map((p) => [p.id, p]));
+    const memo = new Map<string, string>();
+
+    function path(id: string): string {
+        const cached = memo.get(id);
+        if (cached) return cached;
+        const pasta = porId.get(id);
+        if (!pasta) return 'Pasta';
+        const prefixo = pasta.parent_id ? `${path(pasta.parent_id)}/` : '';
+        const valor = `${prefixo}${pasta.name}`;
+        memo.set(id, valor);
+        return valor;
+    }
+
+    for (const p of pastas) path(p.id);
+    return memo;
+}
+
+async function caminhoNotaCom(
+    db: SupabaseClient,
+    ownerId: string,
+    nota: KnowledgePathRow,
+): Promise<string> {
+    if (!nota.folder_id) return nota.title;
+
+    const { data, error } = await db
+        .from('folders')
+        .select('id, name, parent_id')
+        .eq('owner_id', ownerId);
+    if (error) throw new Error(`resolver caminho da nota: ${error.message}`);
+
+    const pathPorPasta = caminhoDasPastas((data ?? []) as FolderPathRow[]);
+    const pasta = pathPorPasta.get(nota.folder_id);
+    return pasta ? `${pasta}/${nota.title}` : nota.title;
 }
 
 export async function escreverNotaCom(
@@ -264,7 +323,7 @@ export const listarArquivados = async () => listarArquivadosCom(await createClie
 export async function getNotaCom(db: SupabaseClient, slug: string): Promise<NotaKnowledge | null> {
     const { data, error } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md, updated_at')
+        .select('id, slug, title, content_md, updated_at, folder_id')
         .eq('slug', slug)
         .is('folder_id', null)
         .maybeSingle();
@@ -276,6 +335,7 @@ export async function getNotaCom(db: SupabaseClient, slug: string): Promise<Nota
               title: data.title,
               contentMd: data.content_md,
               updatedAt: data.updated_at,
+              folderId: data.folder_id ?? null,
           }
         : null;
 }
@@ -287,7 +347,7 @@ export async function getNotaPorIdCom(
 ): Promise<NotaKnowledge | null> {
     const { data, error } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md, updated_at')
+        .select('id, slug, title, content_md, updated_at, folder_id')
         .eq('id', id)
         .maybeSingle();
     if (error) throw new Error(`get nota por id: ${error.message}`);
@@ -298,6 +358,7 @@ export async function getNotaPorIdCom(
               title: data.title,
               contentMd: data.content_md,
               updatedAt: data.updated_at,
+              folderId: data.folder_id ?? null,
           }
         : null;
 }
@@ -392,6 +453,7 @@ async function reapontarBacklinksRenameCom(
     oldSlug: string,
     novoTitulo: string,
     referencingIds: string[] | null | undefined,
+    oldTargetPath?: string | null,
 ): Promise<void> {
     const ids = [...new Set((referencingIds ?? []).map(String).filter(Boolean))];
     let query = db.from('knowledge').select('id, title, content_md').eq('owner_id', ownerId);
@@ -402,19 +464,12 @@ async function reapontarBacklinksRenameCom(
     if (error) throw new Error(`ler backlinks para rename: ${error.message}`);
 
     for (const ref of refs ?? []) {
-        const novoConteudo = reescreverWikilinks(ref.content_md, oldSlug, novoTitulo);
+        const novoConteudo = reescreverWikilinks(ref.content_md, oldSlug, novoTitulo, {
+            oldTargetPath,
+        });
         if (novoConteudo === ref.content_md) continue;
 
-        await escreverNotaCom(
-            db,
-            {
-                title: ref.title,
-                content_md: novoConteudo,
-                links: [],
-                reason: `rename ${oldSlug}`,
-            },
-            'user',
-        );
+        await atualizarNotaPorIdCom(db, ref.id, novoConteudo, 'user');
     }
 }
 
@@ -487,6 +542,16 @@ export async function renomearNotaPorIdCom(
     if (!titulo) throw new Error('título vazio');
     const novoSlug = slugify(titulo);
 
+    const { data: notaAntes, error: notaAntesErr } = await db
+        .from('knowledge')
+        .select('title, folder_id')
+        .eq('owner_id', user.id)
+        .eq('id', id)
+        .maybeSingle();
+    if (notaAntesErr) throw new Error(`ler nota antes de rename: ${notaAntesErr.message}`);
+    if (!notaAntes) throw new Error('nota não encontrada ou sem permissão de escrita');
+    const oldTargetPath = await caminhoNotaCom(db, user.id, notaAntes as KnowledgePathRow);
+
     const renamed = await db
         .rpc('rename_knowledge_entry_by_id', {
             p_id: id,
@@ -505,6 +570,7 @@ export async function renomearNotaPorIdCom(
         slugAnteriorParaBacklinks ?? row.old_slug,
         titulo,
         row.referencing_ids,
+        oldTargetPath,
     );
 
     return { novoSlug };
@@ -568,7 +634,7 @@ export async function candidatosParaFactoCom(
     return entityIds
         .map((id) => porId.get(id))
         .filter((n): n is NonNullable<typeof n> => Boolean(n))
-        .map((n) => ({ slug: n.slug, title: n.title, contentMd: n.content_md }));
+        .map((n) => ({ id: String(n.id), slug: n.slug, title: n.title, contentMd: n.content_md }));
 }
 export const candidatosParaFacto = async (texto: string, limite = 3) =>
     candidatosParaFactoCom(await createClient(), texto, limite);
@@ -579,20 +645,31 @@ export interface LinkNota {
     title: string;
 }
 export interface ForwardLink extends LinkNota {
-    existe: boolean; // o alvo do wikilink existe como nota (senão é link quebrado)
+    existe: boolean; // o alvo do wikilink existe como nota ativa (senão é link quebrado)
     ambiguo?: boolean; // existe mais do que um alvo visível com o mesmo slug
+    arquivada?: boolean; // o alvo existe mas está no arquivo (fora do workspace)
 }
 
-// Backlinks: notas knowledge que apontam para `slug` (edges com to_slug = slug).
-export async function backlinksDeCom(db: SupabaseClient, slug: string): Promise<LinkNota[]> {
+// Backlinks: notas knowledge que apontam para `slug`. Quando há `noteId`, edges
+// já resolvidas por path só contam se apontarem para essa nota exacta.
+export async function backlinksDeCom(
+    db: SupabaseClient,
+    slug: string,
+    noteId?: string,
+): Promise<LinkNota[]> {
     const { data: ed, error } = await db
         .from('edges')
-        .select('from_id')
+        .select('from_id, to_id')
         .eq('from_type', 'knowledge')
         .eq('to_slug', slug);
     if (error) throw new Error(`backlinks edges: ${error.message}`);
 
-    const ids = [...new Set((ed ?? []).map((e) => e.from_id as string))];
+    const edges = (ed ?? []) as BacklinkEdgeRow[];
+    const ids = [
+        ...new Set(
+            edges.filter((e) => !noteId || !e.to_id || e.to_id === noteId).map((e) => e.from_id),
+        ),
+    ];
     if (!ids.length) return [];
 
     const { data, error: nErr } = await db
@@ -603,7 +680,8 @@ export async function backlinksDeCom(db: SupabaseClient, slug: string): Promise<
     if (nErr) throw new Error(`backlinks knowledge: ${nErr.message}`);
     return (data ?? []).map((n) => ({ id: n.id, slug: n.slug, title: n.title }));
 }
-export const backlinksDe = async (slug: string) => backlinksDeCom(await createClient(), slug);
+export const backlinksDe = async (slug: string, noteId?: string) =>
+    backlinksDeCom(await createClient(), slug, noteId);
 
 // Forward links: wikilinks que esta nota faz (edges com from_id = noteId), com
 // flag `existe` (a nota-alvo existe ou é um link quebrado).
@@ -613,17 +691,18 @@ export async function forwardLinksDeCom(
 ): Promise<ForwardLink[]> {
     const { data: ed, error } = await db
         .from('edges')
-        .select('to_slug')
+        .select('to_slug, to_id')
         .eq('from_type', 'knowledge')
         .eq('from_id', noteId);
     if (error) throw new Error(`forward edges: ${error.message}`);
 
-    const slugs = [...new Set((ed ?? []).map((e) => e.to_slug as string))];
+    const edges = (ed ?? []) as ForwardEdgeRow[];
+    const slugs = [...new Set(edges.map((e) => e.to_slug))];
     if (!slugs.length) return [];
 
     const { data, error: nErr } = await db
         .from('knowledge')
-        .select('id, slug, title')
+        .select('id, slug, title, archived')
         .in('slug', slugs);
     if (nErr) throw new Error(`forward knowledge: ${nErr.message}`);
 
@@ -633,19 +712,43 @@ export async function forwardLinksDeCom(
         if (grupo) grupo.push(n);
         else notasPorSlug.set(n.slug, [n]);
     }
-    return slugs
-        .map((slug) => {
+    const notasPorId = new Map((data ?? []).map((n) => [String(n.id), n]));
+
+    const links = new Map<string, ForwardLink>();
+    for (const edge of edges) {
+        const key = edge.to_id ? `id:${edge.to_id}` : `slug:${edge.to_slug}`;
+        if (links.has(key)) continue;
+
+        if (edge.to_id) {
+            const nota = notasPorId.get(edge.to_id);
+            links.set(key, {
+                id: nota?.id ?? edge.to_id,
+                slug: nota?.slug ?? edge.to_slug,
+                title: nota?.title ?? edge.to_slug,
+                existe: Boolean(nota && !nota.archived),
+                ambiguo: false,
+                arquivada: Boolean(nota?.archived),
+            });
+            continue;
+        }
+
+        const slug = edge.to_slug;
+        if (!links.has(`slug:${slug}`)) {
             const matches = notasPorSlug.get(slug) ?? [];
-            const unico = matches.length === 1 ? matches[0] : null;
-            return {
+            const ativos = matches.filter((m) => !m.archived);
+            const unico = ativos.length === 1 ? ativos[0] : null;
+            links.set(`slug:${slug}`, {
                 id: unico?.id,
                 slug,
                 title: unico?.title ?? slug,
-                existe: matches.length > 0,
-                ambiguo: matches.length > 1,
-            };
-        })
-        .sort((a, b) => a.title.localeCompare(b.title, 'pt'));
+                existe: ativos.length > 0,
+                ambiguo: ativos.length > 1,
+                arquivada: ativos.length === 0 && matches.length > 0,
+            });
+        }
+    }
+
+    return [...links.values()].sort((a, b) => a.title.localeCompare(b.title, 'pt'));
 }
 export const forwardLinksDe = async (noteId: string) =>
     forwardLinksDeCom(await createClient(), noteId);
@@ -654,8 +757,9 @@ export interface GrafoNode {
     id: string;
     slug: string;
     title: string;
-    group: string; // 'knowledge' | 'daily'
+    group: string; // 'knowledge' | 'daily' | 'fantasma'
     color: string; // hex resolvido (cor da pasta / cor daily / default)
+    size: number; // nº de caracteres do content_md (dimensiona a bola no grafo)
 }
 export interface GrafoLink {
     source: string;
@@ -667,8 +771,8 @@ export interface GrafoDados {
 }
 
 // Grafo do conhecimento: nós = notas knowledge (cor da pasta) + dailies (cor do
-// grupo daily); arestas = wikilinks (edges com to_id resolvido). Arquivadas e
-// links pendentes (to_id null / extremo desconhecido) ficam de fora.
+// grupo daily); arestas = wikilinks. Alvos fora do grafo (link por criar, nota
+// arquivada) entram como nós fantasma à Obsidian (ver montarArestasGrafo).
 export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     const {
         data: { user },
@@ -682,9 +786,10 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     );
 
     // Nós knowledge (não arquivadas), cor = cor da pasta (ou default).
+    // content_md vem só para medir o tamanho (PostgREST não expõe char_length).
     const { data: notas, error } = await db
         .from('knowledge')
-        .select('id, slug, title, folder_id')
+        .select('id, slug, title, folder_id, content_md')
         .eq('owner_id', user.id)
         .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
@@ -694,6 +799,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         title: n.title,
         group: 'knowledge',
         color: resolverCor(n.folder_id ? corPorPasta.get(String(n.folder_id)) : null, COR_DEFAULT),
+        size: (n.content_md ?? '').length,
     }));
 
     // Cor do grupo daily (profile do utilizador).
@@ -701,30 +807,39 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     const corDaily = resolverCor(prof.data?.daily_color ?? null, COR_DAILY_DEFAULT);
 
     // Nós daily.
-    const { data: dailies } = await db.from('dailies').select('id, dia').eq('owner_id', user.id);
+    const { data: dailies } = await db
+        .from('dailies')
+        .select('id, dia, content_md')
+        .eq('owner_id', user.id);
     const nodesD: GrafoNode[] = (dailies ?? []).map((d) => ({
         id: String(d.id),
         slug: d.dia,
         title: d.dia,
         group: 'daily',
         color: corDaily,
+        size: (d.content_md ?? '').length,
     }));
 
     const nodes = [...nodesK, ...nodesD];
     const idsValidos = new Set(nodes.map((n) => n.id));
 
-    // Arestas: knowledge + daily, ambos os extremos têm de ser nós conhecidos.
+    // Arestas: knowledge + daily. Pendentes/arquivadas viram fantasmas.
     const { data: ed, error: eErr } = await db
         .from('edges')
-        .select('from_id, to_id')
-        .in('from_type', ['knowledge', 'daily'])
-        .not('to_id', 'is', null);
+        .select('from_id, to_id, to_slug')
+        .in('from_type', ['knowledge', 'daily']);
     if (eErr) throw new Error(`grafo edges: ${eErr.message}`);
-    const links: GrafoLink[] = (ed ?? [])
-        .map((e) => ({ source: String(e.from_id), target: String(e.to_id) }))
-        .filter((l) => idsValidos.has(l.source) && idsValidos.has(l.target));
+    const { links, fantasmas } = montarArestasGrafo(
+        (ed ?? []).map((e) => ({
+            fromId: String(e.from_id),
+            toId: e.to_id ? String(e.to_id) : null,
+            toSlug: e.to_slug ?? null,
+        })),
+        idsValidos,
+        new Map(nodes.map((n) => [n.slug, n.id])),
+    );
 
-    return { nodes, links };
+    return { nodes: [...nodes, ...fantasmas], links };
 }
 export const grafoDados = async () => grafoDadosCom(await createClient());
 

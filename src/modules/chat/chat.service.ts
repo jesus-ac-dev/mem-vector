@@ -1,7 +1,14 @@
 import { embedQuery } from '@/lib/embeddings';
 import { generate } from '@/lib/claude';
 import { createClient } from '@/lib/supabase/server';
-import { buildPrompt, relevantSources, type Source, type SourceMetadata } from './chat.prompt';
+import {
+    buildPrompt,
+    relevantSources,
+    type MensagemConversa,
+    type Source,
+    type SourceMetadata,
+} from './chat.prompt';
+import { classificarIntencao } from './chat.intencao';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
     escreverNota as escreverNotaReal,
@@ -183,7 +190,11 @@ export async function aplicarDailyTurno(
 }
 
 // Pipeline do ping-pong: embed(query) → match_chunks → prompt → claude.
-export async function respond(question: string): Promise<ChatResult> {
+// O histórico (janela da conversa) entra no prompt para resolver anáforas.
+export async function respond(
+    question: string,
+    historico: MensagemConversa[] = [],
+): Promise<ChatResult> {
     const db = await createClient();
     const queryEmbedding = await embedQuery(question);
 
@@ -198,7 +209,11 @@ export async function respond(question: string): Promise<ChatResult> {
     // (sources honesto). Abaixo do corte → (sem contexto) → fallback limpo.
     const relevant = relevantSources((data ?? []) as Source[]);
     const sources = await enriquecerSourcesComMetadata(db, relevant);
-    const { text, costUsd } = await generate(buildPrompt(question, sources));
+    // Declarativa sem marcas de pergunta = facto a registar (#19); a mesma
+    // classificação determinística guia a destilação pós-turno.
+    const { text, costUsd } = await generate(
+        buildPrompt(question, sources, classificarIntencao(question), historico),
+    );
 
     return { answer: text, sources, costUsd };
 }

@@ -24,6 +24,7 @@ interface WorkspaceContextValue {
     ficheirosAbertos: FicheiroAberto[];
     ficheiroAtivo: string | null; // tabKey do ativo (ou null)
     abrirFicheiro: (f: FicheiroAberto) => void; // abre nova tab ou foca a existente
+    atualizarFicheiroAberto: (key: string, patch: Partial<FicheiroAberto>) => void;
     fecharFicheiro: (key: string) => void; // fecha a tab pelo tabKey
     activarFicheiro: (key: string) => void;
     // ── painel do chat ──
@@ -51,6 +52,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         const key = tabKey(f);
         setFicheirosAbertos((prev) => (prev.some((x) => tabKey(x) === key) ? prev : [...prev, f]));
         setFicheiroAtivo(key);
+    }
+
+    function atualizarFicheiroAberto(key: string, patch: Partial<FicheiroAberto>) {
+        setFicheirosAbertos((prev) =>
+            prev.map((f) => (tabKey(f) === key ? { ...f, ...patch } : f)),
+        );
     }
 
     function fecharFicheiro(key: string) {
@@ -97,6 +104,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
                 ficheirosAbertos,
                 ficheiroAtivo,
                 abrirFicheiro,
+                atualizarFicheiroAberto,
                 fecharFicheiro,
                 activarFicheiro,
                 chatAberto,

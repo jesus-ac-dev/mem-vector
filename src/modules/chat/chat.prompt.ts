@@ -1,3 +1,5 @@
+import type { Intencao } from './chat.intencao';
+
 export interface SourceMetadata {
     entity_type?: string;
     entity_id?: string;
@@ -40,21 +42,72 @@ export function relevantSources(
 // resposta, mas a LLM nunca fica refém dele. Factos do workspace que não estejam no
 // contexto não se inventam; conhecimento geral pode responder, sinalizado como tal.
 const REGRA =
+    'Estás dentro da app mem-vector, não dentro do Obsidian nem de um terminal. ' +
+    'Nunca proponhas comandos do Obsidian, CLI, vault local ou aprovações para ferramentas externas. ' +
+    'Quando o utilizador pedir para criar/guardar/registar daily notes, notas ou memória, responde em termos ' +
+    'do workspace e do agente-autor; o pós-turno persistente tratará do registo quando houver conteúdo durável. ' +
     'O contexto acima é a tua fonte preferencial — usa-o quando cobrir a pergunta. ' +
+    'Quando afirmares que uma nota ou fonte contém algo, cita o trecho literal entre aspas ' +
+    'a partir do contexto acima; nunca digas que uma fonte contém o que não está lá. ' +
     'Se a pergunta for sobre o workspace (decisões, tarefas, notas ou factos específicos daqui) ' +
     'e o contexto não a cobrir, diz que não tens essa informação no workspace — não inventes. ' +
     'Se for conhecimento geral, podes responder do teu conhecimento, deixando claro de forma breve ' +
     'que é conhecimento geral e não vem do workspace.';
 
+// Regra para afirmações declarativas (#19): sem marcas de pergunta = facto a registar.
+// A escrita real acontece no pós-turno (job de destilação); aqui só se confirma.
+function regraFacto(incerta: boolean): string {
+    return (
+        'A mensagem do utilizador é uma afirmação declarativa, SEM marcas de pergunta — ' +
+        'trata-a como FACTO A REGISTAR, não como pergunta. Se contém um facto, preferência, ' +
+        'decisão ou informação sobre o utilizador, o trabalho ou a vida dele, responde ' +
+        'exatamente uma linha no formato "Registado: <facto reformulado curto>." — sem pedir ' +
+        'confirmação nem perguntar se deve registar. O facto reformulado deve ser autocontido: ' +
+        'resolve pronomes ("eles", "deles", "ela") com os nomes da conversa recente acima. ' +
+        'O pós-turno persistente fará a escrita; não digas que não consegues guardar. ' +
+        (incerta
+            ? 'A afirmação traz uma marca de incerteza ("talvez", "acho que"…): regista na ' +
+              'mesma e acrescenta no fim " (assumi que é facto — se era pergunta, diz)". '
+            : '') +
+        'Só se a mensagem for apenas saudação, agradecimento ou conversa trivial sem facto ' +
+        'é que respondes normalmente, sem registar.'
+    );
+}
+
+export interface MensagemConversa {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+// Janela de conversa: sem o fio, "eles têm dois filhos" não tem sujeito.
+function blocoConversa(historico: MensagemConversa[]): string {
+    if (!historico.length) return '';
+    const linhas = historico
+        .map((m) => `${m.role === 'user' ? 'Utilizador' : 'Assistente'}: ${m.content}`)
+        .join('\n');
+    return `Conversa recente (mais antiga primeiro):\n${linhas}\n\n`;
+}
+
 // Monta o prompt do ping-pong a partir da pergunta e das fontes recuperadas.
-export function buildPrompt(question: string, sources: Source[]): string {
+// Com intenção declarativa, o rótulo e a regra mudam: é um facto a registar.
+export function buildPrompt(
+    question: string,
+    sources: Source[],
+    intencao?: Intencao,
+    historico: MensagemConversa[] = [],
+): string {
     const context = sources.length
         ? sources.map((s, i) => `[${i + 1}] ${s.content}`).join('\n\n')
         : '(sem contexto)';
 
+    const declarativa = intencao?.tipo === 'declarativa';
+    const rotulo = declarativa ? 'Afirmação do utilizador' : 'Pergunta';
+    const regras = declarativa ? `${regraFacto(intencao?.incerta === true)}\n\n${REGRA}` : REGRA;
+
     return (
         `Contexto recuperado da base de conhecimento:\n\n${context}\n\n` +
-        `Pergunta: ${question}\n\n` +
-        REGRA
+        blocoConversa(historico) +
+        `${rotulo}: ${question}\n\n` +
+        regras
     );
 }

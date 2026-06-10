@@ -23,6 +23,7 @@ interface Message {
     sources?: Source[];
     escrita?: NotaEscrita | null;
     daily?: DailyEscrito | null;
+    distillationJobId?: string;
     destilando?: boolean;
     destilacaoErro?: boolean;
 }
@@ -153,6 +154,7 @@ function ChatContent() {
                     role: 'assistant',
                     content: res.answer,
                     sources: res.sources,
+                    distillationJobId: res.distillationJobId,
                     destilando: true,
                 },
             ]);
@@ -228,11 +230,14 @@ function ChatContent() {
                                 <ProvenanceLine sources={m.sources} />
                             )}
                             {m.role === 'assistant' && m.destilando && (
-                                <p className="mt-1 text-xs text-muted-foreground">a destilar…</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    job {m.distillationJobId?.slice(0, 8)} guardado · a destilar…
+                                </p>
                             )}
                             {m.role === 'assistant' && m.destilacaoErro && (
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    destilação pendente — job guardado
+                                    job {m.distillationJobId?.slice(0, 8)} guardado · destilação
+                                    pendente
                                 </p>
                             )}
                             {m.role === 'assistant' && m.escrita && (

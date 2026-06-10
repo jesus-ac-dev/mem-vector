@@ -24,24 +24,33 @@ import {
     Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { FileExplorer } from '@/components/layout/file-explorer';
+import {
+    DRAG_NOTA_ID,
+    DRAG_NOTA_SLUG,
+    DRAG_PASTA_ID,
+    FileExplorer,
+} from '@/components/layout/file-explorer';
 import type { DailyItem } from '@/components/layout/file-explorer';
 import { ArquivadosLista } from '@/components/layout/arquivados-lista';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
 import { WorkspaceGraph } from '@/components/layout/workspace-graph';
+import { ClientErrorListener } from '@/components/layout/client-error-listener';
 import {
     criarNotaNaPasta,
     novaPasta,
     abrirOuCriarNota,
     dadosBarraDireita,
+    arquivarNotaAction,
+    arquivarPastaAction,
     listarArquivadosAction,
     type DadosBarraDireita,
     type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
 import { tabKey } from '@/components/layout/workspace-context';
-import type { Arvore } from '@/modules/folders/folders.tree';
+import type { Arvore, NoArvore, NotaItem } from '@/modules/folders/folders.tree';
 import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 // ──────────────────────────────────────────────
@@ -61,6 +70,47 @@ const navItems = [
     { href: '/grupos', label: 'Grupos', Icon: Users },
 ];
 
+function ordenarNotas(notas: NotaItem[]): NotaItem[] {
+    return [...notas].sort((a, b) => a.title.localeCompare(b.title, 'pt'));
+}
+
+function inserirNotaNaArvore(arvore: Arvore, nota: NotaItem): Arvore {
+    const inserirNo = (no: NoArvore): NoArvore => {
+        if (no.pasta.id === nota.folderId) {
+            return {
+                ...no,
+                notas: ordenarNotas([...no.notas.filter((n) => n.id !== nota.id), nota]),
+            };
+        }
+        return { ...no, subpastas: no.subpastas.map(inserirNo) };
+    };
+
+    if (!nota.folderId) {
+        return {
+            ...arvore,
+            raizNotas: ordenarNotas([...arvore.raizNotas.filter((n) => n.id !== nota.id), nota]),
+        };
+    }
+
+    return { ...arvore, raizPastas: arvore.raizPastas.map(inserirNo) };
+}
+
+function removerPastaDaArvore(arvore: Arvore, pastaId: string): Arvore {
+    function remover(nos: NoArvore[]): NoArvore[] {
+        const restantes: NoArvore[] = [];
+        for (const no of nos) {
+            if (no.pasta.id === pastaId) continue;
+            restantes.push({ ...no, subpastas: remover(no.subpastas) });
+        }
+        return restantes;
+    }
+
+    return {
+        ...arvore,
+        raizPastas: remover(arvore.raizPastas),
+    };
+}
+
 function Ribbon({
     activePanel,
     onPanelChange,
@@ -73,7 +123,7 @@ function Ribbon({
     onOpenLeft: () => void;
 }) {
     const pathname = usePathname();
-    const { abrirChat } = useWorkspace();
+    const { abrirChat, chatAberto } = useWorkspace();
 
     return (
         <nav
@@ -103,7 +153,7 @@ function Ribbon({
 
             {/* Route-nav icons */}
             {navItems.map(({ href, label, Icon }) => {
-                const active = pathname.startsWith(href);
+                const active = href === '/chat' ? chatAberto : pathname.startsWith(href);
                 return (
                     <Link
                         key={href}
@@ -159,26 +209,70 @@ function LeftSidebar({
     onToggle: () => void;
 }) {
     const router = useRouter();
-    const { abrirConversa, abrirFicheiro } = useWorkspace();
+    const { abrirConversa, abrirFicheiro, notificarWorkspaceMudou } = useWorkspace();
+    const [arvoreState, setArvoreState] = useState<{ source: Arvore; atual: Arvore }>({
+        source: arvore,
+        atual: arvore,
+    });
+    const arvoreAtual = arvoreState.source === arvore ? arvoreState.atual : arvore;
     const [verArquivados, setVerArquivados] = useState(false);
     const [arquivados, setArquivados] = useState<NotaKnowledge[]>([]);
+    const [archiveOver, setArchiveOver] = useState(false);
     const [pastaSelecionada, setPastaSelecionada] = useState<string | null>(null);
+    const [knowledgeOpen, setKnowledgeOpen] = useState(true);
+    const [forceOpenFolderIds, setForceOpenFolderIds] = useState<string[]>([]);
     const [criandoPasta, setCriandoPasta] = useState(false);
 
-    async function carregarArquivados() {
-        setArquivados(await listarArquivadosAction());
-    }
-
-    function toggleArquivados() {
-        setVerArquivados((v) => {
-            const novo = !v;
-            if (novo) void carregarArquivados();
-            return novo;
+    function atualizarArvoreLocal(updater: (atual: Arvore) => Arvore) {
+        setArvoreState((state) => {
+            const atual = state.source === arvore ? state.atual : arvore;
+            return { source: arvore, atual: updater(atual) };
         });
     }
 
+    useEffect(() => {
+        if (!verArquivados) return;
+        let cancelado = false;
+        void runClientAction(
+            { area: 'left-sidebar', action: 'listarArquivados' },
+            listarArquivadosAction,
+        ).then((notas) => {
+            if (!cancelado && notas) setArquivados(notas);
+        });
+        return () => {
+            cancelado = true;
+        };
+    }, [verArquivados]);
+
+    async function carregarArquivados() {
+        const notas = await runClientAction(
+            { area: 'left-sidebar', action: 'carregarArquivados' },
+            listarArquivadosAction,
+        );
+        if (notas) setArquivados(notas);
+    }
+
+    function toggleArquivados() {
+        setVerArquivados((v) => !v);
+    }
+
     async function handleNovaNota() {
+        if (pastaSelecionada === null) {
+            setKnowledgeOpen(true);
+        } else {
+            setForceOpenFolderIds((ids) =>
+                ids.includes(pastaSelecionada) ? ids : [...ids, pastaSelecionada],
+            );
+        }
         const nota = await criarNotaNaPasta(pastaSelecionada);
+        atualizarArvoreLocal((atual) =>
+            inserirNotaNaArvore(atual, {
+                id: nota.id,
+                slug: nota.chave,
+                title: nota.titulo,
+                folderId: pastaSelecionada,
+            }),
+        );
         abrirFicheiro({
             tipo: nota.tipo,
             id: nota.id,
@@ -186,17 +280,43 @@ function LeftSidebar({
             titulo: nota.titulo,
             vistaInicial: 'editor',
         });
+        notificarWorkspaceMudou();
         router.push('/chat');
-        router.refresh(); // mostra a nota nova no explorer (server)
     }
 
     function handleNovaPasta() {
+        if (pastaSelecionada === null) setKnowledgeOpen(true);
         setCriandoPasta(true); // mostra o input inline no topo da árvore
+    }
+
+    async function handleDropArquivo(e: React.DragEvent<HTMLButtonElement>) {
+        e.preventDefault();
+        setArchiveOver(false);
+
+        const pastaId = e.dataTransfer.getData(DRAG_PASTA_ID);
+        if (pastaId) {
+            await arquivarPastaAction(pastaId);
+            setPastaSelecionada(null);
+            setKnowledgeOpen(true);
+            setForceOpenFolderIds((ids) => ids.filter((id) => id !== pastaId));
+            atualizarArvoreLocal((atual) => removerPastaDaArvore(atual, pastaId));
+            notificarWorkspaceMudou();
+            if (verArquivados) await carregarArquivados();
+            return;
+        }
+
+        const slug = e.dataTransfer.getData(DRAG_NOTA_SLUG);
+        if (!slug) return;
+        const id = e.dataTransfer.getData(DRAG_NOTA_ID) || undefined;
+        await arquivarNotaAction(slug, id);
+        notificarWorkspaceMudou();
+        router.refresh();
+        if (verArquivados) await carregarArquivados();
     }
 
     async function confirmarCriarPasta(nome: string) {
         setCriandoPasta(false);
-        await novaPasta(nome);
+        await novaPasta(nome, pastaSelecionada);
         router.refresh(); // mostra a pasta nova no explorer (server)
     }
 
@@ -211,36 +331,71 @@ function LeftSidebar({
                 <div className="flex items-center gap-0.5">
                     {activePanel === 'explorer' ? (
                         <>
+                            {!verArquivados && (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Nova pasta"
+                                        aria-label="Nova pasta"
+                                        onClick={handleNovaPasta}
+                                        className="h-6 w-6 text-muted-foreground"
+                                    >
+                                        <FolderPlus className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Nova nota"
+                                        aria-label="Nova nota"
+                                        onClick={() =>
+                                            void runClientAction(
+                                                {
+                                                    area: 'left-sidebar',
+                                                    action: 'novaNota',
+                                                    meta: { pastaSelecionada },
+                                                },
+                                                handleNovaNota,
+                                            )
+                                        }
+                                        className="h-6 w-6 text-muted-foreground"
+                                    >
+                                        <FilePlus className="h-3.5 w-3.5" />
+                                    </Button>
+                                </>
+                            )}
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                title="Nova nota"
-                                aria-label="Nova nota"
-                                onClick={() => void handleNovaNota()}
-                                className="h-6 w-6 text-muted-foreground"
-                            >
-                                <FilePlus className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Nova pasta"
-                                aria-label="Nova pasta"
-                                onClick={handleNovaPasta}
-                                className="h-6 w-6 text-muted-foreground"
-                            >
-                                <FolderPlus className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                title={verArquivados ? 'Ver notas' : 'Ver arquivados'}
+                                title={
+                                    verArquivados
+                                        ? 'Ver notas'
+                                        : 'Ver arquivados · arrasta nota ou pasta para arquivar'
+                                }
                                 aria-label="Ver arquivados"
                                 aria-pressed={verArquivados}
                                 onClick={toggleArquivados}
+                                onDragOver={(e) => {
+                                    if (
+                                        e.dataTransfer.types.includes(DRAG_NOTA_SLUG) ||
+                                        e.dataTransfer.types.includes(DRAG_PASTA_ID)
+                                    ) {
+                                        e.preventDefault();
+                                        setArchiveOver(true);
+                                    }
+                                }}
+                                onDragLeave={() => setArchiveOver(false)}
+                                onDrop={(e) =>
+                                    void runClientAction(
+                                        { area: 'left-sidebar', action: 'dropArquivo' },
+                                        () => handleDropArquivo(e),
+                                    )
+                                }
                                 className={cn(
-                                    'h-6 w-6 text-muted-foreground',
-                                    verArquivados && 'bg-accent text-accent-foreground',
+                                    'h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
+                                    (verArquivados || archiveOver) &&
+                                        'bg-destructive/10 text-destructive',
+                                    archiveOver && 'ring-1 ring-destructive/50',
                                 )}
                             >
                                 <Archive className="h-3.5 w-3.5" />
@@ -282,12 +437,29 @@ function LeftSidebar({
                         <ArquivadosLista arquivados={arquivados} onMudou={carregarArquivados} />
                     ) : (
                         <FileExplorer
-                            arvore={arvore}
+                            arvore={arvoreAtual}
                             dailies={dailies}
                             pastaSelecionada={pastaSelecionada}
                             onSelecionarPasta={setPastaSelecionada}
+                            knowledgeOpen={knowledgeOpen}
+                            onKnowledgeOpenChange={setKnowledgeOpen}
+                            forceOpenFolderIds={forceOpenFolderIds}
+                            onFolderManualToggle={(id) =>
+                                setForceOpenFolderIds((ids) =>
+                                    ids.filter((openId) => openId !== id),
+                                )
+                            }
                             criandoPasta={criandoPasta}
-                            onCriarPasta={(nome) => void confirmarCriarPasta(nome)}
+                            onCriarPasta={(nome) =>
+                                void runClientAction(
+                                    {
+                                        area: 'left-sidebar',
+                                        action: 'novaPasta',
+                                        meta: { nome, pastaSelecionada },
+                                    },
+                                    () => confirmarCriarPasta(nome),
+                                )
+                            }
                             onCancelarCriarPasta={() => setCriandoPasta(false)}
                         />
                     )
@@ -359,11 +531,17 @@ function formatYMD(date: Date): string {
 // Link de nota clicável na barra (backlink ou forward link existente).
 function NotaLink({
     titulo,
+    detalhe,
+    badge,
     existe = true,
+    alerta = false,
     onClick,
 }: {
     titulo: string;
+    detalhe?: string;
+    badge?: string;
     existe?: boolean;
+    alerta?: boolean; // detalhe a vermelho (ex.: alvo no arquivo)
     onClick: () => void;
 }) {
     return (
@@ -373,11 +551,28 @@ function NotaLink({
             onClick={onClick}
             title={titulo}
             className={cn(
-                'h-auto w-full justify-start truncate px-1.5 py-1 text-left text-xs font-normal',
+                'h-auto w-full justify-start gap-2 px-1.5 py-1 text-left text-xs font-normal',
                 existe ? 'text-foreground' : 'italic text-muted-foreground',
             )}
         >
-            {existe ? titulo : `${titulo} (criar)`}
+            <span className="min-w-0 flex-1">
+                <span className="block truncate">{titulo}</span>
+                {detalhe && (
+                    <span
+                        className={cn(
+                            'block truncate text-[0.68rem]',
+                            alerta ? 'text-destructive' : 'text-muted-foreground',
+                        )}
+                    >
+                        {detalhe}
+                    </span>
+                )}
+            </span>
+            {badge && (
+                <span className="shrink-0 rounded border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
+                    {badge}
+                </span>
+            )}
         </Button>
     );
 }
@@ -415,8 +610,15 @@ function RightSidebar({
         if (!ativoTipo || !ativoChave) return;
         const key = tabKey({ tipo: ativoTipo, chave: ativoChave, id: ativoId ?? undefined });
         let cancelado = false;
-        void dadosBarraDireita(ativoTipo, ativoChave, ativoId ?? undefined).then((d) => {
-            if (!cancelado) setDados({ key, d });
+        void runClientAction(
+            {
+                area: 'right-sidebar',
+                action: 'dadosBarraDireita',
+                meta: { ativoTipo, ativoChave, ativoId },
+            },
+            () => dadosBarraDireita(ativoTipo, ativoChave, ativoId ?? undefined),
+        ).then((d) => {
+            if (!cancelado && d) setDados({ key, d });
         });
         return () => {
             cancelado = true;
@@ -432,7 +634,11 @@ function RightSidebar({
             return;
         }
         // Link quebrado: materializa a nota ao clicar (comportamento Obsidian).
-        void abrirOuCriarNota(slug).then((r) => {
+        void runClientAction(
+            { area: 'right-sidebar', action: 'abrirOuCriarNota', meta: { slug } },
+            () => abrirOuCriarNota(slug),
+        ).then((r) => {
+            if (!r) return;
             if (r.estado === 'ambiguo') {
                 setWikilinkAmbiguo({ slug: r.slug, opcoes: r.opcoes });
                 return;
@@ -448,6 +654,13 @@ function RightSidebar({
         setWikilinkAmbiguo(null);
         abrirFicheiro({ tipo: 'knowledge', id: nota.id, chave: nota.chave, titulo: nota.titulo });
         router.push('/chat');
+    }
+
+    function navegarParaHeading(id: string) {
+        const alvo = document.getElementById(id);
+        if (!alvo) return;
+        alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.history.replaceState(null, '', `#${id}`);
     }
 
     if (collapsed) {
@@ -528,15 +741,20 @@ function RightSidebar({
                     vazio('A carregar…')
                 ) : activeTab === 'outline' ? (
                     dadosAtivos.outline.length ? (
-                        <ul className="space-y-0.5">
+                        <ul className="space-y-1">
                             {dadosAtivos.outline.map((h) => (
-                                <li
-                                    key={`${h.linha}-${h.texto}`}
-                                    style={{ paddingLeft: `${(h.nivel - 1) * 12}px` }}
-                                    className="truncate px-1.5 text-xs text-muted-foreground"
-                                    title={h.texto}
-                                >
-                                    {h.texto}
+                                <li key={`${h.linha}-${h.id}`}>
+                                    <a
+                                        href={`#${h.id}`}
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            navegarParaHeading(h.id);
+                                        }}
+                                        style={{ paddingLeft: `${(h.nivel - 1) * 12 + 6}px` }}
+                                        className="block truncate rounded py-1 pr-1.5 text-xs leading-4 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    >
+                                        {h.texto}
+                                    </a>
                                 </li>
                             ))}
                         </ul>
@@ -550,6 +768,7 @@ function RightSidebar({
                                 <li key={n.slug}>
                                     <NotaLink
                                         titulo={n.title}
+                                        detalhe="Backlink"
                                         onClick={() =>
                                             abrirNotaPorSlug(n.slug, n.title, true, n.id)
                                         }
@@ -564,13 +783,32 @@ function RightSidebar({
                     dadosAtivos.forwardLinks.length ? (
                         <ul className="space-y-0.5">
                             {dadosAtivos.forwardLinks.map((l) => (
-                                <li key={l.slug}>
+                                <li key={l.id ?? l.slug}>
                                     <NotaLink
                                         titulo={l.title}
-                                        existe={l.existe}
-                                        onClick={() =>
-                                            abrirNotaPorSlug(l.slug, l.title, l.existe, l.id)
+                                        detalhe={
+                                            l.ambiguo
+                                                ? 'Vários destinos'
+                                                : l.arquivada
+                                                  ? 'No arquivo'
+                                                  : l.existe
+                                                    ? undefined
+                                                    : 'Link por criar'
                                         }
+                                        badge={
+                                            l.ambiguo
+                                                ? 'Escolher'
+                                                : l.existe || l.arquivada
+                                                  ? undefined
+                                                  : 'Criar'
+                                        }
+                                        existe={l.existe}
+                                        alerta={l.arquivada}
+                                        onClick={() => {
+                                            // arquivada: não abrir nem criar por cima do slug
+                                            if (l.arquivada) return;
+                                            abrirNotaPorSlug(l.slug, l.title, l.existe, l.id);
+                                        }}
                                     />
                                 </li>
                             ))}
@@ -613,6 +851,7 @@ export function WorkspaceShell({ arvore, dailies, diasComDaily, children }: Work
 
     return (
         <WorkspaceProvider>
+            <ClientErrorListener />
             <div className="flex flex-1 overflow-hidden">
                 {/* Ribbon */}
                 <Ribbon
