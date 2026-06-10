@@ -81,7 +81,15 @@ export function buildTurnoPrompt(
         '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
-        '"Decisão:", e sem descrever o contexto — só o tópico.\n\n' +
+        '"Decisão:", e sem descrever o contexto — só o tópico. Para factos sobre pessoas, o título ' +
+        'são os nomes delas (ex.: "Carlos e Sofia"), nunca o facto.\n' +
+        'REGRA PARA content_md: a nota é uma página viva de wiki sobre o ASSUNTO, escrita para ' +
+        'leitura humana futura — prosa natural, factos integrados num texto que se lê de seguida ' +
+        '(ex.: "O Carlos gosta da Sofia. Têm dois filhos juntos, o Lucas e o Filipe."). Começa com ' +
+        '"# <título>". NUNCA escrevas carimbos de proveniência no corpo — nada de "(declarado a ' +
+        '<data>)", "o utilizador disse" ou datas de registo: a proveniência fica no versionamento, ' +
+        'fora do texto. Ao continuar uma nota, INTEGRA o facto novo na prosa existente ' +
+        '(reescreve a frase certa se preciso), não acrescentes linhas-log no fim.\n\n' +
         blocoConversaTurno(historico) +
         blocoFactoDeclarado(intencao) +
         blocoCandidatos(candidatos) +

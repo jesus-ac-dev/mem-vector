@@ -67,6 +67,29 @@ describe('buildTurnoPrompt com histórico', () => {
     });
 });
 
+// Contrato de estilo (#19, 3.º smoke): a nota saiu log frio — "(declarado a
+// 2026-06-10)" em cada linha e título-frase. A nota é uma página de wiki viva
+// para leitura humana; a proveniência vive no versionamento, não no corpo.
+describe('buildTurnoPrompt: estilo da nota', () => {
+    it('manda escrever página viva em prosa, não log de declarações', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/página viva/i);
+        expect(prompt).toMatch(/prosa/i);
+    });
+
+    it('proíbe carimbos de proveniência no corpo', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/proveniência/i);
+        expect(prompt).toMatch(/declarado a/i); // o anti-exemplo fica explícito
+    });
+
+    it('título de factos sobre pessoas são os nomes, nunca o facto', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/"Carlos e Sofia"/);
+        expect(prompt).toMatch(/nunca o facto/i);
+    });
+});
+
 // Gate de pertinência (#19, 2.º smoke): a nota-lixo "coisas que acontecem"
 // capturou o facto da Sofia — continuar só quando o assunto pertence à nota.
 describe('blocoCandidatos com gate de pertinência', () => {
