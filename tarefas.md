@@ -8,7 +8,7 @@ Ultima atualizacao: 2026-06-10
 - Objetivo ativo: **#19 FECHADO 2026-06-10 — M0 fechado.** Próxima frente: #21 (placement de tarefas na destilação). Branch `fix/smoke-tests-and-others` pronto para PR/merge (decisão Carlos).
 - App local: `http://localhost:2500`; Supabase local esperado em `npm run db:status` (`mem-vector`, portas 560xx).
 - Ultima validação 2026-06-10: `npm run verify` (36 files / 226 tests), `npx playwright test e2e/home.spec.ts` e `npm run build` verdes.
-- Smokes: TODOS fechados (Explorer/`[[` 2026-06-09; destilação pós-chat 2026-06-10). Backlog separado, não bloqueante: share no header (`5.1`) e animação do grafo (`9.3`).
+- Smokes: TODOS fechados (Explorer/`[[` 2026-06-09; destilação pós-chat 2026-06-10). Backlog separado, não bloqueante: share no header (`5.1`). Animação do grafo (`9.3`) FEITA 2026-06-10 (timelapse cronológico à Obsidian).
 - Antes de mexer: `git status --short`, reler esta secção e o issue #19 com comentários (o relay de diagnóstico vive lá).
 
 ## Em Progresso
