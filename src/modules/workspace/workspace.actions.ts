@@ -264,7 +264,8 @@ export interface DadosBarraDireita {
 
 /**
  * Dados da barra da direita para o ficheiro ativo: outline (headings) sempre, e
- * backlinks/forward links para knowledge. Daily mostra só outline nesta sidebar.
+ * backlinks/forward links para knowledge. Daily mostra outline + forward links
+ * (a daily também escreve edges — ex.: a destilação liga [[carlos-e-sofia]]).
  */
 export async function dadosBarraDireita(
     tipo: 'knowledge' | 'daily',
@@ -285,7 +286,8 @@ export async function dadosBarraDireita(
 
     const daily = id ? await getDailyPorId(id) : await getDaily(chave);
     if (!daily) return vazio;
-    return { ...vazio, outline: extrairOutline(daily.contentMd) };
+    const forwardLinks = await forwardLinksDe(daily.id, 'daily');
+    return { ...vazio, outline: extrairOutline(daily.contentMd), forwardLinks };
 }
 
 /** Dados do grafo do conhecimento (nós = notas, arestas = wikilinks). */

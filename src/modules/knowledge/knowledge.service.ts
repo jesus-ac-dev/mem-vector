@@ -744,16 +744,18 @@ export async function backlinksDeCom(
 export const backlinksDe = async (slug: string, noteId?: string) =>
     backlinksDeCom(await createClient(), slug, noteId);
 
-// Forward links: wikilinks que esta nota faz (edges com from_id = noteId), com
-// flag `existe` (a nota-alvo existe ou é um link quebrado).
+// Forward links: wikilinks que esta entidade faz (edges com from_id = noteId), com
+// flag `existe` (a nota-alvo existe ou é um link quebrado). As dailies também
+// escrevem edges — o sidebar delas usa fromType='daily'.
 export async function forwardLinksDeCom(
     db: SupabaseClient,
     noteId: string,
+    fromType: 'knowledge' | 'daily' = 'knowledge',
 ): Promise<ForwardLink[]> {
     const { data: ed, error } = await db
         .from('edges')
         .select('to_slug, to_id')
-        .eq('from_type', 'knowledge')
+        .eq('from_type', fromType)
         .eq('from_id', noteId);
     if (error) throw new Error(`forward edges: ${error.message}`);
 
@@ -811,8 +813,10 @@ export async function forwardLinksDeCom(
 
     return [...links.values()].sort((a, b) => a.title.localeCompare(b.title, 'pt'));
 }
-export const forwardLinksDe = async (noteId: string) =>
-    forwardLinksDeCom(await createClient(), noteId);
+export const forwardLinksDe = async (
+    noteId: string,
+    fromType: 'knowledge' | 'daily' = 'knowledge',
+) => forwardLinksDeCom(await createClient(), noteId, fromType);
 
 export interface GrafoNode {
     id: string;
