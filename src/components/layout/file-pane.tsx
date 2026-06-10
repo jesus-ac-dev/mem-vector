@@ -8,6 +8,7 @@ import { logClientError, runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { NotaEditor } from '@/components/layout/nota-editor';
+import { NotaPropriedades } from '@/components/layout/nota-propriedades';
 import {
     Select,
     SelectContent,
@@ -27,6 +28,7 @@ import type { ConteudoFicheiro } from '@/modules/workspace/workspace.files';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
+import type { PropriedadesNota } from '@/modules/knowledge/knowledge.props';
 
 // ──────────────────────────────────────────────
 // FilePane — barra de tabs + corpo do ficheiro ativo
@@ -92,7 +94,13 @@ export function FilePane() {
 type PaneEstado =
     | { tipo: 'carregando' }
     | { tipo: 'erro' }
-    | { tipo: 'ok'; titulo: string; contentMd: string; folderId?: string | null };
+    | {
+          tipo: 'ok';
+          titulo: string;
+          contentMd: string;
+          folderId?: string | null;
+          propriedades?: PropriedadesNota;
+      };
 
 type HistoryEstado = { tipo: 'carregando' } | { tipo: 'ok'; versoes: Versao[] };
 
@@ -174,6 +182,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                     titulo: res.titulo,
                     contentMd: res.contentMd,
                     folderId: res.folderId ?? null,
+                    propriedades: res.propriedades,
                 });
                 if (ficheiro.vistaInicial === 'editor') {
                     setRascunho((atual) => atual || res.contentMd);
@@ -248,6 +257,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                 titulo: titulo ?? chave,
                 contentMd: rascunho,
                 folderId: prev.tipo === 'ok' ? prev.folderId : null,
+                propriedades: prev.tipo === 'ok' ? prev.propriedades : undefined,
             }));
             atualizarFicheiroAberto(ficheiroKey, { chave, titulo: titulo ?? chave });
             setRascunho(rascunho);
@@ -478,11 +488,23 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                             <p className="text-muted-foreground">não encontrado</p>
                         )}
                         {estado.tipo === 'ok' && (
-                            <Markdown
-                                content={estado.contentMd}
-                                wikilinks
-                                onInternalLink={handleInternalLink}
-                            />
+                            <>
+                                {ficheiro.tipo === 'knowledge' && estado.propriedades && (
+                                    <NotaPropriedades
+                                        key={estado.propriedades.id}
+                                        propriedades={estado.propriedades}
+                                        onMudou={() => {
+                                            notificarWorkspaceMudou();
+                                            router.refresh();
+                                        }}
+                                    />
+                                )}
+                                <Markdown
+                                    content={estado.contentMd}
+                                    wikilinks
+                                    onInternalLink={handleInternalLink}
+                                />
+                            </>
                         )}
                     </>
                 )}
