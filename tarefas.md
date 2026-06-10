@@ -5,15 +5,15 @@ Ultima atualizacao: 2026-06-10
 ## Retoma rapida
 
 - Branch: `fix/smoke-tests-and-others`.
-- Objetivo ativo: fechar o #19 (destilação pós-chat durável). Mecanismo provado em smoke 2026-06-10: 1 create + 2 updates à mesma nota, anáfora resolvida via janela de conversa, "continuar" aterra na candidata por id. Falta: re-smoke do contrato de estilo (página viva, sem carimbos de proveniência) + smokes finais de durabilidade/RAG/proveniência. Placement "tarefa real → task" recortado para o #21 (passo seguinte, fora do #19).
+- Objetivo ativo: **#19 FECHADO 2026-06-10 — M0 fechado.** Próxima frente: #21 (placement de tarefas na destilação). Branch `fix/smoke-tests-and-others` pronto para PR/merge (decisão Carlos).
 - App local: `http://localhost:2500`; Supabase local esperado em `npm run db:status` (`mem-vector`, portas 560xx).
 - Ultima validação 2026-06-10: `npm run verify` (36 files / 226 tests), `npx playwright test e2e/home.spec.ts` e `npm run build` verdes.
-- Smokes ainda abertos: `[?] Destilacao pos-chat duravel` (último do plano; Smoke 2/Explorer/`[[` fechados 2026-06-09). Backlog separado, não bloqueante: share no header (`5.1`) e animação do grafo (`9.3`).
+- Smokes: TODOS fechados (Explorer/`[[` 2026-06-09; destilação pós-chat 2026-06-10). Backlog separado, não bloqueante: share no header (`5.1`) e animação do grafo (`9.3`).
 - Antes de mexer: `git status --short`, reler esta secção e o issue #19 com comentários (o relay de diagnóstico vive lá).
 
 ## Em Progresso
 
-- [?] **Destilacao pos-chat duravel** — job durável ✅; intenção declarativa = facto ✅ (`chat.intencao.ts`); janela de conversa ✅; update>create por id ✅; contrato de estilo no prompt ✅ (re-smoke pendente). Falta: smoke final dos critérios do #19 (estilo, durabilidade, RAG, proveniência). Placement de tarefas → #21. Ref: `src/modules/chat/chat.turno.ts`, `src/modules/chat/chat.actions.ts`, `src/modules/knowledge/knowledge.continuar.ts`.
+- [x] **Destilacao pos-chat duravel** — job durável ✅; intenção declarativa = facto ✅ (`chat.intencao.ts`); janela de conversa ✅; update>create por id ✅; contrato de estilo no prompt ✅ (re-smoke pendente). ✅ 2026-06-10 — #19 fechado com todos os critérios provados (1 create + 2 updates, prosa wiki, trivial sem escrita, proveniência agent/user, RAG em sessão nova). Placement de tarefas → #21. Ref: `src/modules/chat/chat.turno.ts`, `src/modules/chat/chat.actions.ts`, `src/modules/knowledge/knowledge.continuar.ts`.
 
 ## Pendentes — Alta
 
