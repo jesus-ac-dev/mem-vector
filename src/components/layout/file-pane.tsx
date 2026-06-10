@@ -257,6 +257,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                 titulo: titulo ?? chave,
                 contentMd: rascunho,
                 folderId: prev.tipo === 'ok' ? prev.folderId : null,
+                propriedades: prev.tipo === 'ok' ? prev.propriedades : undefined,
             }));
             atualizarFicheiroAberto(ficheiroKey, { chave, titulo: titulo ?? chave });
             setRascunho(rascunho);

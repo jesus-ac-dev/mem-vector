@@ -388,11 +388,15 @@ export async function getPropriedadesNotaPorIdCom(
 export const getPropriedadesNotaPorId = async (id: string) =>
     getPropriedadesNotaPorIdCom(await createClient(), id);
 
+// Espelha o RETURNS TABLE do RPC; propriedadesDoRow só consome um subconjunto.
 interface UpdateKnowledgePropertiesRow {
     id: string;
+    slug: string;
+    title: string;
     frontmatter: unknown;
     visibility: string;
     created_at: string;
+    updated_at: string;
 }
 
 // Edita propriedades sem tocar no conteúdo: tags/summary fazem merge no
