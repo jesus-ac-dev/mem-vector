@@ -69,9 +69,11 @@ export function buildTurnoPrompt(
     return (
         'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes DUAS coisas, ' +
         'devolvidas num ÚNICO bloco ```json``` com a forma {"daily": [...], "nota": null | {...}}.\n\n' +
-        '1) "daily": array de 2 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
+        '1) "daily": array de 0 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
         'neste turno — factos, decisões, alterações, bloqueios, próximos passos. Só o recap, não ' +
-        'respondas ao utilizador.\n' +
+        'respondas ao utilizador. Escreve só o que aconteceu de facto, nunca mais do que foi dito ' +
+        '— sem encher. Turno trivial (saudação, agradecimento, small talk sem conteúdo) = ' +
+        '"daily": [] — o daily não regista o nada.\n' +
         '2) "nota": és PROATIVO a registar. Se a troca traz um FACTO, DECISÃO, PLANO, PREFERÊNCIA ou ' +
         'CONHECIMENTO durável sobre o utilizador, o trabalho ou a vida dele, ESCREVE-O — não esperes ' +
         'que peçam licença. Na dúvida entre guardar e não guardar, GUARDA: continua a nota dona (se ' +

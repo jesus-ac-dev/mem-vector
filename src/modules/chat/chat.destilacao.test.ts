@@ -63,6 +63,17 @@ describe('aplicarDailyTurno', () => {
         expect(result).toEqual({ dia: '2026-06-06', criado: true });
     });
 
+    // Turno trivial: sem resumo e sem nota, o daily não regista o nada.
+    it('não escreve o daily quando o turno não deixou resumo nem nota', async () => {
+        const resumir = vi.fn().mockResolvedValue('');
+        const escrever = vi.fn();
+
+        const result = await aplicarDailyTurno('olá bom dia', 'Olá!', null, { resumir, escrever });
+
+        expect(escrever).not.toHaveBeenCalled();
+        expect(result).toBeNull();
+    });
+
     it('inclui link da nota quando a destilação escreveu conhecimento', async () => {
         const resumir = vi.fn().mockResolvedValue('- Turno resumido');
         const escrever = vi.fn().mockResolvedValue({ dia: '2026-06-06', criado: false });

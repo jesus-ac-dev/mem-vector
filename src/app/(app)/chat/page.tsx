@@ -10,6 +10,11 @@ import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import { Button } from '@/components/ui/button';
+import {
+    isUnexpectedServerActionResponse,
+    logClientError,
+    retryTransientClientAction,
+} from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
@@ -139,7 +144,7 @@ function ChatContent() {
         let asstMsgId: number;
         try {
             // Step 1: get the answer and render it immediately.
-            const res = await ask({ question, conversationId });
+            const res = await retryTransientClientAction(() => ask({ question, conversationId }));
             setConversationId(res.conversationId);
             if (conversaAberta === null) {
                 conversaCarregadaRef.current = res.conversationId;
@@ -172,8 +177,9 @@ function ChatContent() {
                     );
                     if (nota || daily) router.refresh();
                 })
-                .catch(() => {
+                .catch((e: unknown) => {
                     // The job is durable in agent_jobs; this only reflects the current UI attempt.
+                    logClientError({ area: 'chat', action: 'processarDestilacaoJob' }, e);
                     setMessages((prev) =>
                         prev.map((m) =>
                             m.id === asstMsgId
@@ -183,7 +189,16 @@ function ChatContent() {
                     );
                 });
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Erro desconhecido');
+            logClientError({ area: 'chat', action: 'ask' }, e);
+            // Caso conhecido: o dev server recompilou (edição ou commit com lint-staged)
+            // e este tab ficou com IDs de server actions mortos — só o reload resolve.
+            setError(
+                isUnexpectedServerActionResponse(e)
+                    ? 'O servidor recompilou e este tab ficou desatualizado. Faz hard reload (Ctrl+Shift+R), volta a entrar e reenvia a mensagem.'
+                    : e instanceof Error
+                      ? e.message
+                      : 'Erro desconhecido',
+            );
             setPending(false);
         }
     }

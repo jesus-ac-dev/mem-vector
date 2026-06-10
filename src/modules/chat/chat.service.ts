@@ -181,9 +181,11 @@ export async function aplicarDailyTurno(
     answer: string,
     nota: NotaEscrita | null,
     deps: Partial<DailyDeps> = {},
-): Promise<DailyEscrito> {
+): Promise<DailyEscrito | null> {
     const { resumir = resumirTurnoParaDailyReal, escrever = acrescentarAoDailyReal } = deps;
     const resumoMd = await resumir(question, answer);
+    // Turno trivial: sem resumo e sem nota, o daily não regista o nada.
+    if (!resumoMd.trim() && !nota) return null;
     const entrada = formatDailyTurnoEntry({ resumoMd, nota });
     const resultado = await escrever(entrada);
     return { dia: resultado.dia, criado: resultado.criado };

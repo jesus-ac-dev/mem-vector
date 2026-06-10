@@ -70,6 +70,19 @@ describe('buildTurnoPrompt com histórico', () => {
 // Contrato de estilo (#19, 3.º smoke): a nota saiu log frio — "(declarado a
 // 2026-06-10)" em cada linha e título-frase. A nota é uma página de wiki viva
 // para leitura humana; a proveniência vive no versionamento, não no corpo.
+// Daily sem inflação (#19, re-smoke 21:18): "olá bom dia" gerou 2 bullets de
+// enchimento ("a aguardar tarefa") porque o prompt EXIGIA 2 a 5. O daily nunca
+// escreve mais do que aconteceu; turno trivial = [].
+describe('buildTurnoPrompt: daily sem inflação', () => {
+    it('permite daily vazio e proíbe encher', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/0 a 5 bullets/i);
+        expect(prompt).not.toMatch(/2 a 5 bullets/i);
+        expect(prompt).toMatch(/nunca mais do que foi dito|não escrevas mais do que/i);
+        expect(prompt).toMatch(/"daily": \[\]/);
+    });
+});
+
 describe('buildTurnoPrompt: estilo da nota', () => {
     it('manda escrever página viva em prosa, não log de declarações', () => {
         const prompt = buildTurnoPrompt('q', 'a');
