@@ -849,6 +849,7 @@ export interface GrafoNode {
     group: string; // 'knowledge' | 'daily' | 'fantasma'
     color: string; // hex resolvido (cor da pasta / cor daily / default)
     size: number; // nº de caracteres do content_md (dimensiona a bola no grafo)
+    createdAt?: string; // ISO; fantasmas não têm (nascem com a 1ª origem no timelapse)
 }
 export interface GrafoLink {
     source: string;
@@ -878,7 +879,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     // content_md vem só para medir o tamanho (PostgREST não expõe char_length).
     const { data: notas, error } = await db
         .from('knowledge')
-        .select('id, slug, title, folder_id, content_md')
+        .select('id, slug, title, folder_id, content_md, created_at')
         .eq('owner_id', user.id)
         .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
@@ -889,6 +890,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         group: 'knowledge',
         color: resolverCor(n.folder_id ? corPorPasta.get(String(n.folder_id)) : null, COR_DEFAULT),
         size: (n.content_md ?? '').length,
+        createdAt: String(n.created_at),
     }));
 
     // Cor do grupo daily (profile do utilizador).
@@ -898,7 +900,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     // Nós daily.
     const { data: dailies } = await db
         .from('dailies')
-        .select('id, dia, content_md')
+        .select('id, dia, content_md, created_at')
         .eq('owner_id', user.id);
     const nodesD: GrafoNode[] = (dailies ?? []).map((d) => ({
         id: String(d.id),
@@ -907,6 +909,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         group: 'daily',
         color: corDaily,
         size: (d.content_md ?? '').length,
+        createdAt: String(d.created_at),
     }));
 
     const nodes = [...nodesK, ...nodesD];
