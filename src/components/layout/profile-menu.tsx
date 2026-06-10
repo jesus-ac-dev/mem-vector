@@ -3,6 +3,7 @@
 import { signOut } from '@/modules/auth/auth.actions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { runClientAction } from '@/lib/client-error-log';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -28,7 +29,13 @@ export function ProfileMenu({ displayName }: { displayName: string }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem disabled>Perfil (em breve)</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void signOut()}>Sair</DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={() =>
+                        void runClientAction({ area: 'profile-menu', action: 'signOut' }, signOut)
+                    }
+                >
+                    Sair
+                </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
     );

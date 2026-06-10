@@ -5,6 +5,8 @@ import {
     type NotaCandidata,
 } from '@/modules/knowledge/knowledge.schema';
 import { parseDailyCapture } from '@/modules/daily/daily.capture';
+import type { Intencao } from './chat.intencao';
+import type { MensagemConversa } from './chat.prompt';
 
 export interface TurnoDestiladoRaw {
     resumoMd: string;
@@ -23,9 +25,34 @@ function blocoCandidatos(candidatos: NotaCandidata[]): string {
     return (
         'NOTAS EXISTENTES (preferir CONTINUAR uma destas a criar nova):\n' +
         `${lista}\n\n` +
-        'Se o facto pertencer a uma destas notas, CONTINUA-A: usa EXATAMENTE o mesmo "title" e ' +
-        'devolve o "content_md" COMPLETO com o facto novo integrado (não percas o que já lá está). ' +
-        'Só cria nota nova se for mesmo um assunto novo.\n\n'
+        'CONTINUA uma destas APENAS se o facto pertencer mesmo ao assunto dela (título e ' +
+        'conteúdo sobre o MESMO assunto): usa EXATAMENTE o mesmo "title" e devolve o ' +
+        '"content_md" COMPLETO com o facto novo integrado (não percas o que já lá está). ' +
+        'Uma nota de teste, quase vazia ou com título genérico NÃO captura factos novos — ' +
+        'nesse caso cria nota nova com o título do assunto (pessoas → os nomes delas).\n\n'
+    );
+}
+
+// Janela de conversa: a destilação resolve pronomes pelo fio, não adivinha.
+function blocoConversaTurno(historico: MensagemConversa[]): string {
+    if (!historico.length) return '';
+    const linhas = historico
+        .map((m) => `${m.role === 'user' ? 'Utilizador' : 'Assistente'}: ${m.content}`)
+        .join('\n');
+    return `Conversa recente (contexto para resolver pronomes e o assunto):\n${linhas}\n\n`;
+}
+
+// Bloco para intenção declarativa (#19): o utilizador declarou um facto sem
+// marcas de pergunta — a nota deixa de ser opcional, salvo trivialidade.
+function blocoFactoDeclarado(intencao?: Intencao): string {
+    if (intencao?.tipo !== 'declarativa') return '';
+    return (
+        'ATENÇÃO: o utilizador DECLAROU UM FACTO (mensagem declarativa, sem marcas de ' +
+        'pergunta). Neste turno "nota": null NÃO é opção, salvo se a mensagem for apenas ' +
+        'saudação, agradecimento ou conversa trivial sem conteúdo: escreve o facto em ' +
+        'knowledge — CONTINUA a nota candidata se houver, cria nova só se o assunto não existir. ' +
+        'Escreve o FACTO autocontido (pronomes resolvidos em nomes via conversa recente), ' +
+        'não meta-comentário sobre a conversa ou sobre o que falta esclarecer.\n\n'
     );
 }
 
@@ -36,6 +63,8 @@ export function buildTurnoPrompt(
     question: string,
     answer: string,
     candidatos: NotaCandidata[] = [],
+    intencao?: Intencao,
+    historico: MensagemConversa[] = [],
 ): string {
     return (
         'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes DUAS coisas, ' +
@@ -53,6 +82,8 @@ export function buildTurnoPrompt(
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
         '"Decisão:", e sem descrever o contexto — só o tópico.\n\n' +
+        blocoConversaTurno(historico) +
+        blocoFactoDeclarado(intencao) +
         blocoCandidatos(candidatos) +
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Responde só com o bloco ```json```.'
@@ -109,7 +140,11 @@ export async function destilarResumirTurno(
     question: string,
     answer: string,
     candidatos: NotaCandidata[] = [],
+    intencao?: Intencao,
+    historico: MensagemConversa[] = [],
 ): Promise<TurnoDestiladoRaw> {
-    const { text } = await generate(buildTurnoPrompt(question, answer, candidatos));
+    const { text } = await generate(
+        buildTurnoPrompt(question, answer, candidatos, intencao, historico),
+    );
     return parseTurno(text);
 }

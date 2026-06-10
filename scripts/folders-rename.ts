@@ -15,35 +15,49 @@ const PASSWORD = 'dev-password-123';
 
 async function main(): Promise<void> {
     const admin = getSupabaseAdmin();
-    const c = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true });
-    if (c.error && !c.error.message.includes('already been registered')) throw new Error(c.error.message);
+    const c = await admin.auth.admin.createUser({
+        email: EMAIL,
+        password: PASSWORD,
+        email_confirm: true,
+    });
+    if (c.error && !c.error.message.includes('already been registered'))
+        throw new Error(c.error.message);
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const db = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const db = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
     const si = await db.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (si.error) throw new Error(si.error.message);
 
-    const oldSlug = slugify('Alvo Rename FP');
-    const newSlug = slugify('Alvo Renomeado FP');
-    const refSlug = slugify('Referente Rename FP');
+    const suffix = Date.now() % 100000;
+    const oldTitle = `Alvo Rename FP ${suffix}`;
+    const newTitle = `Alvo Renomeado FP ${suffix}`;
+    const refTitle = `Referente Rename FP ${suffix}`;
+    const oldSlug = slugify(oldTitle);
+    const newSlug = slugify(newTitle);
+    const refSlug = slugify(refTitle);
 
-    await escreverNotaCom(db, { title: 'Alvo Rename FP', content_md: '# Alvo', links: [], reason: 'p' });
+    await escreverNotaCom(db, { title: oldTitle, content_md: '# Alvo', links: [], reason: 'p' });
     await escreverNotaCom(db, {
-        title: 'Referente Rename FP',
+        title: refTitle,
         content_md: `# Ref\n\nLiga a [[${oldSlug}]].`,
         links: [],
         reason: 'p',
     });
 
-    await renomearNotaCom(db, oldSlug, 'Alvo Renomeado FP');
+    await renomearNotaCom(db, oldSlug, newTitle);
 
     const novo = await getNotaCom(db, newSlug);
     const velho = await getNotaCom(db, oldSlug);
     const eixo1 = !!novo && velho === null;
-    console.log(`${eixo1 ? '✅' : '❌'} eixo 1 — nota renomeada (novo slug existe, antigo desapareceu)`);
+    console.log(
+        `${eixo1 ? '✅' : '❌'} eixo 1 — nota renomeada (novo slug existe, antigo desapareceu)`,
+    );
 
     const ref = await getNotaCom(db, refSlug);
-    const eixo2 = !!ref && ref.contentMd.includes('Alvo Renomeado FP') && !ref.contentMd.includes(`[[${oldSlug}]]`);
+    const eixo2 =
+        !!ref && ref.contentMd.includes(newTitle) && !ref.contentMd.includes(`[[${oldSlug}]]`);
     console.log(`${eixo2 ? '✅' : '❌'} eixo 2 — o [[link]] na nota referente foi reapontado`);
 
     const ed = await db
@@ -54,7 +68,28 @@ async function main(): Promise<void> {
     const eixo3 = (ed.data ?? []).some((e) => e.to_id === novo?.id);
     console.log(`${eixo3 ? '✅' : '❌'} eixo 3 — a aresta da referente resolve para a nota nova`);
 
-    const ok = eixo1 && eixo2 && eixo3;
+    const chunks = await db
+        .from('chunks')
+        .select('metadata')
+        .eq('metadata->>entity_id', novo?.id ?? '');
+    const eixo4 = (chunks.data ?? []).every((c) => {
+        const meta = (c.metadata ?? {}) as Record<string, unknown>;
+        return meta.slug === newSlug && meta.title === newTitle;
+    });
+    console.log(`${eixo4 ? '✅' : '❌'} eixo 4 — metadata dos chunks atualizada`);
+
+    const versions = await db
+        .from('file_versions')
+        .select('author, frontmatter')
+        .eq('entity_type', 'knowledge')
+        .eq('entity_id', novo?.id ?? '');
+    const eixo5 = (versions.data ?? []).some((v) => {
+        const frontmatter = (v.frontmatter ?? {}) as Record<string, unknown>;
+        return v.author === 'user' && frontmatter.title === newTitle;
+    });
+    console.log(`${eixo5 ? '✅' : '❌'} eixo 5 — rename gravou versão com metadata`);
+
+    const ok = eixo1 && eixo2 && eixo3 && eixo4 && eixo5;
     console.log(ok ? 'PROVA VERDE' : 'PROVA VERMELHA');
     process.exit(ok ? 0 : 1);
 }

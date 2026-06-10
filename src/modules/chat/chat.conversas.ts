@@ -74,6 +74,32 @@ export async function carregarConversaCom(db: SupabaseClient, id: string): Promi
     }));
 }
 
+// Janela de conversa para os prompts (anáfora: "eles", "deles" só se resolvem
+// com o fio da conversa). Últimas `limite` mensagens, ordem cronológica,
+// opcionalmente excluindo ids (o turno atual já vai explícito no prompt).
+export async function ultimasMensagensCom(
+    db: SupabaseClient,
+    conversationId: string,
+    limite = 10,
+    excluirIds: string[] = [],
+): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
+    let query = db
+        .from('messages')
+        .select('id, role, content, created_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(limite);
+    if (excluirIds.length) {
+        query = query.not('id', 'in', `(${excluirIds.join(',')})`);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(`ultimasMensagens falhou: ${error.message}`);
+
+    return (data ?? [])
+        .reverse()
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content as string }));
+}
+
 // Cookie-session wrappers
 export const listarConversas = async (): Promise<ConversaResumo[]> =>
     listarConversasCom(await createClient());

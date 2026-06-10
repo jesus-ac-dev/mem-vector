@@ -1,7 +1,14 @@
 export interface NotaLinkavel {
     tipo: 'knowledge' | 'daily';
+    id?: string;
     titulo: string; // texto mostrado e inserido entre [[ ]]
     chave: string; // slug (knowledge) ou dia (daily)
+    caminho?: string; // caminho legível no explorer, ex.: Pasta/Subpasta/Nota
+    linkTarget?: string; // alvo a inserir no wikilink quando difere do título
+}
+
+export function chaveNotaLinkavel(nota: NotaLinkavel): string {
+    return `${nota.tipo}:${nota.id ?? nota.caminho ?? nota.chave}`;
 }
 
 export interface GatilhoLink {

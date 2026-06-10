@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let client: SupabaseClient | null = null;
 
-// Cliente server-side com a service role — bypassa RLS (v1 sem auth).
+// Cliente server-side para scripts/testes com service role; bypassa RLS.
 export function getSupabaseAdmin(): SupabaseClient {
     if (client) return client;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

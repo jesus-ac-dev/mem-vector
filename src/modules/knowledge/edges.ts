@@ -1,10 +1,108 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { slugify, type WikilinkTarget } from './knowledge.links';
+
+type EdgeTargetInput = string | WikilinkTarget;
 
 export interface RegenerarEdgesInput {
     ownerId: string;
     fromType: 'knowledge' | 'daily';
     fromId: string;
-    alvos: string[]; // slugs já normalizados (parseWikilinks + links explícitos)
+    alvos: EdgeTargetInput[]; // slugs antigos ou alvos completos de wikilinks
+}
+
+interface AlvoEdge {
+    slug: string;
+    path: string | null;
+}
+
+interface KnowledgeTargetRow {
+    id: string;
+    slug: string;
+    title: string;
+    folder_id: string | null;
+}
+
+interface FolderRow {
+    id: string;
+    name: string;
+    parent_id: string | null;
+}
+
+function ultimoSegmento(target: string): string {
+    const partes = target
+        .split('/')
+        .map((p) => p.trim())
+        .filter(Boolean);
+    return partes.at(-1) ?? target;
+}
+
+function limparCaminho(path: string): string {
+    return path
+        .split('/')
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .join('/');
+}
+
+function normalizarCaminho(path: string): string {
+    return limparCaminho(path).split('/').map(slugify).join('/');
+}
+
+function normalizarAlvo(alvo: EdgeTargetInput): AlvoEdge {
+    if (typeof alvo !== 'string') {
+        return { slug: alvo.slug, path: alvo.path ? limparCaminho(alvo.path) : null };
+    }
+
+    const target = limparCaminho(alvo);
+    return {
+        slug: slugify(ultimoSegmento(target)),
+        path: target.includes('/') ? target : null,
+    };
+}
+
+function chaveAlvo(alvo: AlvoEdge): string {
+    return alvo.path ? `${alvo.slug}:${normalizarCaminho(alvo.path)}` : alvo.slug;
+}
+
+function caminhoDasPastas(pastas: FolderRow[]): Map<string, string> {
+    const porId = new Map(pastas.map((p) => [p.id, p]));
+    const memo = new Map<string, string>();
+    const aResolver = new Set<string>();
+
+    function path(id: string): string {
+        const cached = memo.get(id);
+        if (cached) return cached;
+        const pasta = porId.get(id);
+        if (!pasta) return 'Pasta';
+        if (aResolver.has(id)) return pasta.name;
+        aResolver.add(id);
+        const prefixo = pasta.parent_id ? `${path(pasta.parent_id)}/` : '';
+        const valor = `${prefixo}${pasta.name}`;
+        memo.set(id, valor);
+        aResolver.delete(id);
+        return valor;
+    }
+
+    for (const p of pastas) path(p.id);
+    return memo;
+}
+
+function caminhosIguais(a: string, b: string): boolean {
+    return limparCaminho(a) === limparCaminho(b) || normalizarCaminho(a) === normalizarCaminho(b);
+}
+
+// Resolve o alvo para o id da nota: path certo ganha; path desatualizado com
+// slug único faz fallback (a nota mudou de pasta, o link não deve partir);
+// homónimos sem path certo ficam pendentes.
+export function resolverIdAlvo(
+    path: string | null,
+    matches: Array<{ id: string; caminho: string }>,
+): string | null {
+    if (path) {
+        const porPath = matches.find((m) => caminhosIguais(m.caminho, path));
+        if (porPath) return porPath.id;
+    }
+    return matches.length === 1 ? matches[0].id : null;
 }
 
 // Regenera as arestas de uma entidade: apaga as antigas (owner, fromType, fromId)
@@ -22,26 +120,67 @@ export async function regenerarEdgesCom(
         .eq('from_id', fromId);
     if (dErr) throw new Error(`apagar edges: ${dErr.message}`);
 
-    const unicos = [...new Set(alvos)].filter(Boolean);
+    const unicos = Array.from(
+        new Map(
+            alvos
+                .map(normalizarAlvo)
+                .filter((alvo) => Boolean(alvo.slug))
+                .map((alvo) => [chaveAlvo(alvo), alvo]),
+        ).values(),
+    );
     if (!unicos.length) return;
 
-    const { data: existentes } = await db
+    const slugs = [...new Set(unicos.map((alvo) => alvo.slug))];
+    const { data: existentes, error: kErr } = await db
         .from('knowledge')
-        .select('id, slug')
+        .select('id, slug, title, folder_id')
         .eq('owner_id', ownerId)
-        .in('slug', unicos);
-    const idPorSlug = new Map((existentes ?? []).map((r) => [r.slug, r.id]));
+        .in('slug', slugs);
+    if (kErr) throw new Error(`resolver knowledge para edges: ${kErr.message}`);
+
+    const notasPorSlug = new Map<string, KnowledgeTargetRow[]>();
+    for (const r of (existentes ?? []) as KnowledgeTargetRow[]) {
+        const notas = notasPorSlug.get(r.slug);
+        if (notas) notas.push(r);
+        else notasPorSlug.set(r.slug, [r]);
+    }
+
+    let pathPorPasta = new Map<string, string>();
+    if (unicos.some((alvo) => alvo.path)) {
+        const { data: pastas, error: fErr } = await db
+            .from('folders')
+            .select('id, name, parent_id')
+            .eq('owner_id', ownerId);
+        if (fErr) throw new Error(`resolver pastas para edges: ${fErr.message}`);
+        pathPorPasta = caminhoDasPastas((pastas ?? []) as FolderRow[]);
+    }
+
+    function caminhoNota(nota: KnowledgeTargetRow): string {
+        const pasta = nota.folder_id ? pathPorPasta.get(nota.folder_id) : null;
+        return pasta ? `${pasta}/${nota.title}` : nota.title;
+    }
+
+    function idResolvido(alvo: AlvoEdge): string | null {
+        const matches = notasPorSlug.get(alvo.slug) ?? [];
+        return resolverIdAlvo(
+            alvo.path,
+            matches.map((nota) => ({ id: nota.id, caminho: caminhoNota(nota) })),
+        );
+    }
 
     const { error: iErr } = await db.from('edges').insert(
-        unicos.map((to_slug) => ({
-            owner_id: ownerId,
-            from_type: fromType,
-            from_id: fromId,
-            to_type: idPorSlug.has(to_slug) ? 'knowledge' : null,
-            to_slug,
-            to_id: idPorSlug.get(to_slug) ?? null,
-            kind: 'wikilink',
-        })),
+        unicos.map((alvo) => {
+            const to_id = idResolvido(alvo);
+            return {
+                owner_id: ownerId,
+                from_type: fromType,
+                from_id: fromId,
+                to_type: to_id ? 'knowledge' : null,
+                to_slug: alvo.slug,
+                to_id,
+                kind: 'wikilink',
+            };
+        }),
     );
     if (iErr) throw new Error(`inserir edges: ${iErr.message}`);
 }

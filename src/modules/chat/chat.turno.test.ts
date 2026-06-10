@@ -5,6 +5,7 @@ describe('buildTurnoPrompt com candidatos', () => {
     it('lista as notas existentes e manda continuar reutilizando o título exato', () => {
         const prompt = buildTurnoPrompt('q', 'a', [
             {
+                id: 'id-filhos',
                 slug: 'filhos-de-carlos-e-sofia',
                 title: 'Filhos de Carlos e Sofia',
                 contentMd: 'O Carlos e a Sofia têm dois filhos: Lucas e Filipe.',
@@ -18,6 +19,68 @@ describe('buildTurnoPrompt com candidatos', () => {
 
     it('sem candidatos não inclui a secção de notas existentes', () => {
         expect(buildTurnoPrompt('q', 'a')).not.toMatch(/notas existentes/i);
+    });
+});
+
+// Declarativa sem marcas de pergunta = facto declarado → a nota é obrigatória,
+// salvo trivialidade (#19, decisão 2026-06-10).
+describe('buildTurnoPrompt com intenção declarativa', () => {
+    const declarativa = { tipo: 'declarativa' as const, incerta: false };
+
+    it('força a escrita da nota quando o utilizador declarou um facto', () => {
+        const prompt = buildTurnoPrompt('o carlos gosta da sofia', 'Registado.', [], declarativa);
+        expect(prompt).toMatch(/declarou um facto/i);
+        expect(prompt).toMatch(/"nota": null NÃO é opção/i);
+        expect(prompt).toMatch(/sauda|trivial/i); // a única exceção fica explícita
+    });
+
+    it('sem intenção (ou pergunta) mantém o prompt atual, sem bloco de facto', () => {
+        expect(buildTurnoPrompt('q', 'a')).not.toMatch(/declarou um facto/i);
+        expect(buildTurnoPrompt('q?', 'a', [], { tipo: 'pergunta', incerta: false })).not.toMatch(
+            /declarou um facto/i,
+        );
+    });
+
+    it('manda escrever o facto autocontido, sem meta-comentário', () => {
+        const prompt = buildTurnoPrompt('eles têm dois filhos', 'Registado.', [], declarativa);
+        expect(prompt).toMatch(/autocontido/i);
+        expect(prompt).toMatch(/meta-coment/i);
+    });
+});
+
+// Janela de conversa: a destilação resolve pronomes pelo fio, não adivinha.
+describe('buildTurnoPrompt com histórico', () => {
+    it('inclui a conversa recente quando há histórico', () => {
+        const prompt = buildTurnoPrompt(
+            'eles têm dois filhos juntos',
+            'Registado: o Carlos e a Sofia têm dois filhos.',
+            [],
+            { tipo: 'declarativa', incerta: false },
+            [{ role: 'user', content: 'o carlos gosta da sofia' }],
+        );
+        expect(prompt).toMatch(/conversa recente/i);
+        expect(prompt).toContain('o carlos gosta da sofia');
+    });
+
+    it('sem histórico não inclui o bloco', () => {
+        expect(buildTurnoPrompt('q', 'a')).not.toMatch(/conversa recente/i);
+    });
+});
+
+// Gate de pertinência (#19, 2.º smoke): a nota-lixo "coisas que acontecem"
+// capturou o facto da Sofia — continuar só quando o assunto pertence à nota.
+describe('blocoCandidatos com gate de pertinência', () => {
+    it('continua só se o assunto pertencer; lixo/teste não captura factos', () => {
+        const prompt = buildTurnoPrompt('q', 'a', [
+            {
+                id: 'id-x',
+                slug: 'coisas-que-acontecem',
+                title: 'coisas que acontecem',
+                contentMd: '# coisas que acontecem',
+            },
+        ]);
+        expect(prompt).toMatch(/APENAS se o facto pertencer/i);
+        expect(prompt).toMatch(/genéric|teste|quase vazia/i);
     });
 });
 

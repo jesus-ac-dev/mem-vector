@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { detetarGatilho, filtrarNotasParaLink, type NotaLinkavel } from './wikilink-autocomplete';
+import {
+    chaveNotaLinkavel,
+    detetarGatilho,
+    filtrarNotasParaLink,
+    type NotaLinkavel,
+} from './wikilink-autocomplete';
 
 describe('detetarGatilho', () => {
     it('sem [[ não há gatilho', () => {
@@ -40,5 +45,26 @@ describe('filtrarNotasParaLink', () => {
     });
     it('termo vazio devolve tudo, respeitando o limite', () => {
         expect(filtrarNotasParaLink(notas, '', 2)).toHaveLength(2);
+    });
+});
+
+describe('chaveNotaLinkavel', () => {
+    it('usa id para distinguir notas com o mesmo slug em pastas diferentes', () => {
+        const a: NotaLinkavel = {
+            tipo: 'knowledge',
+            id: 'id-raiz',
+            titulo: 'Nova nota',
+            chave: 'nova-nota',
+        };
+        const b: NotaLinkavel = {
+            tipo: 'knowledge',
+            id: 'id-pasta',
+            titulo: 'Nova nota',
+            chave: 'nova-nota',
+            caminho: 'Pasta/Nova nota',
+        };
+
+        expect(chaveNotaLinkavel(a)).toBe('knowledge:id-raiz');
+        expect(chaveNotaLinkavel(b)).toBe('knowledge:id-pasta');
     });
 });

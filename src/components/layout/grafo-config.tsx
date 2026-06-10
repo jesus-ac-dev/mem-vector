@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { runClientAction } from '@/lib/client-error-log';
 import { PALETA } from '@/lib/cores';
 import {
     listarPastasAction,
@@ -51,13 +52,17 @@ function LinhaPaleta({
     );
 }
 
-export function GrafoConfig({ onFechar }: { onFechar: () => void }) {
+export function GrafoConfig({ onFechar, onMudou }: { onFechar: () => void; onMudou: () => void }) {
     const router = useRouter();
     const [pastas, setPastas] = useState<Pasta[]>([]);
     const [corDaily, setCorDaily] = useState<string | null>(null);
 
     useEffect(() => {
-        void Promise.all([listarPastasAction(), corDailyAction()]).then(([ps, cd]) => {
+        void runClientAction({ area: 'grafo-config', action: 'carregarCores' }, () =>
+            Promise.all([listarPastasAction(), corDailyAction()]),
+        ).then((res) => {
+            if (!res) return;
+            const [ps, cd] = res;
             setPastas(ps);
             setCorDaily(cd);
         });
@@ -65,13 +70,21 @@ export function GrafoConfig({ onFechar }: { onFechar: () => void }) {
 
     async function escolherPasta(folderId: string, hex: string | null) {
         setPastas((prev) => prev.map((p) => (p.id === folderId ? { ...p, color: hex } : p)));
-        await definirCorPastaAction(folderId, hex);
+        await runClientAction(
+            { area: 'grafo-config', action: 'definirCorPasta', meta: { folderId, hex } },
+            () => definirCorPastaAction(folderId, hex),
+        );
+        onMudou();
         router.refresh();
     }
 
     async function escolherDaily(hex: string | null) {
         setCorDaily(hex);
-        await definirCorDailyAction(hex);
+        await runClientAction(
+            { area: 'grafo-config', action: 'definirCorDaily', meta: { hex } },
+            () => definirCorDailyAction(hex),
+        );
+        onMudou();
         router.refresh();
     }
 

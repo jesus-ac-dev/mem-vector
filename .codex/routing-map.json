@@ -1,0 +1,195 @@
+{
+    "version": 1,
+    "hooks": [
+        {
+            "agent": "supabase-schema-architect",
+            "trigger_keywords": [
+                "schema.sql",
+                "supabase/schemas",
+                "supabase/migrations",
+                "migration",
+                "migração",
+                "migracao",
+                "nova tabela",
+                "criar tabela",
+                "alterar tabela",
+                "adicionar coluna",
+                "policy",
+                "policies",
+                "row level security",
+                " rls",
+                "pgvector",
+                "embeddings",
+                "edges",
+                "lookup",
+                "foreign key",
+                "db diff",
+                "db:types"
+            ],
+            "defer_to": [
+                {
+                    "agent": "db-reviewer",
+                    "keywords": [
+                        "rever",
+                        "revê",
+                        "reve esta",
+                        "auditar",
+                        "é seguro",
+                        "e seguro",
+                        "posso aplicar",
+                        "está conforme",
+                        "esta conforme"
+                    ]
+                }
+            ],
+            "reminder": "Tarefa de schema da BD. Antes de SQL ou edit em `supabase/`, aplica `supabase-schema-architect` e a skill `.codex/skills/base-de-dados/SKILL.md`."
+        },
+        {
+            "agent": "db-reviewer",
+            "trigger_keywords": [
+                "rever migração",
+                "rever migracao",
+                "revê esta migra",
+                "reve esta migra",
+                "auditar sql",
+                "auditar migração",
+                "auditar migracao",
+                "auditar rls",
+                "auditar policies",
+                "tabelas sem rls",
+                "cobertura rls",
+                "esta policy está",
+                "esta policy esta",
+                "esta migração é segura",
+                "esta migracao e segura",
+                "posso aplicar este sql"
+            ],
+            "defer_to": [],
+            "reminder": "Pedido de auditoria de SQL/migration/RLS. Aplica `db-reviewer` em modo read-only; devolve veredicto antes de corrigir/aplicar."
+        },
+        {
+            "agent": "feature-guardian",
+            "trigger_keywords": [
+                "onde colocar",
+                "onde meto",
+                "onde fica",
+                "isto é regra",
+                "isto e regra",
+                "é regra de negócio",
+                "e regra de negocio",
+                "auditar arquitetura",
+                "auditar arquitectura",
+                "esta feature está",
+                "esta feature esta",
+                "src/modules",
+                "query direta supabase",
+                "query directa supabase",
+                "createclient(",
+                ".from(",
+                ".rpc("
+            ],
+            "defer_to": [],
+            "reminder": "Duvida/auditoria de arquitetura por feature. Aplica `feature-guardian` em modo read-only e a skill `.codex/skills/arquitetura-por-feature/SKILL.md`."
+        },
+        {
+            "agent": "tdd-runner",
+            "trigger_keywords": [
+                "com testes",
+                "implementar com tdd",
+                "usar tdd",
+                "red green refactor",
+                "red-green-refactor",
+                "testa isto",
+                "testar isto",
+                "adicionar testes",
+                "criar teste",
+                "novo teste",
+                "lógica para calcular",
+                "logica para calcular",
+                "regra de cálculo",
+                "regra de calculo",
+                "validação de",
+                "validacao de"
+            ],
+            "defer_to": [
+                {
+                    "agent": "bug-fixer",
+                    "keywords": [
+                        "corrigir bug",
+                        "corrigir erro",
+                        "está partido",
+                        "esta partido",
+                        "está a falhar",
+                        "esta a falhar",
+                        "dá erro",
+                        "da erro"
+                    ]
+                }
+            ],
+            "reminder": "Logica testavel. Aplica `tdd-runner`: RED -> GREEN -> REFACTOR, com teste ao lado do modulo."
+        },
+        {
+            "agent": "bug-fixer",
+            "trigger_keywords": [
+                "corrigir erro",
+                "corrigir bug",
+                "fix bug",
+                "há um bug",
+                "ha um bug",
+                "tem um bug",
+                "está partido",
+                "esta partido",
+                "está a falhar",
+                "esta a falhar",
+                "dá erro",
+                "da erro",
+                "erro de build",
+                "erro de typescript",
+                "erro de lint",
+                "página branca",
+                "pagina branca",
+                "não funciona",
+                "nao funciona",
+                "parou de funcionar",
+                "stack trace",
+                "is not defined",
+                "cannot read"
+            ],
+            "defer_to": [
+                {
+                    "agent": "tdd-runner",
+                    "keywords": [
+                        "com testes",
+                        "implementar com tdd",
+                        "adicionar testes",
+                        "criar teste"
+                    ]
+                }
+            ],
+            "reminder": "Correcao de bug/regressao. Aplica `bug-fixer`: reproduzir, causa raiz, teste quando razoavel, validar."
+        },
+        {
+            "agent": "pt-pt-linter",
+            "trigger_keywords": [
+                "verificar pt-pt",
+                "auditar pt-pt",
+                "auditar idioma",
+                "pt-br",
+                "português brasileiro",
+                "portugues brasileiro",
+                "string em inglês",
+                "string em ingles",
+                "inglês na ui",
+                "ingles na ui",
+                "rever português",
+                "rever portugues",
+                "traduzir para pt-pt",
+                "arquivo para ficheiro",
+                "usuário para utilizador",
+                "tela para ecrã"
+            ],
+            "defer_to": [],
+            "reminder": "Auditoria de idioma PT-PT. Aplica `pt-pt-linter`: tocar so em strings; ambiguidades ficam listadas."
+        }
+    ]
+}

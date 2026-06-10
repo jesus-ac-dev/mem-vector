@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { History, FileText } from 'lucide-react';
-import { getDaily, listarVersoesDaily } from '@/modules/daily/daily.service';
+import { getDaily, getDailyPorId, listarVersoesDaily } from '@/modules/daily/daily.service';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { NoteContent } from '@/modules/knowledge/note-content';
@@ -12,14 +12,14 @@ export default async function DailyPage({
     searchParams,
 }: {
     params: Promise<{ dia: string }>;
-    searchParams: Promise<{ base?: string; view?: string }>;
+    searchParams: Promise<{ base?: string; id?: string; view?: string }>;
 }) {
     const { dia } = await params;
-    const { base: baseId, view } = await searchParams;
+    const { base: baseId, id, view } = await searchParams;
 
     const isHistoryView = view === 'history';
 
-    const daily = await getDaily(dia);
+    const daily = id ? await getDailyPorId(id) : await getDaily(dia);
     if (!daily) notFound();
 
     const versoes = await listarVersoesDaily(daily.id);
@@ -35,16 +35,21 @@ export default async function DailyPage({
 
     // Versions available for comparison (all except the current/latest)
     const compareVersions = versoes.slice(1);
+    const basePath = `/daily/${encodeURIComponent(daily.dia)}${id ? `?id=${encodeURIComponent(id)}` : ''}`;
+    const contentHref = id
+        ? `/daily/${encodeURIComponent(daily.dia)}?id=${encodeURIComponent(id)}`
+        : `/daily/${encodeURIComponent(daily.dia)}`;
+    const historyHref = `${contentHref}${id ? '&' : '?'}view=history`;
 
     return (
         <main className="space-y-6 p-6">
             {/* Shared header: title + toggle icon */}
             <div className="flex items-start justify-between gap-2">
-                <h1 className="text-xl font-semibold text-foreground">{dia}</h1>
+                <h1 className="text-xl font-semibold text-foreground">{daily.dia}</h1>
 
                 {isHistoryView ? (
                     <Link
-                        href={`/daily/${dia}`}
+                        href={contentHref}
                         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                         title="Voltar ao conteúdo"
                         aria-label="Voltar ao conteúdo"
@@ -53,7 +58,7 @@ export default async function DailyPage({
                     </Link>
                 ) : (
                     <Link
-                        href={`/daily/${dia}?view=history`}
+                        href={historyHref}
                         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                         title="Histórico"
                         aria-label="Histórico"
@@ -74,7 +79,7 @@ export default async function DailyPage({
                         <>
                             <VersionPicker
                                 versions={compareVersions}
-                                basePath={`/daily/${dia}`}
+                                basePath={basePath}
                                 currentBase={baseId}
                                 keepView
                             />

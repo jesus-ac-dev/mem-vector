@@ -59,17 +59,21 @@ Daily               { id: string; dia: string; contentMd: string; updatedAt: str
 Versao              { id: string; contentMd: string; author: string; createdAt: string }
 ```
 
+## Identidade operacional
+
+- `dia` continua a ser label/rota humana.
+- `id` é a chave operacional preferida no workspace: `getDailyPorId` e `substituirDailyPorId` evitam colisões quando dailies próprios e `protected` partilhados têm a mesma data visível.
+- `substituirDailyPorId` usa `replace_daily_entry_by_id` e restringe edição ao dono até o modelo colaborativo de reindex/chunks partilhados ficar fechado.
+
 ## Fluxo — capturar turno no dia
 
 1. `destilarTurno` recebe a pergunta e resposta já mostrada ao utilizador.
 2. `resumirTurnoParaDaily` gera 2-5 bullets factuais em markdown.
 3. `formatDailyTurnoEntry` embrulha o recap em `### HH:mm` e acrescenta link `[[slug]]` quando a destilação também escreveu/atualizou uma nota `knowledge`.
 4. `acrescentarAoDaily(linha, dia?)` resolve `dia` para hoje em `Europe/Lisbon` se omitido (`hojeLisboa()` via `Intl.DateTimeFormat('sv-SE', ...)`).
-5. Lê o daily existente para `(owner_id, dia)` via `maybeSingle`.
-6. Upsert em `dailies` com `onConflict: 'owner_id,dia'`: cria se novo, ou substitui `content_md` por `<anterior>\n\n<entrada>`.
-7. Insere uma nova linha em `file_versions` (`entity_type='daily'`, `author='agent'`).
-8. Apaga os chunks anteriores deste daily (`metadata->>'entity_id' = daily.id`), gera embedding do conteúdo completo via `embedPassage`, e insere novo chunk em `chunks`.
-9. Devolve `{ dia, criado }`.
+5. Chama a RPC `append_daily_entry(dia, linha)`, que serializa por `(owner,dia)`, cria ou atualiza `dailies` e insere a versão em `file_versions` no mesmo statement transacional.
+6. Enfileira e processa o projector `agent_jobs(type='derived_index_entity')`, que reindexa chunks/embeddings e regenera edges dos `[[wikilinks]]` encontrados no daily.
+8. Devolve `{ dia, criado }`.
 
 ## Ligações
 

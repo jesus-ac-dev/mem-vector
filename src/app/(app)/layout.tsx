@@ -39,6 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             slug: n.slug,
             title: n.title,
             folderId: n.folderId ?? null,
+            tags: n.tags ?? [],
         })),
     );
     const dailyItems = dailies.map((d) => ({ id: d.id, slug: d.dia, title: d.dia }));

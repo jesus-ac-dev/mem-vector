@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { History, FileText } from 'lucide-react';
-import { getNota, listarVersoes } from '@/modules/knowledge/knowledge.service';
+import { getNota, getNotaPorId, listarVersoes } from '@/modules/knowledge/knowledge.service';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { NoteContent } from '@/modules/knowledge/note-content';
@@ -12,14 +12,14 @@ export default async function NotaPage({
     searchParams,
 }: {
     params: Promise<{ slug: string }>;
-    searchParams: Promise<{ base?: string; view?: string }>;
+    searchParams: Promise<{ base?: string; id?: string; view?: string }>;
 }) {
     const { slug } = await params;
-    const { base: baseId, view } = await searchParams;
+    const { base: baseId, id, view } = await searchParams;
 
     const isHistoryView = view === 'history';
 
-    const nota = await getNota(slug);
+    const nota = id ? await getNotaPorId(id) : await getNota(slug);
     if (!nota) notFound();
 
     const versoes = await listarVersoes(nota.id);
@@ -35,6 +35,11 @@ export default async function NotaPage({
 
     // Versions available for comparison (all except the current/latest)
     const compareVersions = versoes.slice(1);
+    const basePath = `/knowledge/${encodeURIComponent(nota.slug)}${id ? `?id=${encodeURIComponent(id)}` : ''}`;
+    const contentHref = id
+        ? `/knowledge/${encodeURIComponent(nota.slug)}?id=${encodeURIComponent(id)}`
+        : `/knowledge/${encodeURIComponent(nota.slug)}`;
+    const historyHref = `${contentHref}${id ? '&' : '?'}view=history`;
 
     return (
         <main className="space-y-6 p-6">
@@ -44,7 +49,7 @@ export default async function NotaPage({
 
                 {isHistoryView ? (
                     <Link
-                        href={`/knowledge/${slug}`}
+                        href={contentHref}
                         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                         title="Voltar ao conteúdo"
                         aria-label="Voltar ao conteúdo"
@@ -53,7 +58,7 @@ export default async function NotaPage({
                     </Link>
                 ) : (
                     <Link
-                        href={`/knowledge/${slug}?view=history`}
+                        href={historyHref}
                         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                         title="Histórico"
                         aria-label="Histórico"
@@ -74,7 +79,7 @@ export default async function NotaPage({
                         <>
                             <VersionPicker
                                 versions={compareVersions}
-                                basePath={`/knowledge/${slug}`}
+                                basePath={basePath}
                                 currentBase={baseId}
                                 keepView
                             />

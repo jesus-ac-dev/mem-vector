@@ -35,6 +35,88 @@ describe('buildPrompt', () => {
         expect(prompt).toMatch(/workspace/i);
         expect(prompt).toMatch(/conhecimento geral/i);
     });
+
+    it('proíbe respostas que mandem usar Obsidian ou comandos externos para daily/nota', () => {
+        const prompt = buildPrompt('cria uma daily note sff', []);
+        expect(prompt).toMatch(/Nunca proponhas comandos do Obsidian/i);
+        expect(prompt).toMatch(/agente-autor/i);
+    });
+
+    // Guard das fontes (#19): nunca afirmar que uma nota contém o que não está lá.
+    it('carrega o guard das fontes: citar o trecho literal, não parafrasear a fonte', () => {
+        const prompt = buildPrompt('pergunta?', [src('x')]);
+        expect(prompt).toMatch(/trecho literal/i);
+        expect(prompt).toMatch(/nunca .*cont[ée]m o que/i);
+    });
+
+    // Declarativa sem marcas de pergunta = facto a registar (#19, decisão 2026-06-10).
+    it('declarativa: instrui a tratar como facto e responder "Registado: …"', () => {
+        const prompt = buildPrompt('o carlos gosta da sofia', [], {
+            tipo: 'declarativa',
+            incerta: false,
+        });
+        expect(prompt).toContain('Afirmação do utilizador: o carlos gosta da sofia');
+        expect(prompt).not.toContain('Pergunta: o carlos gosta da sofia');
+        expect(prompt).toMatch(/Registado: /);
+        expect(prompt).toMatch(/facto a registar/i);
+        expect(prompt).toMatch(/sauda|trivial/i);
+    });
+
+    it('declarativa incerta: instrui a registar e sinalizar a assunção', () => {
+        const prompt = buildPrompt('a sofia talvez goste de gatos', [], {
+            tipo: 'declarativa',
+            incerta: true,
+        });
+        expect(prompt).toMatch(/assumi que é facto/i);
+    });
+
+    it('declarativa certa: não pede sinalização de assunção', () => {
+        const prompt = buildPrompt('o carlos gosta da sofia', [], {
+            tipo: 'declarativa',
+            incerta: false,
+        });
+        expect(prompt).not.toMatch(/assumi que é facto/i);
+    });
+
+    // Janela de conversa (#19, 2.º smoke): "Eles têm dois filhos juntos" sem o
+    // fio da conversa não tem sujeito — o prompt tem de levar o histórico.
+    it('inclui a conversa recente quando há histórico', () => {
+        const prompt = buildPrompt(
+            'eles têm dois filhos juntos',
+            [],
+            { tipo: 'declarativa', incerta: false },
+            [
+                { role: 'user', content: 'o carlos gosta da sofia' },
+                { role: 'assistant', content: 'Registado: o Carlos gosta da Sofia.' },
+            ],
+        );
+        expect(prompt).toMatch(/conversa recente/i);
+        expect(prompt).toContain('o carlos gosta da sofia');
+        expect(prompt).toContain('Registado: o Carlos gosta da Sofia.');
+    });
+
+    it('sem histórico não inclui o bloco de conversa recente', () => {
+        const prompt = buildPrompt('pergunta?', [src('x')]);
+        expect(prompt).not.toMatch(/conversa recente/i);
+    });
+
+    it('declarativa: manda resolver pronomes num facto autocontido', () => {
+        const prompt = buildPrompt('eles têm dois filhos', [], {
+            tipo: 'declarativa',
+            incerta: false,
+        });
+        expect(prompt).toMatch(/pronomes/i);
+        expect(prompt).toMatch(/autocontido/i);
+    });
+
+    it('pergunta explícita mantém o prompt de query', () => {
+        const prompt = buildPrompt('o que decidimos sobre auth?', [src('x')], {
+            tipo: 'pergunta',
+            incerta: false,
+        });
+        expect(prompt).toContain('Pergunta: o que decidimos sobre auth?');
+        expect(prompt).not.toMatch(/Registado: /);
+    });
 });
 
 describe('relevantSources', () => {
