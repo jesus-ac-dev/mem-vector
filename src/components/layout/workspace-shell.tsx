@@ -496,9 +496,6 @@ function DailyCalendar({
         <Calendar
             mode="single"
             modifiers={{ comDaily: highlightedDates }}
-            modifiersClassNames={{
-                comDaily: 'bg-accent text-accent-foreground rounded-full',
-            }}
             onDayClick={onDayClick}
             className="p-2 text-xs [--cell-size:1.75rem]"
             classNames={{
@@ -842,7 +839,14 @@ function RightSidebar({
                 <div className="flex flex-1 items-center justify-center overflow-hidden">
                     <DailyCalendar
                         diasComDaily={diasComDaily}
-                        onDayClick={(day) => router.push('/daily/' + formatYMD(day))}
+                        onDayClick={(day) => {
+                            const dia = formatYMD(day);
+                            // Dia sem daily: clique calmo, sem ação. Com daily: abre
+                            // como ficheiro nos panes (não toma conta do centro).
+                            if (!diasComDaily.includes(dia)) return;
+                            abrirFicheiro({ tipo: 'daily', chave: dia, titulo: dia });
+                            router.push('/chat');
+                        }}
                     />
                 </div>
             </div>
