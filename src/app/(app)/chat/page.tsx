@@ -10,11 +10,7 @@ import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import { Button } from '@/components/ui/button';
-import {
-    isUnexpectedServerActionResponse,
-    logClientError,
-    retryTransientClientAction,
-} from '@/lib/client-error-log';
+import { isUnexpectedServerActionResponse, logClientError } from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
@@ -143,8 +139,9 @@ function ChatContent() {
 
         let asstMsgId: number;
         try {
-            // Step 1: get the answer and render it immediately.
-            const res = await retryTransientClientAction(() => ask({ question, conversationId }));
+            // Step 1: get the answer and render it immediately. Sem retry: ask() é
+            // escrita (não idempotente) e num action ID morto o retry bate no mesmo ID.
+            const res = await ask({ question, conversationId });
             setConversationId(res.conversationId);
             if (conversaAberta === null) {
                 conversaCarregadaRef.current = res.conversationId;

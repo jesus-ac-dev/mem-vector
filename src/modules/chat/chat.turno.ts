@@ -138,8 +138,12 @@ export function parseTurno(raw: string): TurnoDestiladoRaw {
           : '';
     const notaParsed = EscritaKnowledgeSchema.safeParse(rec.nota);
 
+    // "daily": [] é deliberado (turno trivial) — não passa pelo parseDailyCapture,
+    // que tem fallback não-vazio e mataria o "não regista o nada".
+    const dailyVazio = Array.isArray(rec.daily) && rec.daily.length === 0;
+
     return {
-        resumoMd: parseDailyCapture(dailyRaw),
+        resumoMd: dailyVazio ? '' : parseDailyCapture(dailyRaw),
         nota: notaParsed.success ? notaParsed.data : null,
     };
 }

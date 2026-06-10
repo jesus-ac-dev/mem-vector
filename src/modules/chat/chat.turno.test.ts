@@ -138,6 +138,13 @@ describe('parseTurno', () => {
         expect(parseTurno(raw)).toEqual({ resumoMd: '- só registo', nota: null });
     });
 
+    // Turno trivial: "daily": [] deliberado fica vazio (sem o fallback do
+    // parseDailyCapture), para o aplicarDailyTurno poder não escrever nada.
+    it('daily [] deliberado devolve resumo vazio, sem bullet de fallback', () => {
+        const raw = '{"daily":[],"nota":null}';
+        expect(parseTurno(raw)).toEqual({ resumoMd: '', nota: null });
+    });
+
     it('daily como string também vira bullets', () => {
         const raw = '{"daily":"- linha um\\n- linha dois","nota":null}';
         expect(parseTurno(raw)).toEqual({ resumoMd: '- linha um\n- linha dois', nota: null });
