@@ -765,13 +765,29 @@ function RightSidebar({
                     dadosAtivos.backlinks.length ? (
                         <ul className="space-y-0.5">
                             {dadosAtivos.backlinks.map((n) => (
-                                <li key={n.slug}>
+                                <li key={`${n.tipo ?? 'knowledge'}:${n.slug}`}>
                                     <NotaLink
                                         titulo={n.title}
-                                        detalhe="Backlink"
-                                        onClick={() =>
-                                            abrirNotaPorSlug(n.slug, n.title, true, n.id)
+                                        detalhe={
+                                            n.tipo === 'daily' ? 'Backlink (daily)' : 'Backlink'
                                         }
+                                        onClick={() => {
+                                            // Daily nunca cai no caminho de knowledge
+                                            // (abriria/criaria uma nota com o nome da data).
+                                            if (n.tipo === 'daily') {
+                                                if (n.id) {
+                                                    abrirFicheiro({
+                                                        tipo: 'daily',
+                                                        id: n.id,
+                                                        chave: n.slug,
+                                                        titulo: n.title,
+                                                    });
+                                                    router.push('/chat');
+                                                }
+                                                return;
+                                            }
+                                            abrirNotaPorSlug(n.slug, n.title, true, n.id);
+                                        }}
                                     />
                                 </li>
                             ))}

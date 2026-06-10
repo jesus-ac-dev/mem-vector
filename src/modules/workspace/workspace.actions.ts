@@ -286,8 +286,13 @@ export async function dadosBarraDireita(
 
     const daily = id ? await getDailyPorId(id) : await getDaily(chave);
     if (!daily) return vazio;
-    const forwardLinks = await forwardLinksDe(daily.id, 'daily');
-    return { ...vazio, outline: extrairOutline(daily.contentMd), forwardLinks };
+    // Simetria completa: a daily mostra os links que faz E quem aponta para ela
+    // (o alvo de um wikilink para daily é o próprio dia).
+    const [backlinks, forwardLinks] = await Promise.all([
+        backlinksDe(daily.dia, daily.id),
+        forwardLinksDe(daily.id, 'daily'),
+    ]);
+    return { outline: extrairOutline(daily.contentMd), backlinks, forwardLinks };
 }
 
 /** Dados do grafo do conhecimento (nós = notas, arestas = wikilinks). */

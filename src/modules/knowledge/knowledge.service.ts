@@ -65,6 +65,7 @@ interface ForwardEdgeRow {
 
 interface BacklinkEdgeRow {
     from_id: string;
+    from_type: 'knowledge' | 'daily';
     to_id: string | null;
 }
 
@@ -704,6 +705,7 @@ export interface LinkNota {
     id?: string;
     slug: string;
     title: string;
+    tipo?: 'knowledge' | 'daily'; // origem do backlink (ausente = knowledge)
 }
 export interface ForwardLink extends LinkNota {
     existe: boolean; // o alvo do wikilink existe como nota ativa (senão é link quebrado)
@@ -718,28 +720,50 @@ export async function backlinksDeCom(
     slug: string,
     noteId?: string,
 ): Promise<LinkNota[]> {
+    // Cross-type: as dailies também fazem wikilinks (ex.: a destilação liga
+    // [[carlos-e-sofia]]) — um backlink pode vir de knowledge OU de uma daily.
     const { data: ed, error } = await db
         .from('edges')
-        .select('from_id, to_id')
-        .eq('from_type', 'knowledge')
+        .select('from_id, from_type, to_id')
+        .in('from_type', ['knowledge', 'daily'])
         .eq('to_slug', slug);
     if (error) throw new Error(`backlinks edges: ${error.message}`);
 
     const edges = (ed ?? []) as BacklinkEdgeRow[];
-    const ids = [
-        ...new Set(
-            edges.filter((e) => !noteId || !e.to_id || e.to_id === noteId).map((e) => e.from_id),
-        ),
+    const relevantes = edges.filter((e) => !noteId || !e.to_id || e.to_id === noteId);
+    const idsNotas = [
+        ...new Set(relevantes.filter((e) => e.from_type === 'knowledge').map((e) => e.from_id)),
     ];
-    if (!ids.length) return [];
+    const idsDailies = [
+        ...new Set(relevantes.filter((e) => e.from_type === 'daily').map((e) => e.from_id)),
+    ];
+    if (!idsNotas.length && !idsDailies.length) return [];
 
-    const { data, error: nErr } = await db
-        .from('knowledge')
-        .select('id, slug, title')
-        .in('id', ids)
-        .order('title');
-    if (nErr) throw new Error(`backlinks knowledge: ${nErr.message}`);
-    return (data ?? []).map((n) => ({ id: n.id, slug: n.slug, title: n.title }));
+    const [notasRes, dailiesRes] = await Promise.all([
+        idsNotas.length
+            ? db.from('knowledge').select('id, slug, title').in('id', idsNotas)
+            : Promise.resolve({ data: [], error: null }),
+        idsDailies.length
+            ? db.from('dailies').select('id, dia').in('id', idsDailies)
+            : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (notasRes.error) throw new Error(`backlinks knowledge: ${notasRes.error.message}`);
+    if (dailiesRes.error) throw new Error(`backlinks dailies: ${dailiesRes.error.message}`);
+
+    return [
+        ...(notasRes.data ?? []).map((n) => ({
+            id: String(n.id),
+            slug: n.slug as string,
+            title: n.title as string,
+            tipo: 'knowledge' as const,
+        })),
+        ...(dailiesRes.data ?? []).map((d) => ({
+            id: String(d.id),
+            slug: String(d.dia),
+            title: String(d.dia),
+            tipo: 'daily' as const,
+        })),
+    ].sort((a, b) => a.title.localeCompare(b.title, 'pt'));
 }
 export const backlinksDe = async (slug: string, noteId?: string) =>
     backlinksDeCom(await createClient(), slug, noteId);

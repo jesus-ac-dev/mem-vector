@@ -232,6 +232,7 @@ describe('escreverNota (integração RLS)', () => {
             id: ref.id,
             slug: ref.slug,
             title: ref.title,
+            tipo: 'knowledge',
         });
 
         const pastaRenomeada = `Pasta Path Renamed ${suffix}`;
