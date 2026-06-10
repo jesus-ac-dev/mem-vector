@@ -94,7 +94,7 @@ function ChatContent() {
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
     const bottomRef = useRef<HTMLDivElement>(null);
-    const { conversaAberta, abrirConversa, fecharChat } = useWorkspace();
+    const { conversaAberta, abrirConversa, fecharChat, notificarWorkspaceMudou } = useWorkspace();
     const conversaCarregadaRef = useRef<string | null>(null);
 
     // Mantém a vista colada ao fundo (mensagens crescem de baixo para cima).
@@ -172,7 +172,13 @@ function ChatContent() {
                                 : m,
                         ),
                     );
-                    if (nota || daily) router.refresh();
+                    // O agente escreveu estado: o ambiente reage ao vivo — explorer,
+                    // grafo, sidebar e panes abertos ouvem o workspaceVersion; o
+                    // router.refresh cobre os server components (calendário, /daily).
+                    if (nota || daily) {
+                        notificarWorkspaceMudou();
+                        router.refresh();
+                    }
                 })
                 .catch((e: unknown) => {
                     // The job is durable in agent_jobs; this only reflects the current UI attempt.
