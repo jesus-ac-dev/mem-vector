@@ -49,6 +49,19 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [workspaceVersion, setWorkspaceVersion] = useState(0);
 
     function abrirFicheiro(f: FicheiroAberto) {
+        // Mesma entidade aberta por chaves diferentes não duplica tab: a daily
+        // deduplica por dia (único por dono) — ex.: calendário abre sem id, o
+        // explorer com id, e a tab é a mesma. Knowledge fica por id (homónimos
+        // em pastas diferentes são notas distintas de propósito).
+        const existente = ficheirosAbertos.find(
+            (x) =>
+                x.tipo === f.tipo &&
+                ((f.id && x.id === f.id) || (f.tipo === 'daily' && x.chave === f.chave)),
+        );
+        if (existente) {
+            setFicheiroAtivo(tabKey(existente));
+            return;
+        }
         const key = tabKey(f);
         setFicheirosAbertos((prev) => (prev.some((x) => tabKey(x) === key) ? prev : [...prev, f]));
         setFicheiroAtivo(key);

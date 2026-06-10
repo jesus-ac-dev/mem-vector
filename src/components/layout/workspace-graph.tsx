@@ -1,13 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Play, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
-import { construirGraphData, ligaAoNo, type GraphDataView, type NoGrafoView } from '@/lib/grafo';
+import {
+    construirGraphData,
+    instantesDoGrafo,
+    ligaAoNo,
+    nascimentoDeLink,
+    nascimentosDoGrafo,
+    type GraphDataView,
+    type NoGrafoView,
+} from '@/lib/grafo';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/layout/workspace-context';
 import { GrafoConfig } from '@/components/layout/grafo-config';
@@ -68,8 +76,8 @@ type Modo = '2D' | '3D';
 const RAIO_REL = 4;
 
 // Grafo do conhecimento à Obsidian: nós = notas (bola proporcional ao tamanho
-// do ficheiro), arestas = wikilinks. Toggle 2D/3D (2D default), botão animate
-// (re-corre o layout), clicar num nó abre a nota. O nó ativo pinta-se com a cor
+// do ficheiro), arestas = wikilinks. Toggle 2D/3D (2D default), botão Play
+// (timelapse: o grafo cresce pela data de criação, à Obsidian), clicar num nó abre a nota. O nó ativo pinta-se com a cor
 // extrema do tema (#fff em dark, #000 em light — nenhuma outra bola as usa) e a
 // vista centra-se nele. O graphData NUNCA é reconstruído por mudança de ficheiro
 // ativo: o force-graph muta nós e links (posições, refs), reconstruir a cada
@@ -86,7 +94,11 @@ export function WorkspaceGraph() {
     // posições do snapshot anterior — um refetch não re-explode o layout.
     const [graphData, setGraphData] = useState<GraphDataView | null>(null);
     const [modo, setModo] = useState<Modo>('2D');
-    const [animKey, setAnimKey] = useState(0); // bump → remonta o grafo → re-anima o layout
+    // Timelapse à Obsidian: cursor temporal (epoch ms); null = tudo visível.
+    // Esconder por visibilidade mantém o layout estável (lição do grafo v2:
+    // nunca reconstruir/remontar — era o "reinício" da animação antiga).
+    const [cursorAnim, setCursorAnim] = useState<number | null>(null);
+    const timelapseRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [config, setConfig] = useState(false);
 
@@ -167,7 +179,7 @@ export function WorkspaceGraph() {
     const vistaAjustada = useRef(false);
     useEffect(() => {
         vistaAjustada.current = false;
-    }, [modo, animKey]);
+    }, [modo]);
     const aoEstabilizar = useCallback(() => {
         if (!vistaAjustada.current) {
             vistaAjustada.current = true;
@@ -179,6 +191,39 @@ export function WorkspaceGraph() {
         }
         centrarNoAtivo();
     }, [activeNodeId, centrarNoAtivo, modo]);
+
+    // Nascimento de cada nó (data de criação; fantasma herda da 1ª origem).
+    const nascimentos = useMemo(
+        () => (graphData ? nascimentosDoGrafo(graphData) : new Map<string, number>()),
+        [graphData],
+    );
+
+    // Timelapse: avança o cursor pelos instantes de criação (~5s no total).
+    function iniciarTimelapse() {
+        if (!graphData?.nodes.length) return;
+        const instantes = instantesDoGrafo(nascimentos);
+        if (instantes.length < 2) return;
+        if (timelapseRef.current) clearInterval(timelapseRef.current);
+        let i = 0;
+        setCursorAnim(instantes[0]);
+        const passo = Math.max(60, Math.min(400, Math.round(5000 / instantes.length)));
+        timelapseRef.current = setInterval(() => {
+            i += 1;
+            if (i >= instantes.length) {
+                if (timelapseRef.current) clearInterval(timelapseRef.current);
+                timelapseRef.current = null;
+                setCursorAnim(null); // fim: tudo visível
+                return;
+            }
+            setCursorAnim(instantes[i]);
+        }, passo);
+    }
+    useEffect(
+        () => () => {
+            if (timelapseRef.current) clearInterval(timelapseRef.current);
+        },
+        [],
+    );
 
     const props = {
         graphData: graphData ?? { nodes: [], links: [] },
@@ -197,6 +242,12 @@ export function WorkspaceGraph() {
         cooldownTicks: 80,
         onNodeClick: abrirNo,
         onEngineStop: aoEstabilizar,
+        nodeVisibility: (n: object) =>
+            cursorAnim === null || (nascimentos.get((n as NoGrafoView).id) ?? 0) <= cursorAnim,
+        linkVisibility: (l: object) =>
+            cursorAnim === null ||
+            nascimentoDeLink(l as { source?: unknown; target?: unknown }, nascimentos) <=
+                cursorAnim,
     };
 
     return (
@@ -233,9 +284,9 @@ export function WorkspaceGraph() {
                     <Button
                         variant="ghost"
                         size="icon"
-                        title="Animar layout"
-                        aria-label="Animar layout"
-                        onClick={() => setAnimKey((k) => k + 1)}
+                        title="Ver o grafo a crescer no tempo"
+                        aria-label="Ver o grafo a crescer no tempo"
+                        onClick={iniciarTimelapse}
                         className="h-5 w-5 text-muted-foreground"
                     >
                         <Play className="h-3 w-3" />
@@ -248,7 +299,7 @@ export function WorkspaceGraph() {
                 {graphData && graphData.nodes.length > 0 && dim.w > 0 ? (
                     modo === '2D' ? (
                         <ForceGraph2D
-                            key={`2d-${animKey}`}
+                            key="2d"
                             grafoRef={fg2dRef}
                             {...props}
                             linkColor={(l: object) =>
@@ -257,6 +308,14 @@ export function WorkspaceGraph() {
                             linkWidth={(l: object) => (ligaAoNo(l, activeNodeId) ? 2.4 : 1.4)}
                             nodeCanvasObject={(node, ctx, globalScale) => {
                                 const n = node as NoGrafoView;
+                                // O canvas custom ignora o nodeVisibility — sem este
+                                // guard as bolas apareciam antes do seu instante.
+                                if (
+                                    cursorAnim !== null &&
+                                    (nascimentos.get(n.id) ?? 0) > cursorAnim
+                                ) {
+                                    return;
+                                }
                                 const ativo = n.id === activeNodeId;
                                 const raio = Math.sqrt(n.val ?? 1) * RAIO_REL;
                                 ctx.beginPath();
@@ -285,7 +344,7 @@ export function WorkspaceGraph() {
                         />
                     ) : (
                         <ForceGraph3D
-                            key={`3d-${animKey}`}
+                            key="3d"
                             grafoRef={fg3dRef}
                             {...props}
                             backgroundColor="rgba(0,0,0,0)"

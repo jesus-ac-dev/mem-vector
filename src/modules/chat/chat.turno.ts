@@ -69,9 +69,11 @@ export function buildTurnoPrompt(
     return (
         'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes DUAS coisas, ' +
         'devolvidas num ÚNICO bloco ```json``` com a forma {"daily": [...], "nota": null | {...}}.\n\n' +
-        '1) "daily": array de 2 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
+        '1) "daily": array de 0 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
         'neste turno — factos, decisões, alterações, bloqueios, próximos passos. Só o recap, não ' +
-        'respondas ao utilizador.\n' +
+        'respondas ao utilizador. Escreve só o que aconteceu de facto, nunca mais do que foi dito ' +
+        '— sem encher. Turno trivial (saudação, agradecimento, small talk sem conteúdo) = ' +
+        '"daily": [] — o daily não regista o nada.\n' +
         '2) "nota": és PROATIVO a registar. Se a troca traz um FACTO, DECISÃO, PLANO, PREFERÊNCIA ou ' +
         'CONHECIMENTO durável sobre o utilizador, o trabalho ou a vida dele, ESCREVE-O — não esperes ' +
         'que peçam licença. Na dúvida entre guardar e não guardar, GUARDA: continua a nota dona (se ' +
@@ -81,7 +83,15 @@ export function buildTurnoPrompt(
         '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
-        '"Decisão:", e sem descrever o contexto — só o tópico.\n\n' +
+        '"Decisão:", e sem descrever o contexto — só o tópico. Para factos sobre pessoas, o título ' +
+        'são os nomes delas (ex.: "Carlos e Sofia"), nunca o facto.\n' +
+        'REGRA PARA content_md: a nota é uma página viva de wiki sobre o ASSUNTO, escrita para ' +
+        'leitura humana futura — prosa natural, factos integrados num texto que se lê de seguida ' +
+        '(ex.: "O Carlos gosta da Sofia. Têm dois filhos juntos, o Lucas e o Filipe."). Começa com ' +
+        '"# <título>". NUNCA escrevas carimbos de proveniência no corpo — nada de "(declarado a ' +
+        '<data>)", "o utilizador disse" ou datas de registo: a proveniência fica no versionamento, ' +
+        'fora do texto. Ao continuar uma nota, INTEGRA o facto novo na prosa existente ' +
+        '(reescreve a frase certa se preciso), não acrescentes linhas-log no fim.\n\n' +
         blocoConversaTurno(historico) +
         blocoFactoDeclarado(intencao) +
         blocoCandidatos(candidatos) +
@@ -128,8 +138,12 @@ export function parseTurno(raw: string): TurnoDestiladoRaw {
           : '';
     const notaParsed = EscritaKnowledgeSchema.safeParse(rec.nota);
 
+    // "daily": [] é deliberado (turno trivial) — não passa pelo parseDailyCapture,
+    // que tem fallback não-vazio e mataria o "não regista o nada".
+    const dailyVazio = Array.isArray(rec.daily) && rec.daily.length === 0;
+
     return {
-        resumoMd: parseDailyCapture(dailyRaw),
+        resumoMd: dailyVazio ? '' : parseDailyCapture(dailyRaw),
         nota: notaParsed.success ? notaParsed.data : null,
     };
 }

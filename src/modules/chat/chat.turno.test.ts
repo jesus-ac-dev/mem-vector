@@ -67,6 +67,42 @@ describe('buildTurnoPrompt com histórico', () => {
     });
 });
 
+// Contrato de estilo (#19, 3.º smoke): a nota saiu log frio — "(declarado a
+// 2026-06-10)" em cada linha e título-frase. A nota é uma página de wiki viva
+// para leitura humana; a proveniência vive no versionamento, não no corpo.
+// Daily sem inflação (#19, re-smoke 21:18): "olá bom dia" gerou 2 bullets de
+// enchimento ("a aguardar tarefa") porque o prompt EXIGIA 2 a 5. O daily nunca
+// escreve mais do que aconteceu; turno trivial = [].
+describe('buildTurnoPrompt: daily sem inflação', () => {
+    it('permite daily vazio e proíbe encher', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/0 a 5 bullets/i);
+        expect(prompt).not.toMatch(/2 a 5 bullets/i);
+        expect(prompt).toMatch(/nunca mais do que foi dito|não escrevas mais do que/i);
+        expect(prompt).toMatch(/"daily": \[\]/);
+    });
+});
+
+describe('buildTurnoPrompt: estilo da nota', () => {
+    it('manda escrever página viva em prosa, não log de declarações', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/página viva/i);
+        expect(prompt).toMatch(/prosa/i);
+    });
+
+    it('proíbe carimbos de proveniência no corpo', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/proveniência/i);
+        expect(prompt).toMatch(/declarado a/i); // o anti-exemplo fica explícito
+    });
+
+    it('título de factos sobre pessoas são os nomes, nunca o facto', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toMatch(/"Carlos e Sofia"/);
+        expect(prompt).toMatch(/nunca o facto/i);
+    });
+});
+
 // Gate de pertinência (#19, 2.º smoke): a nota-lixo "coisas que acontecem"
 // capturou o facto da Sofia — continuar só quando o assunto pertence à nota.
 describe('blocoCandidatos com gate de pertinência', () => {
@@ -100,6 +136,13 @@ describe('parseTurno', () => {
     it('nota null: devolve só o resumo, sem nota', () => {
         const raw = '{"daily":["só registo"],"nota":null}';
         expect(parseTurno(raw)).toEqual({ resumoMd: '- só registo', nota: null });
+    });
+
+    // Turno trivial: "daily": [] deliberado fica vazio (sem o fallback do
+    // parseDailyCapture), para o aplicarDailyTurno poder não escrever nada.
+    it('daily [] deliberado devolve resumo vazio, sem bullet de fallback', () => {
+        const raw = '{"daily":[],"nota":null}';
+        expect(parseTurno(raw)).toEqual({ resumoMd: '', nota: null });
     });
 
     it('daily como string também vira bullets', () => {

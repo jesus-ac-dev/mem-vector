@@ -496,14 +496,12 @@ function DailyCalendar({
         <Calendar
             mode="single"
             modifiers={{ comDaily: highlightedDates }}
-            modifiersClassNames={{
-                comDaily: 'bg-accent text-accent-foreground rounded-full',
-            }}
             onDayClick={onDayClick}
             className="p-2 text-xs [--cell-size:1.75rem]"
             classNames={{
                 caption_label: 'text-xs font-medium',
-                weekday: 'text-[0.7rem]',
+                weekday:
+                    'text-muted-foreground flex-1 select-none text-center text-[0.7rem] font-normal',
             }}
         />
     );
@@ -765,13 +763,29 @@ function RightSidebar({
                     dadosAtivos.backlinks.length ? (
                         <ul className="space-y-0.5">
                             {dadosAtivos.backlinks.map((n) => (
-                                <li key={n.slug}>
+                                <li key={`${n.tipo ?? 'knowledge'}:${n.slug}`}>
                                     <NotaLink
                                         titulo={n.title}
-                                        detalhe="Backlink"
-                                        onClick={() =>
-                                            abrirNotaPorSlug(n.slug, n.title, true, n.id)
+                                        detalhe={
+                                            n.tipo === 'daily' ? 'Backlink (daily)' : 'Backlink'
                                         }
+                                        onClick={() => {
+                                            // Daily nunca cai no caminho de knowledge
+                                            // (abriria/criaria uma nota com o nome da data).
+                                            if (n.tipo === 'daily') {
+                                                if (n.id) {
+                                                    abrirFicheiro({
+                                                        tipo: 'daily',
+                                                        id: n.id,
+                                                        chave: n.slug,
+                                                        titulo: n.title,
+                                                    });
+                                                    router.push('/chat');
+                                                }
+                                                return;
+                                            }
+                                            abrirNotaPorSlug(n.slug, n.title, true, n.id);
+                                        }}
                                     />
                                 </li>
                             ))}
@@ -826,7 +840,14 @@ function RightSidebar({
                 <div className="flex flex-1 items-center justify-center overflow-hidden">
                     <DailyCalendar
                         diasComDaily={diasComDaily}
-                        onDayClick={(day) => router.push('/daily/' + formatYMD(day))}
+                        onDayClick={(day) => {
+                            const dia = formatYMD(day);
+                            // Dia sem daily: clique calmo, sem ação. Com daily: abre
+                            // como ficheiro nos panes (não toma conta do centro).
+                            if (!diasComDaily.includes(dia)) return;
+                            abrirFicheiro({ tipo: 'daily', chave: dia, titulo: dia });
+                            router.push('/chat');
+                        }}
                     />
                 </div>
             </div>

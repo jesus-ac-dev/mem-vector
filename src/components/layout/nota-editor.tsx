@@ -13,7 +13,7 @@ import {
     filtrarNotasParaLink,
     type NotaLinkavel,
 } from '@/modules/workspace/wikilink-autocomplete';
-import { listarNotasLinkaveis, criarNotaComTitulo } from '@/modules/workspace/workspace.actions';
+import { criarNotaComTitulo } from '@/modules/workspace/workspace.actions';
 
 interface NotaEditorProps {
     value: string;
@@ -41,10 +41,16 @@ export function NotaEditor({
 
     useEffect(() => {
         let cancelled = false;
-        void runClientAction(
-            { area: 'nota-editor', action: 'listarNotasLinkaveis' },
-            listarNotasLinkaveis,
-        ).then((ns) => {
+        // GET em vez de Server Action (padrão /api/file): loads de montagem por
+        // action partem com "unexpected response" após recompile do dev server.
+        void runClientAction({ area: 'nota-editor', action: 'listarNotasLinkaveis' }, async () => {
+            const res = await fetch('/api/notas-linkaveis', {
+                method: 'GET',
+                headers: { accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error(`notas linkáveis: HTTP ${res.status}`);
+            return (await res.json()) as NotaLinkavel[];
+        }).then((ns) => {
             if (!cancelled && ns) setNotas(ns);
         });
         return () => {

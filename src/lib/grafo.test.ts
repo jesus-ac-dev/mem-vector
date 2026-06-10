@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { construirGraphData, ligaAoNo, valPorTamanho } from '@/lib/grafo';
-import type { GrafoDados } from '@/modules/knowledge/knowledge.service';
+import {
+    construirGraphData,
+    instantesDoGrafo,
+    ligaAoNo,
+    nascimentoDeLink,
+    nascimentosDoGrafo,
+    valPorTamanho,
+} from '@/lib/grafo';
+import type { GrafoDados, GrafoNode } from '@/modules/knowledge/knowledge.service';
 
 describe('valPorTamanho', () => {
     it('nota vazia fica no val mínimo', () => {
@@ -77,5 +84,75 @@ describe('ligaAoNo', () => {
 
     it('sem nó ativo → nunca liga', () => {
         expect(ligaAoNo({ source: '1', target: '2' }, null)).toBe(false);
+    });
+});
+
+// Timelapse à Obsidian: o grafo cresce pela data de criação das notas.
+// Fantasma não tem data própria — nasce com a primeira origem que o liga.
+describe('nascimentosDoGrafo', () => {
+    const dados: { nodes: GrafoNode[]; links: { source: string; target: string }[] } = {
+        nodes: [
+            {
+                id: '1',
+                slug: 'a',
+                title: 'A',
+                group: 'knowledge',
+                color: '#abc',
+                size: 10,
+                createdAt: '2026-06-01T10:00:00Z',
+            },
+            {
+                id: '2',
+                slug: 'b',
+                title: 'B',
+                group: 'daily',
+                color: '#def',
+                size: 0,
+                createdAt: '2026-06-03T10:00:00Z',
+            },
+            { id: 'fantasma:c', slug: 'c', title: 'c', group: 'fantasma', color: '#999', size: 0 },
+        ],
+        links: [
+            { source: '1', target: '2' },
+            { source: '2', target: 'fantasma:c' },
+        ],
+    };
+
+    it('nó com createdAt nasce nessa data', () => {
+        const n = nascimentosDoGrafo(dados);
+        expect(n.get('1')).toBe(Date.parse('2026-06-01T10:00:00Z'));
+        expect(n.get('2')).toBe(Date.parse('2026-06-03T10:00:00Z'));
+    });
+
+    it('fantasma nasce com a primeira origem que o liga', () => {
+        const n = nascimentosDoGrafo(dados);
+        expect(n.get('fantasma:c')).toBe(Date.parse('2026-06-03T10:00:00Z'));
+    });
+
+    it('nó sem data e sem origens nasce no início (sempre visível)', () => {
+        const semLigacoes: GrafoNode[] = [
+            { id: 'x', slug: 'x', title: 'x', group: 'fantasma', color: '#999', size: 0 },
+        ];
+        const n = nascimentosDoGrafo({ nodes: semLigacoes, links: [] });
+        expect(n.get('x')).toBe(0);
+    });
+
+    it('a aresta nasce quando os dois extremos existem', () => {
+        const n = nascimentosDoGrafo(dados);
+        expect(nascimentoDeLink({ source: '1', target: '2' }, n)).toBe(
+            Date.parse('2026-06-03T10:00:00Z'),
+        );
+        // extremos já como objeto-nó (depois do motor processar)
+        expect(nascimentoDeLink({ source: { id: '1' }, target: { id: '2' } }, n)).toBe(
+            Date.parse('2026-06-03T10:00:00Z'),
+        );
+    });
+
+    it('instantes do timelapse: ordenados e únicos', () => {
+        const n = nascimentosDoGrafo(dados);
+        expect(instantesDoGrafo(n)).toEqual([
+            Date.parse('2026-06-01T10:00:00Z'),
+            Date.parse('2026-06-03T10:00:00Z'),
+        ]);
     });
 });

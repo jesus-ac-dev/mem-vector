@@ -10,6 +10,7 @@ import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import { Button } from '@/components/ui/button';
+import { isUnexpectedServerActionResponse, logClientError } from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
@@ -93,7 +94,7 @@ function ChatContent() {
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
     const bottomRef = useRef<HTMLDivElement>(null);
-    const { conversaAberta, abrirConversa, fecharChat } = useWorkspace();
+    const { conversaAberta, abrirConversa, fecharChat, notificarWorkspaceMudou } = useWorkspace();
     const conversaCarregadaRef = useRef<string | null>(null);
 
     // Mantém a vista colada ao fundo (mensagens crescem de baixo para cima).
@@ -138,7 +139,8 @@ function ChatContent() {
 
         let asstMsgId: number;
         try {
-            // Step 1: get the answer and render it immediately.
+            // Step 1: get the answer and render it immediately. Sem retry: ask() é
+            // escrita (não idempotente) e num action ID morto o retry bate no mesmo ID.
             const res = await ask({ question, conversationId });
             setConversationId(res.conversationId);
             if (conversaAberta === null) {
@@ -170,10 +172,17 @@ function ChatContent() {
                                 : m,
                         ),
                     );
-                    if (nota || daily) router.refresh();
+                    // O agente escreveu estado: o ambiente reage ao vivo — explorer,
+                    // grafo, sidebar e panes abertos ouvem o workspaceVersion; o
+                    // router.refresh cobre os server components (calendário, /daily).
+                    if (nota || daily) {
+                        notificarWorkspaceMudou();
+                        router.refresh();
+                    }
                 })
-                .catch(() => {
+                .catch((e: unknown) => {
                     // The job is durable in agent_jobs; this only reflects the current UI attempt.
+                    logClientError({ area: 'chat', action: 'processarDestilacaoJob' }, e);
                     setMessages((prev) =>
                         prev.map((m) =>
                             m.id === asstMsgId
@@ -183,7 +192,16 @@ function ChatContent() {
                     );
                 });
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Erro desconhecido');
+            logClientError({ area: 'chat', action: 'ask' }, e);
+            // Caso conhecido: o dev server recompilou (edição ou commit com lint-staged)
+            // e este tab ficou com IDs de server actions mortos — só o reload resolve.
+            setError(
+                isUnexpectedServerActionResponse(e)
+                    ? 'O servidor recompilou e este tab ficou desatualizado. Faz hard reload (Ctrl+Shift+R), volta a entrar e reenvia a mensagem.'
+                    : e instanceof Error
+                      ? e.message
+                      : 'Erro desconhecido',
+            );
             setPending(false);
         }
     }
