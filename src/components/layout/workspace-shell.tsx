@@ -500,7 +500,8 @@ function DailyCalendar({
             className="p-2 text-xs [--cell-size:1.75rem]"
             classNames={{
                 caption_label: 'text-xs font-medium',
-                weekday: 'text-[0.7rem]',
+                weekday:
+                    'text-muted-foreground flex-1 select-none text-center text-[0.7rem] font-normal',
             }}
         />
     );
