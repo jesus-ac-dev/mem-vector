@@ -25,7 +25,12 @@ export const EscritaKnowledgeSchema = z.object({
     content_md: z.string().min(1),
     links: z.array(z.string()).default([]),
     reason: z.string().min(1),
-    summary: z.string().max(500).optional(),
+    // Truncar em vez de max(): um summary longo demais do LLM não pode custar
+    // a nota inteira (o safeParse rejeitaria o objeto todo em silêncio).
+    summary: z
+        .string()
+        .transform((s) => s.trim().slice(0, 500))
+        .optional(),
 });
 export type EscritaKnowledge = z.infer<typeof EscritaKnowledgeSchema>;
 

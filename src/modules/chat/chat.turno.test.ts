@@ -203,3 +203,13 @@ describe('parseTurno: summary auto (#22)', () => {
         expect(parseTurno(raw).nota?.title).toBe('T');
     });
 });
+
+describe('parseTurno: summary longo não custa a nota (#22 nit do review)', () => {
+    it('trunca o summary a 500 chars em vez de rejeitar o envelope', () => {
+        const longo = 'x'.repeat(600);
+        const raw = `{"daily":["x"],"nota":{"title":"T","content_md":"c","links":[],"reason":"r","summary":"${longo}"}}`;
+        const nota = parseTurno(raw).nota;
+        expect(nota).not.toBeNull();
+        expect(nota?.summary?.length).toBe(500);
+    });
+});
