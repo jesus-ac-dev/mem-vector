@@ -153,6 +153,14 @@ A resposta não espera pela destilação (evita dobrar a latência).
 upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikilinks) → devolve diff
 ```
 
+**Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
+workspace — notas normais (editáveis, versionadas, RLS) com a identidade,
+prioridades e regras do utilizador, injetadas em todos os arranques do agente
+(chat, destilação one-shot, system da sessão agentic). Caps por nota/total;
+arquivadas e subpastas ficam fora (só notas diretamente na pasta); sem pasta = comportamento de sempre. Conteúdo do Kernel manda no agente por design (workspace é do utilizador) — re-avaliar quando houver grupos partilhados. Lição da auditoria do
+arranque do vault: estado do utilizador é escrito e tem dono; estado de sessão
+(candidatos, daily, conversa) é gerado na hora.
+
 **Arquivo = fora do pipeline de escrita (#28):** os 3 RPCs de escrita de knowledge
 recusam alvo `archived` ("slug no arquivo") — o upsert por slug não escreve por
 cima de nota arquivada (era assim que o agente "atualizava" arquivadas e que uma

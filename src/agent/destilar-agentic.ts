@@ -28,6 +28,9 @@ export interface TurnoAgenticInput {
     candidatos?: NotaCandidata[];
     intencao?: Intencao;
     historico?: MensagemConversa[];
+    // Kernel do workspace (#34): junta-se ao contrato como system prompt —
+    // contrato base (a casa) + personalidade do utilizador.
+    kernel?: string;
 }
 
 // Caminho agentic da destilação (issue #27): em vez de pedir um JSON one-shot,
@@ -77,7 +80,9 @@ export async function destilarTurnoAgenticCom(
             {
                 mcpConfig,
                 allowedTools: TOOLS_PERMITIDAS,
-                systemPrompt: AGENT_CONTRACT,
+                systemPrompt: input.kernel
+                    ? `${AGENT_CONTRACT}\n\n${input.kernel}`
+                    : AGENT_CONTRACT,
                 env: {
                     MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
                     MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,
