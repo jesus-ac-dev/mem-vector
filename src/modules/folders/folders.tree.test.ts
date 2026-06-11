@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-    construirArvore,
-    tagsDaArvore,
-    filtrarArvorePorTag,
-    type Pasta,
-    type NotaItem,
-} from './folders.tree';
+import { construirArvore, tagsComNotasDaArvore, type Pasta, type NotaItem } from './folders.tree';
 
 const pasta = (over: Partial<Pasta>): Pasta => ({
     id: 'f',
@@ -66,43 +60,40 @@ describe('construirArvore', () => {
     });
 });
 
-describe('tagsDaArvore', () => {
-    it('junta tags distintas de raiz e pastas, ordenadas (pt)', () => {
+describe('tagsComNotasDaArvore', () => {
+    it('agrupa case-insensitive mantendo a primeira grafia, com notas de raiz e pastas', () => {
         const arv = construirArvore(
             [pasta({ id: 'a', name: 'A' })],
             [
-                nota({ id: 'n1', tags: ['rag', 'chat'] }),
-                nota({ id: 'n2', folderId: 'a', tags: ['Chat', 'agente'] }),
+                nota({ id: 'n1', title: 'Beta', tags: ['rag', 'chat'] }),
+                nota({ id: 'n2', title: 'Alfa', folderId: 'a', tags: ['Chat', 'agente'] }),
                 nota({ id: 'n3', folderId: 'a' }),
             ],
         );
-        expect(tagsDaArvore(arv)).toEqual(['agente', 'chat', 'rag']);
+        const tags = tagsComNotasDaArvore(arv);
+        const chat = tags.find((t) => t.tag === 'chat');
+        expect(chat?.notas.map((n) => n.id)).toEqual(['n2', 'n1']); // ordenadas por título
+        expect(tags.map((t) => t.tag)).not.toContain('Chat'); // 1ª grafia ganha
     });
-});
 
-describe('filtrarArvorePorTag', () => {
-    it('mantém só notas com a tag (case-insensitive) e poda pastas vazias', () => {
+    it('ordena por nº de ocorrências desc e desempata alfabeticamente (pt)', () => {
         const arv = construirArvore(
-            [pasta({ id: 'a', name: 'A' }), pasta({ id: 'b', name: 'B' })],
+            [],
             [
-                nota({ id: 'n1', tags: ['RAG'] }),
-                nota({ id: 'n2', folderId: 'a', tags: ['rag'] }),
-                nota({ id: 'n3', folderId: 'b', tags: ['chat'] }),
+                nota({ id: 'n1', tags: ['zebra', 'rag'] }),
+                nota({ id: 'n2', tags: ['rag', 'agente'] }),
+                nota({ id: 'n3', tags: ['rag'] }),
             ],
         );
-        const f = filtrarArvorePorTag(arv, 'rag');
-        expect(f.raizNotas.map((n) => n.id)).toEqual(['n1']);
-        expect(f.raizPastas.map((p) => p.pasta.id)).toEqual(['a']);
-        expect(f.raizPastas[0].notas.map((n) => n.id)).toEqual(['n2']);
+        expect(tagsComNotasDaArvore(arv).map((t) => [t.tag, t.notas.length])).toEqual([
+            ['rag', 3],
+            ['agente', 1],
+            ['zebra', 1],
+        ]);
     });
 
-    it('mantém pasta-pai quando só a subpasta tem notas com a tag', () => {
-        const arv = construirArvore(
-            [pasta({ id: 'a', name: 'A' }), pasta({ id: 'a1', name: 'A1', parentId: 'a' })],
-            [nota({ id: 'n1', folderId: 'a1', tags: ['rag'] })],
-        );
-        const f = filtrarArvorePorTag(arv, 'rag');
-        expect(f.raizPastas.map((p) => p.pasta.id)).toEqual(['a']);
-        expect(f.raizPastas[0].subpastas[0].notas.map((n) => n.id)).toEqual(['n1']);
+    it('árvore sem tags devolve lista vazia', () => {
+        const arv = construirArvore([], [nota({ id: 'n1' })]);
+        expect(tagsComNotasDaArvore(arv)).toEqual([]);
     });
 });

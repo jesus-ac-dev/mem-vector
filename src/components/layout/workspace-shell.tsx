@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
@@ -18,6 +18,7 @@ import {
     CornerDownLeft,
     CornerUpRight,
     Share2,
+    Tag,
     FilePlus,
     FolderPlus,
     Archive,
@@ -50,7 +51,12 @@ import {
     type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
 import { tabKey } from '@/components/layout/workspace-context';
-import type { Arvore, NoArvore, NotaItem } from '@/modules/folders/folders.tree';
+import {
+    tagsComNotasDaArvore,
+    type Arvore,
+    type NoArvore,
+    type NotaItem,
+} from '@/modules/folders/folders.tree';
 import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 
 // ──────────────────────────────────────────────
@@ -510,12 +516,13 @@ function DailyCalendar({
 // ──────────────────────────────────────────────
 // Right sidebar
 // ──────────────────────────────────────────────
-type RightTab = 'outline' | 'backlinks' | 'forward' | 'partilhas';
+type RightTab = 'outline' | 'backlinks' | 'forward' | 'tags' | 'partilhas';
 
 const rightTabs: { id: RightTab; label: string; Icon: React.ElementType }[] = [
     { id: 'outline', label: 'Outline', Icon: List },
     { id: 'backlinks', label: 'Backlinks', Icon: CornerDownLeft },
     { id: 'forward', label: 'Forward links', Icon: CornerUpRight },
+    { id: 'tags', label: 'Tags', Icon: Tag },
     { id: 'partilhas', label: 'Partilhas', Icon: Share2 },
 ];
 
@@ -583,14 +590,20 @@ function RightSidebar({
     collapsed,
     onToggle,
     diasComDaily,
+    arvore,
 }: {
     collapsed: boolean;
     onToggle: () => void;
     diasComDaily: string[];
+    arvore: Arvore;
 }) {
     const router = useRouter();
     const { ficheiroAtivo, ficheirosAbertos, abrirFicheiro, workspaceVersion } = useWorkspace();
     const [activeTab, setActiveTab] = useState<RightTab>('outline');
+    // Tab Tags (#32): tag expandida mostra as notas onde aparece. A lista é
+    // memoizada — recalcula só quando a árvore muda, não a cada estado local.
+    const [tagAberta, setTagAberta] = useState<string | null>(null);
+    const tagsGlobais = useMemo(() => tagsComNotasDaArvore(arvore), [arvore]);
     const [wikilinkAmbiguo, setWikilinkAmbiguo] = useState<{
         slug: string;
         opcoes: NotaResolvidaWikilink[];
@@ -733,6 +746,57 @@ function RightSidebar({
                             ))}
                         </div>
                     </div>
+                ) : activeTab === 'tags' ? (
+                    // Tags são globais ao workspace (#32) — não dependem do
+                    // ficheiro ativo. Clique na tag expande as notas; clique na
+                    // nota abre a tab.
+                    (() => {
+                        if (!tagsGlobais.length) return vazio('Sem tags');
+                        return (
+                            <ul className="space-y-0.5">
+                                {tagsGlobais.map(({ tag, notas }) => {
+                                    const aberta = tagAberta?.toLowerCase() === tag.toLowerCase();
+                                    return (
+                                        <li key={tag.toLowerCase()}>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setTagAberta(aberta ? null : tag)}
+                                                title={aberta ? 'Fechar' : `Notas com #${tag}`}
+                                                className="h-auto w-full justify-between px-1.5 py-1 text-xs font-normal"
+                                            >
+                                                <span className="truncate text-primary">
+                                                    #{tag}
+                                                </span>
+                                                <span className="ml-2 shrink-0 rounded border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
+                                                    {notas.length}
+                                                </span>
+                                            </Button>
+                                            {aberta && (
+                                                <ul className="mb-1 ml-2 space-y-0.5 border-l pl-1.5">
+                                                    {notas.map((n) => (
+                                                        <li key={n.id}>
+                                                            <NotaLink
+                                                                titulo={n.title}
+                                                                onClick={() =>
+                                                                    abrirNotaPorSlug(
+                                                                        n.slug,
+                                                                        n.title,
+                                                                        true,
+                                                                        n.id,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        );
+                    })()
                 ) : !ativo ? (
                     vazio('Selecciona um ficheiro')
                 ) : !dadosAtivos ? (
@@ -914,6 +978,7 @@ export function WorkspaceShell({ arvore, dailies, diasComDaily, children }: Work
                     collapsed={rightCollapsed}
                     onToggle={() => setRightCollapsed((v) => !v)}
                     diasComDaily={diasComDaily}
+                    arvore={arvore}
                 />
             </div>
         </WorkspaceProvider>
