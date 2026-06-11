@@ -8,12 +8,12 @@ binário e a mesma subscrição. Liga-se com `MEMVECTOR_AGENTIC_DISTILL=1`
 
 ## Peças
 
-| Ficheiro | Papel |
-|---|---|
-| `contract.ts` | **Agent Contract v0** (M1): as regras do agente-autor (update-bias, prosa wiki sem proveniência, trivial sem escrita) como system prompt estável; `buildPromptAgentic` só carrega o contexto variável. |
-| `mcp-tools.ts` | MCP server stdio lançado pelo claude CLI: `procurar_notas`, `ler_nota`, `criar_nota`, `continuar_nota`, `acrescentar_daily`, `ler_daily_hoje`. Reutiliza os serviços `...Com` (RPCs transacionais + projeção de índices) sob a **sessão do utilizador** (tokens por env → RLS real, sem service role). |
-| `resultado.ts` | Contrato do ficheiro de resultado: as tools registam cada escrita em JSON-lines; o job reduz a `TurnoDestilado` a partir daí — nunca do texto do modelo. |
-| `destilar-agentic.ts` | Orquestração do lado do job: tokens da sessão, mcp-config (tsx com `--tsconfig` absoluto — o CLI lança o server com cwd fora do repo), `generateAgentic`, leitura do resultado. |
+| Ficheiro              | Papel                                                                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `contract.ts`         | **Agent Contract v0** (M1): as regras do agente-autor (update-bias, prosa wiki sem proveniência, trivial sem escrita) como system prompt estável; `buildPromptAgentic` só carrega o contexto variável.                                                                                                 |
+| `mcp-tools.ts`        | MCP server stdio lançado pelo claude CLI: `procurar_notas`, `ler_nota`, `criar_nota`, `continuar_nota`, `acrescentar_daily`, `ler_daily_hoje`. Reutiliza os serviços `...Com` (RPCs transacionais + projeção de índices) sob a **sessão do utilizador** (tokens por env → RLS real, sem service role). |
+| `resultado.ts`        | Contrato do ficheiro de resultado: as tools registam cada escrita em JSON-lines; o job reduz a `TurnoDestilado` a partir daí — nunca do texto do modelo.                                                                                                                                               |
+| `destilar-agentic.ts` | Orquestração do lado do job: tokens da sessão, mcp-config (tsx com `--tsconfig` absoluto — o CLI lança o server com cwd fora do repo), `generateAgentic`, leitura do resultado.                                                                                                                        |
 
 ## Fluxo
 

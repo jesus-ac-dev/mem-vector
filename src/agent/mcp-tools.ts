@@ -23,8 +23,12 @@ import { registarEscrita } from './resultado';
 const RESULT_FILE = process.env.MEMVECTOR_AGENT_RESULT_FILE ?? '';
 
 // A nota escrita neste turno entra na entrada do daily (paridade com o formato
-// do caminho one-shot: "Estado escrito: [[slug]]").
-let notaDoTurno: DailyTurnoNota | null = null;
+// do caminho one-shot: "Estado escrito: [[slug]]"). Vive num contexto por
+// sessão, não em estado de módulo — se este server um dia for reutilizado por
+// várias sessões, o estado não vaza entre elas (audit #27).
+interface EstadoTurno {
+    notaDoTurno: DailyTurnoNota | null;
+}
 
 async function criarDb(): Promise<SupabaseClient> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -145,7 +149,12 @@ function listaStrings(args: Args, campo: string): string[] {
     return v.map(String);
 }
 
-async function executarTool(db: SupabaseClient, name: string, args: Args): Promise<string> {
+async function executarTool(
+    db: SupabaseClient,
+    estado: EstadoTurno,
+    name: string,
+    args: Args,
+): Promise<string> {
     switch (name) {
         case 'procurar_notas': {
             const notas = await candidatosParaFactoCom(db, texto(args, 'texto'));
@@ -178,7 +187,7 @@ async function executarTool(db: SupabaseClient, name: string, args: Args): Promi
                 'agent',
             );
             const criada = r.diff === null;
-            notaDoTurno = { slug: r.slug, title: r.title, criada };
+            estado.notaDoTurno = { slug: r.slug, title: r.title, criada };
             if (RESULT_FILE) {
                 registarEscrita(RESULT_FILE, {
                     tipo: 'nota',
@@ -197,7 +206,7 @@ async function executarTool(db: SupabaseClient, name: string, args: Args): Promi
                 'agent',
                 summaryDoAgente(typeof args.summary === 'string' ? args.summary : undefined),
             );
-            notaDoTurno = { slug: r.slug, title: r.title, criada: false };
+            estado.notaDoTurno = { slug: r.slug, title: r.title, criada: false };
             if (RESULT_FILE) {
                 registarEscrita(RESULT_FILE, {
                     tipo: 'nota',
@@ -213,7 +222,7 @@ async function executarTool(db: SupabaseClient, name: string, args: Args): Promi
             if (!bullets.length) throw new Error('daily sem bullets');
             const entrada = formatDailyTurnoEntry({
                 resumoMd: bullets.map((b) => `- ${b}`).join('\n'),
-                nota: notaDoTurno,
+                nota: estado.notaDoTurno,
             });
             const r = await acrescentarAoDailyCom(db, entrada);
             if (RESULT_FILE) {
@@ -232,6 +241,7 @@ async function executarTool(db: SupabaseClient, name: string, args: Args): Promi
 
 async function main(): Promise<void> {
     const db = await criarDb();
+    const estado: EstadoTurno = { notaDoTurno: null };
     const server = new Server(
         { name: 'memvector', version: '0.1.0' },
         { capabilities: { tools: {} } },
@@ -242,7 +252,7 @@ async function main(): Promise<void> {
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const { name, arguments: args } = req.params;
         try {
-            const resultado = await executarTool(db, name, (args ?? {}) as Args);
+            const resultado = await executarTool(db, estado, name, (args ?? {}) as Args);
             return { content: [{ type: 'text', text: resultado }] };
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'erro desconhecido';

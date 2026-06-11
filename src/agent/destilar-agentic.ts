@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -43,6 +44,9 @@ export async function destilarTurnoAgenticCom(
     if (!session) throw new Error('sem sessão para a destilação agentic');
 
     const resultFile = join(tmpdir(), `memvector-agentic-${randomUUID()}.jsonl`);
+    // O pai cria o ficheiro (wx falha se já existir, 0600): ninguém no tmpdir
+    // partilhado consegue plantá-lo primeiro com registos falsos (audit #27).
+    writeFileSync(resultFile, '', { flag: 'wx', mode: 0o600 });
     const raiz = process.cwd();
     const mcpConfig = JSON.stringify({
         mcpServers: {

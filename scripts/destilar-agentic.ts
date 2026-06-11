@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
 import { getSupabaseAdmin } from '../src/lib/supabase-admin';
@@ -15,7 +16,10 @@ process.loadEnvFile('.env.local');
 //   eixo 3 — facto novo sobre o MESMO assunto, com candidatas: CONTINUA a nota
 //            do eixo 2 (mesmo slug, criada=false), não cria duplicado.
 
-const EMAIL = 'dev@mem-vector.local';
+// Utilizador fresco por corrida: com workspace já povoado, o agente lê a nota
+// e conclui (bem) que o facto já está registado — a prova ficava vermelha por
+// inteligência, não por bug. Workspace vazio = corridas comparáveis.
+const EMAIL = `prova-agentic-${randomUUID().slice(0, 8)}@mem-vector.local`;
 const PASSWORD = 'dev-password-123';
 
 async function main(): Promise<void> {

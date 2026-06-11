@@ -166,10 +166,22 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
             // pelo MCP server que o CLI lança como subprocesso.
             env: opts?.env ? { ...process.env, ...opts.env } : undefined,
             stdio: ['pipe', 'pipe', 'pipe'],
+            // Líder de grupo de processos: o timeout mata o grupo inteiro,
+            // senão o MCP server lançado pelo CLI fica órfão a escrever com a
+            // sessão do utilizador depois do job já ter falhado (audit #27).
+            detached: true,
         });
 
         const timeout = setTimeout(() => {
-            child.kill('SIGTERM');
+            if (child.pid) {
+                try {
+                    process.kill(-child.pid, 'SIGTERM');
+                } catch {
+                    child.kill('SIGTERM');
+                }
+            } else {
+                child.kill('SIGTERM');
+            }
             finish(() => reject(new Error(`claude excedeu timeout (${timeoutMs}ms)`)));
         }, timeoutMs);
 
