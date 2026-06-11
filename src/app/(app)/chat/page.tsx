@@ -238,10 +238,9 @@ function ChatContent() {
                                 </span>
                             ) : (
                                 <span className="inline-block rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-                                    <Markdown
-                                        content={linkCitations(m.content, m.sources ?? [])}
-                                        wikilinks={false}
-                                    />
+                                    {/* wikilinks ligados (#27, smoke 2026-06-11): [[slug]] na
+                                        resposta abre a nota, como os chips e as citações. */}
+                                    <Markdown content={linkCitations(m.content, m.sources ?? [])} />
                                 </span>
                             )}
                             {m.role === 'assistant' && m.sources && (

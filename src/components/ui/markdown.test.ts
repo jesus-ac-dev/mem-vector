@@ -25,4 +25,25 @@ describe('preprocessWikilinks', () => {
             'ver [Teste](/knowledge/teste?path=Pasta%2FTeste)',
         );
     });
+
+    it('compoe com linkCitations na ordem do chat sem interferencia', async () => {
+        // O chat corre linkCitations primeiro e o Markdown pré-processa os
+        // wikilinks depois — uma resposta com citação [N] E [[wikilink]] tem
+        // de produzir os dois links (era o wikilink morto do smoke da #27).
+        const { linkCitations } = await import('@/modules/chat/chat.provenance');
+        const sources: Parameters<typeof linkCitations>[1] = [
+            {
+                id: 'c1',
+                content: 'trecho',
+                source: 'knowledge',
+                similarity: 0.9,
+                metadata: { entity_type: 'knowledge', slug: 'carlos-e-sofia' },
+            },
+        ];
+
+        const comCitacao = linkCitations('Segundo a nota [[carlos-e-sofia]] [1].', sources);
+        const final = preprocessWikilinks(comCitacao);
+        expect(final).toContain('[carlos-e-sofia](/knowledge/carlos-e-sofia)');
+        expect(final).toContain('[1](');
+    });
 });
