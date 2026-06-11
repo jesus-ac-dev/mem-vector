@@ -12,6 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
 import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
+import { blocoKernelCom } from '@/agent/kernel';
 import { classificarIntencao } from './chat.intencao';
 import type { MensagemConversa } from './chat.prompt';
 import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
@@ -172,6 +173,10 @@ async function executarDestilacaoTurnoCom(
         console.error('candidatos para facto falhou:', e);
     }
 
+    // Kernel do workspace (#34): identidade/regras do utilizador no arranque
+    // da destilação (não-fatal: sem Kernel, comportamento de sempre).
+    const kernel = await blocoKernelCom(db);
+
     // Caminho agentic (issue #27, atrás de flag): a sessão CLI lê as candidatas
     // e escreve via tools MCP — sem fallback para o one-shot, para o A/B medir
     // o caminho real (um erro aqui falha o job, visível, em vez de mascarar).
@@ -182,6 +187,7 @@ async function executarDestilacaoTurnoCom(
             candidatos,
             intencao: classificarIntencao(question),
             historico,
+            kernel,
         });
     }
 
@@ -196,6 +202,7 @@ async function executarDestilacaoTurnoCom(
             candidatos,
             classificarIntencao(question),
             historico,
+            kernel,
         );
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);

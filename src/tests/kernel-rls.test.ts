@@ -1,0 +1,94 @@
+// @vitest-environment node
+import { describe, it, expect, beforeAll } from 'vitest';
+import { createClient as createAnonClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
+
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+async function userClient(email: string, password: string) {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    if (error && !error.message.includes('already been registered')) throw error;
+    const c = createAnonClient(URL, ANON);
+    const { error: e2 } = await c.auth.signInWithPassword({ email, password });
+    if (e2) throw e2;
+    return c;
+}
+
+// Kernel do workspace (#34): a pasta `Kernel` na raiz dá personalidade ao
+// agente; arquivadas ficam fora; sem pasta = sem bloco.
+describe('lerKernelCom (integração RLS)', () => {
+    let alice: Awaited<ReturnType<typeof userClient>>;
+    let aliceId: string;
+
+    beforeAll(async () => {
+        alice = await userClient('alice-kernel@test.local', 'pw-alice-123');
+        aliceId = (await alice.auth.getUser()).data.user!.id;
+        const admin = getSupabaseAdmin();
+        // limpar runs anteriores: notas do kernel e a pasta
+        const { data: pastas } = await admin
+            .from('folders')
+            .select('id')
+            .eq('owner_id', aliceId)
+            .ilike('name', 'kernel');
+        for (const p of pastas ?? []) {
+            const { data: notas } = await admin
+                .from('knowledge')
+                .select('id')
+                .eq('folder_id', p.id);
+            for (const n of notas ?? []) {
+                await admin.from('file_versions').delete().eq('entity_id', n.id);
+                await admin.from('chunks').delete().eq('metadata->>entity_id', n.id);
+                await admin.from('edges').delete().eq('from_id', n.id);
+                await admin.from('knowledge').delete().eq('id', n.id);
+            }
+            await admin.from('folders').delete().eq('id', p.id);
+        }
+    });
+
+    it('sem pasta Kernel devolve vazio (zero mudança)', async () => {
+        const { lerKernelCom } = await import('@/agent/kernel');
+        expect(await lerKernelCom(alice)).toEqual([]);
+    });
+
+    it('lê as notas da pasta Kernel (case-insensitive) e exclui arquivadas', async () => {
+        const { lerKernelCom } = await import('@/agent/kernel');
+        const { escreverNotaEmPastaCom, arquivarNotaPorIdCom } =
+            await import('@/modules/knowledge/knowledge.service');
+
+        const pasta = await alice
+            .from('folders')
+            .insert({ owner_id: aliceId, name: 'kernel' })
+            .select('id')
+            .single();
+        expect(pasta.error).toBeNull();
+        const folderId = String(pasta.data!.id);
+
+        await escreverNotaEmPastaCom(
+            alice,
+            {
+                title: 'Regras do agente',
+                content_md: '# Regras do agente\n\nTrata o Carlos por tu.',
+                links: [],
+                reason: 'kernel',
+            },
+            folderId,
+        );
+        const morta = await escreverNotaEmPastaCom(
+            alice,
+            {
+                title: 'Antiga',
+                content_md: '# Antiga\n\nfora',
+                links: [],
+                reason: 'kernel',
+            },
+            folderId,
+        );
+        await arquivarNotaPorIdCom(alice, morta.id);
+
+        const kernel = await lerKernelCom(alice);
+        expect(kernel.map((n) => n.title)).toEqual(['Regras do agente']);
+        expect(kernel[0].contentMd).toContain('Trata o Carlos por tu.');
+    });
+});

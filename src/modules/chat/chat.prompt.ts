@@ -95,6 +95,7 @@ export function buildPrompt(
     sources: Source[],
     intencao?: Intencao,
     historico: MensagemConversa[] = [],
+    kernel = '',
 ): string {
     const context = sources.length
         ? sources.map((s, i) => `[${i + 1}] ${s.content}`).join('\n\n')
@@ -105,6 +106,9 @@ export function buildPrompt(
     const regras = declarativa ? `${regraFacto(intencao?.incerta === true)}\n\n${REGRA}` : REGRA;
 
     return (
+        // Kernel do workspace (#34) primeiro: identidade/regras do utilizador
+        // moldam a resposta antes do contexto recuperado.
+        (kernel ? `${kernel}\n` : '') +
         `Contexto recuperado da base de conhecimento:\n\n${context}\n\n` +
         blocoConversa(historico) +
         `${rotulo}: ${question}\n\n` +

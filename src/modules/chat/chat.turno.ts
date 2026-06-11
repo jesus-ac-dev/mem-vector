@@ -65,8 +65,12 @@ export function buildTurnoPrompt(
     candidatos: NotaCandidata[] = [],
     intencao?: Intencao,
     historico: MensagemConversa[] = [],
+    kernel = '',
 ): string {
     return (
+        // Kernel do workspace (#34): as regras/identidade do utilizador também
+        // moldam o que se regista e como se escreve.
+        (kernel ? `${kernel}\n` : '') +
         'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes DUAS coisas, ' +
         'devolvidas num ÚNICO bloco ```json``` com a forma {"daily": [...], "nota": null | {...}}.\n\n' +
         '1) "daily": array de 0 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
@@ -159,9 +163,10 @@ export async function destilarResumirTurno(
     candidatos: NotaCandidata[] = [],
     intencao?: Intencao,
     historico: MensagemConversa[] = [],
+    kernel = '',
 ): Promise<TurnoDestiladoRaw> {
     const { text } = await generate(
-        buildTurnoPrompt(question, answer, candidatos, intencao, historico),
+        buildTurnoPrompt(question, answer, candidatos, intencao, historico, kernel),
     );
     return parseTurno(text);
 }

@@ -9,6 +9,7 @@ import {
     type SourceMetadata,
 } from './chat.prompt';
 import { classificarIntencao } from './chat.intencao';
+import { blocoKernelCom } from '@/agent/kernel';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
     escreverNota as escreverNotaReal,
@@ -213,8 +214,11 @@ export async function respond(
     const sources = await enriquecerSourcesComMetadata(db, relevant);
     // Declarativa sem marcas de pergunta = facto a registar (#19); a mesma
     // classificação determinística guia a destilação pós-turno.
+    // Kernel do workspace (#34): identidade/regras do utilizador no arranque
+    // da resposta (não-fatal: sem Kernel, prompt igual ao de sempre).
+    const kernel = await blocoKernelCom(db);
     const { text, costUsd } = await generate(
-        buildPrompt(question, sources, classificarIntencao(question), historico),
+        buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
     );
 
     return { answer: text, sources, costUsd };
