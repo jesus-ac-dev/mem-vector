@@ -419,7 +419,12 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setVista(vista === 'history' ? 'conteudo' : 'history')}
+                            onClick={() => {
+                                // Reset: sem isto, reabrir o histórico depois de um
+                                // guardar mantinha um baseId de uma lista antiga.
+                                setBaseId(null);
+                                setVista(vista === 'history' ? 'conteudo' : 'history');
+                            }}
                             title="Histórico"
                             aria-label="Histórico"
                             className={cn(

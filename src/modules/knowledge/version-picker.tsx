@@ -17,6 +17,9 @@ interface Version {
 }
 
 interface VersionPickerProps {
+    /** O conjunto de COMPARAÇÃO: todas as versões MENOS a atual (versoes.slice(1)).
+     * Passar a lista completa faria o default comparar a atual consigo própria
+     * (diff vazio silencioso). */
     versions: Version[];
     /** Full base path for the item, e.g. `/knowledge/my-slug` or `/daily/2026-06-05`. */
     basePath: string;
