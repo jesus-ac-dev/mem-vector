@@ -89,6 +89,54 @@ export function buildClaudeArgs(): string[] {
     ];
 }
 
+// Sessão agentic: o MESMO CLI (mesma subscrição) mas com loop de tool-use sobre
+// as tools MCP do workspace — em vez de proibir tudo, permite só as nossas. O
+// contrato do agente segue como system prompt; o timeout é maior porque a
+// sessão faz várias chamadas (a destilação já é job assíncrono).
+export interface AgenticConfig {
+    mcpConfig: string; // JSON inline para --mcp-config
+    allowedTools: string[]; // ex.: mcp__memvector__criar_nota
+    systemPrompt: string;
+    env?: Record<string, string>; // extras herdados pelo MCP server
+    timeoutMs?: number;
+    maxTurns?: number;
+}
+
+const DEFAULT_AGENTIC_TIMEOUT_MS = 300_000;
+
+export function claudeAgenticTimeoutMs(envValue = process.env.CLAUDE_AGENTIC_TIMEOUT_MS): number {
+    const parsed = Number(envValue);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AGENTIC_TIMEOUT_MS;
+}
+
+export function buildClaudeAgenticArgs(cfg: AgenticConfig): string[] {
+    return [
+        '-p',
+        '--input-format',
+        'text',
+        '--output-format',
+        'json',
+        '--strict-mcp-config',
+        '--mcp-config',
+        cfg.mcpConfig,
+        '--allowedTools',
+        ...cfg.allowedTools,
+        '--max-turns',
+        String(cfg.maxTurns ?? 15),
+        '--system-prompt',
+        cfg.systemPrompt,
+        '--exclude-dynamic-system-prompt-sections',
+        '--disallowedTools',
+        ...DISALLOWED_TOOLS,
+    ];
+}
+
+interface RunOptions {
+    args: string[];
+    env?: Record<string, string>;
+    timeoutMs?: number;
+}
+
 const claudeQueue = createAsyncSemaphore(claudeConcurrency());
 
 // Conduz o claude CLI (subscrição) num contexto mínimo: sem MCP, sem tools, cwd
@@ -98,12 +146,25 @@ export function generate(prompt: string): Promise<Generation> {
     return claudeQueue.run(() => runClaudeCli(prompt));
 }
 
-function runClaudeCli(prompt: string): Promise<Generation> {
+export function generateAgentic(prompt: string, cfg: AgenticConfig): Promise<Generation> {
+    return claudeQueue.run(() =>
+        runClaudeCli(prompt, {
+            args: buildClaudeAgenticArgs(cfg),
+            env: cfg.env,
+            timeoutMs: cfg.timeoutMs ?? claudeAgenticTimeoutMs(),
+        }),
+    );
+}
+
+function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
     return new Promise<Generation>((resolve, reject) => {
         let settled = false;
-        const timeoutMs = claudeTimeoutMs();
-        const child = spawn(CLAUDE_BIN, buildClaudeArgs(), {
+        const timeoutMs = opts?.timeoutMs ?? claudeTimeoutMs();
+        const child = spawn(CLAUDE_BIN, opts?.args ?? buildClaudeArgs(), {
             cwd: tmpdir(),
+            // O env extra (tokens da sessão, ficheiro de resultado) é herdado
+            // pelo MCP server que o CLI lança como subprocesso.
+            env: opts?.env ? { ...process.env, ...opts.env } : undefined,
             stdio: ['pipe', 'pipe', 'pipe'],
         });
 

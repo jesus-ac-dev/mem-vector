@@ -11,6 +11,7 @@ import {
 } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { destilarResumirTurno, type TurnoDestiladoRaw } from './chat.turno';
+import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
 import { classificarIntencao } from './chat.intencao';
 import type { MensagemConversa } from './chat.prompt';
 import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
@@ -169,6 +170,19 @@ async function executarDestilacaoTurnoCom(
         candidatos = await candidatosParaFactoCom(db, `${question}\n${answer}`);
     } catch (e) {
         console.error('candidatos para facto falhou:', e);
+    }
+
+    // Caminho agentic (issue #27, atrás de flag): a sessão CLI lê as candidatas
+    // e escreve via tools MCP — sem fallback para o one-shot, para o A/B medir
+    // o caminho real (um erro aqui falha o job, visível, em vez de mascarar).
+    if (process.env.MEMVECTOR_AGENTIC_DISTILL === '1') {
+        return destilarTurnoAgenticCom(db, {
+            question,
+            answer,
+            candidatos,
+            intencao: classificarIntencao(question),
+            historico,
+        });
     }
 
     // Uma só chamada ao CLI para o pós-turno (resumo do daily + decisão de nota).
