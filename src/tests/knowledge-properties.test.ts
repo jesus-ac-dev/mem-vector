@@ -214,3 +214,32 @@ describe('summary auto no ciclo de escrita (#22, integração RLS)', () => {
         expect(p6!.summary).toBe('resumo v5');
     }, 120_000);
 });
+
+describe('proveniência por pessoa (#23): author_id nas versões', () => {
+    it('cada file_version fica carimbada com auth.uid() (default da coluna)', async () => {
+        const alice = await userClient('alice-props@test.local', 'pw-alice-123');
+        const aliceId = (await alice.auth.getUser()).data.user!.id;
+        const { escreverNotaCom, listarVersoesCom } =
+            await import('@/modules/knowledge/knowledge.service');
+
+        const r = await escreverNotaCom(alice, {
+            title: 'Nota Autor Id',
+            content_md: 'v1',
+            links: [],
+            reason: 'x',
+        });
+
+        const { data: versao } = await alice
+            .from('file_versions')
+            .select('author_id')
+            .eq('entity_id', r.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+        expect(versao?.author_id).toBe(aliceId);
+
+        // E o serviço resolve o nome (sem display_name → email da sessão).
+        const versoes = await listarVersoesCom(alice, r.id);
+        expect(versoes[0].autorNome).toBe('alice-props@test.local');
+    }, 60_000);
+});

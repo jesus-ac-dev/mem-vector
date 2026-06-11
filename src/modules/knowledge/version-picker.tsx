@@ -14,6 +14,7 @@ interface Version {
     id: string;
     createdAt: string;
     author: string;
+    autorNome?: string | null;
 }
 
 interface VersionPickerProps {
@@ -69,7 +70,10 @@ export function VersionPicker({
                             timeStyle: 'short',
                         })}
                     </span>{' '}
-                    · <span className="text-foreground">{rotuloAutor(atual.author)}</span>
+                    ·{' '}
+                    <span className="text-foreground">
+                        {rotuloAutor(atual.author, atual.autorNome)}
+                    </span>
                 </p>
             )}
             <p className="text-xs text-muted-foreground">Comparar a versão atual com:</p>
@@ -87,7 +91,7 @@ export function VersionPicker({
                                 })}
                             </span>
                             <span className="ml-2 text-muted-foreground">
-                                {rotuloAutor(v.author)}
+                                {rotuloAutor(v.author, v.autorNome)}
                             </span>
                         </SelectItem>
                     ))}

@@ -542,7 +542,10 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                                         </span>{' '}
                                         ·{' '}
                                         <span className="text-foreground">
-                                            {rotuloAutor(historyEstado.versoes[0].author)}
+                                            {rotuloAutor(
+                                                historyEstado.versoes[0].author,
+                                                historyEstado.versoes[0].autorNome,
+                                            )}
                                         </span>
                                     </p>
                                     <p className="text-xs text-muted-foreground">
@@ -572,7 +575,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                                                         )}
                                                     </span>
                                                     <span className="ml-2 text-muted-foreground">
-                                                        {rotuloAutor(v.author)}
+                                                        {rotuloAutor(v.author, v.autorNome)}
                                                     </span>
                                                 </SelectItem>
                                             ))}

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
+import { nomesDosAutoresCom } from '@/modules/knowledge/versoes-nomes';
 import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projector';
 
 export interface ResultadoAcrescento {
@@ -23,7 +24,8 @@ export interface Daily {
 export interface Versao {
     id: string;
     contentMd: string;
-    author: string;
+    author: string; // 'agent' | 'user' (quem: autorNome)
+    autorNome: string | null; // display name/email do author_id (null = desconhecido)
     createdAt: string;
 }
 
@@ -254,15 +256,20 @@ export async function listarVersoesDailyCom(
 ): Promise<Versao[]> {
     const { data, error } = await db
         .from('file_versions')
-        .select('id, content_md, author, created_at')
+        .select('id, content_md, author, author_id, created_at')
         .eq('entity_type', 'daily')
         .eq('entity_id', entityId)
         .order('created_at', { ascending: false });
     if (error) throw new Error(`listar versões daily: ${error.message}`);
+    const nomes = await nomesDosAutoresCom(
+        db,
+        (data ?? []).map((r) => r.author_id),
+    );
     return (data ?? []).map((r) => ({
         id: r.id,
         contentMd: r.content_md,
         author: r.author,
+        autorNome: (r.author_id && nomes.get(String(r.author_id))) || null,
         createdAt: r.created_at,
     }));
 }

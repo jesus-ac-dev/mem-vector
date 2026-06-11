@@ -70,20 +70,22 @@ test('histórico mostra a autoria da versão atual (tu) e da base (agente)', asy
     await editor.fill(`# ${TITULO}\n\nEscrito pelo agente. Editado pelo Carlos.`);
     await page.getByRole('button', { name: 'Guardar' }).click();
 
-    // Histórico: a versão ATUAL é do utilizador ("tu"), a base é do agente.
+    // Histórico: a versão ATUAL é do utilizador (NOME, não "user" cru — com
+    // grupos a proveniência é por pessoa); a base é do agente. O dev user não
+    // tem display_name → cai para o email.
     await page.getByRole('button', { name: 'Histórico' }).click();
     const linhaAtual = page.getByText(/Versão atual:/);
     await expect(linhaAtual).toBeVisible();
-    await expect(linhaAtual).toContainText('tu');
+    await expect(linhaAtual).toContainText(EMAIL);
     // O trigger do select (base default = versão anterior) mostra "agente".
     await expect(page.getByRole('combobox')).toContainText('agente');
 
-    // 2.º edit manual: a base default passa a ser o 1.º edit ("tu" nos dois).
+    // 2.º edit manual: a base default passa a ser o 1.º edit (nome nos dois).
     await page.getByRole('button', { name: 'Voltar ao conteúdo' }).click();
     await page.getByRole('button', { name: 'Editar' }).click();
     await editor.fill(`# ${TITULO}\n\nEscrito pelo agente. Editado duas vezes.`);
     await page.getByRole('button', { name: 'Guardar' }).click();
     await page.getByRole('button', { name: 'Histórico' }).click();
-    await expect(page.getByText(/Versão atual:/)).toContainText('tu');
-    await expect(page.getByRole('combobox')).toContainText('tu');
+    await expect(page.getByText(/Versão atual:/)).toContainText(EMAIL);
+    await expect(page.getByRole('combobox')).toContainText(EMAIL);
 });

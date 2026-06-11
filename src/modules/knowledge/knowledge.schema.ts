@@ -56,6 +56,7 @@ export interface NotaCandidata {
 export interface Versao {
     id: string;
     contentMd: string;
-    author: string;
+    author: string; // 'agent' | 'user' (quem: autorNome)
+    autorNome: string | null; // display name/email do author_id (null = desconhecido)
     createdAt: string;
 }

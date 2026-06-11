@@ -6,6 +6,7 @@ import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
 import { normalizarTags, propriedadesDoRow, type PropriedadesNota } from './knowledge.props';
+import { nomesDosAutoresCom } from './versoes-nomes';
 import { montarArestasGrafo } from './knowledge.grafo';
 import { diffLines, type DiffLine } from './knowledge.diff';
 import {
@@ -954,15 +955,20 @@ export const grafoDados = async () => grafoDadosCom(await createClient());
 export async function listarVersoesCom(db: SupabaseClient, entityId: string): Promise<Versao[]> {
     const { data, error } = await db
         .from('file_versions')
-        .select('id, content_md, author, created_at')
+        .select('id, content_md, author, author_id, created_at')
         .eq('entity_type', 'knowledge')
         .eq('entity_id', entityId)
         .order('created_at', { ascending: false });
     if (error) throw new Error(`listar versões: ${error.message}`);
+    const nomes = await nomesDosAutoresCom(
+        db,
+        (data ?? []).map((r) => r.author_id),
+    );
     return (data ?? []).map((r) => ({
         id: r.id,
         contentMd: r.content_md,
         author: r.author,
+        autorNome: (r.author_id && nomes.get(String(r.author_id))) || null,
         createdAt: r.created_at,
     }));
 }
