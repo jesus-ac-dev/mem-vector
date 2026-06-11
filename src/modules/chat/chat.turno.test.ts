@@ -127,7 +127,7 @@ describe('parseTurno', () => {
             '{"daily":["fez X","decidiu Y"],' +
             '"nota":{"title":"T","content_md":"c","links":[],"reason":"r"}}\n' +
             '```';
-        expect(parseTurno(raw)).toEqual({
+        expect(parseTurno(raw)).toMatchObject({
             resumoMd: '- fez X\n- decidiu Y',
             nota: { title: 'T', content_md: 'c', links: [], reason: 'r' },
         });
@@ -135,24 +135,24 @@ describe('parseTurno', () => {
 
     it('nota null: devolve só o resumo, sem nota', () => {
         const raw = '{"daily":["só registo"],"nota":null}';
-        expect(parseTurno(raw)).toEqual({ resumoMd: '- só registo', nota: null });
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- só registo', nota: null });
     });
 
     // Turno trivial: "daily": [] deliberado fica vazio (sem o fallback do
     // parseDailyCapture), para o aplicarDailyTurno poder não escrever nada.
     it('daily [] deliberado devolve resumo vazio, sem bullet de fallback', () => {
         const raw = '{"daily":[],"nota":null}';
-        expect(parseTurno(raw)).toEqual({ resumoMd: '', nota: null });
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '', nota: null });
     });
 
     it('daily como string também vira bullets', () => {
         const raw = '{"daily":"- linha um\\n- linha dois","nota":null}';
-        expect(parseTurno(raw)).toEqual({ resumoMd: '- linha um\n- linha dois', nota: null });
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- linha um\n- linha dois', nota: null });
     });
 
     it('json inválido: trata o texto como bullets do daily e nota null (daily sobrevive)', () => {
         const raw = '- bullet solto\n- outro bullet';
-        expect(parseTurno(raw)).toEqual({
+        expect(parseTurno(raw)).toMatchObject({
             resumoMd: '- bullet solto\n- outro bullet',
             nota: null,
         });
@@ -160,7 +160,7 @@ describe('parseTurno', () => {
 
     it('nota com campos em falta é descartada, mas o resumo mantém-se', () => {
         const raw = '{"daily":["x"],"nota":{"title":"sem corpo"}}';
-        expect(parseTurno(raw)).toEqual({ resumoMd: '- x', nota: null });
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- x', nota: null });
     });
 
     it('extrai a nota mesmo quando o content_md tem um bloco de código (fence interno)', () => {

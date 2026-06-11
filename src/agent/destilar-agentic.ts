@@ -20,6 +20,9 @@ const TOOLS_PERMITIDAS = [
     'mcp__memvector__continuar_nota',
     'mcp__memvector__acrescentar_daily',
     'mcp__memvector__ler_daily_hoje',
+    'mcp__memvector__listar_tarefas_abertas',
+    'mcp__memvector__criar_tarefa',
+    'mcp__memvector__concluir_tarefa',
 ];
 
 export interface TurnoAgenticInput {
@@ -91,7 +94,12 @@ export async function destilarTurnoAgenticCom(
             },
         );
 
-        return reduzirEscritas(lerEscritas(resultFile));
+        const { nota, daily, tarefas } = reduzirEscritas(lerEscritas(resultFile));
+        return {
+            nota,
+            daily,
+            tarefas: tarefas.criadas.length || tarefas.concluidas.length ? tarefas : null,
+        };
     } finally {
         await unlink(resultFile).catch(() => {
             // turno trivial: ficheiro nunca chegou a existir

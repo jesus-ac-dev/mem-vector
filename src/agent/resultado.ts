@@ -17,7 +17,14 @@ export interface RegistoDaily {
     criado: boolean;
 }
 
-export type RegistoEscrita = RegistoNota | RegistoDaily;
+export interface RegistoTarefa {
+    tipo: 'tarefa';
+    acao: 'criada' | 'concluida';
+    id: string;
+    titulo: string;
+}
+
+export type RegistoEscrita = RegistoNota | RegistoDaily | RegistoTarefa;
 
 export function registarEscrita(file: string, registo: RegistoEscrita): void {
     appendFileSync(file, `${JSON.stringify(registo)}\n`, 'utf8');
@@ -37,7 +44,8 @@ export function lerEscritas(file: string): RegistoEscrita[] {
         try {
             const o: unknown = JSON.parse(linha);
             const r = o as RegistoEscrita;
-            if (r && (r.tipo === 'nota' || r.tipo === 'daily')) registos.push(r);
+            if (r && (r.tipo === 'nota' || r.tipo === 'daily' || r.tipo === 'tarefa'))
+                registos.push(r);
         } catch {
             // linha corrompida não custa o resto do resultado
         }
@@ -50,12 +58,22 @@ export function lerEscritas(file: string): RegistoEscrita[] {
 export function reduzirEscritas(registos: RegistoEscrita[]): {
     nota: Omit<RegistoNota, 'tipo'> | null;
     daily: Omit<RegistoDaily, 'tipo'> | null;
+    tarefas: {
+        criadas: { id: string; titulo: string }[];
+        concluidas: { id: string; titulo: string }[];
+    };
 } {
     let nota: Omit<RegistoNota, 'tipo'> | null = null;
     let daily: Omit<RegistoDaily, 'tipo'> | null = null;
+    const tarefas = {
+        criadas: [] as { id: string; titulo: string }[],
+        concluidas: [] as { id: string; titulo: string }[],
+    };
     for (const r of registos) {
         if (r.tipo === 'nota') nota = { slug: r.slug, title: r.title, criada: r.criada };
-        else daily = { dia: r.dia, criado: r.criado };
+        else if (r.tipo === 'daily') daily = { dia: r.dia, criado: r.criado };
+        else if (r.acao === 'criada') tarefas.criadas.push({ id: r.id, titulo: r.titulo });
+        else tarefas.concluidas.push({ id: r.id, titulo: r.titulo });
     }
-    return { nota, daily };
+    return { nota, daily, tarefas };
 }

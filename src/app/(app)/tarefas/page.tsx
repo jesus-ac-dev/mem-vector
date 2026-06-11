@@ -15,8 +15,16 @@ export default async function TarefasPage() {
 
             <ul className="space-y-2">
                 {tarefas.map((t) => (
-                    <li key={t.id} className="rounded-md border px-3 py-2 text-sm">
-                        {t.titulo}
+                    <li
+                        key={t.id}
+                        className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                    >
+                        <span className="truncate">{t.titulo}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                            {t.estado}
+                            {t.projeto ? ` · #${t.projeto}` : ''}
+                            {t.prioridade !== 'normal' ? ` · !${t.prioridade}` : ''}
+                        </span>
                     </li>
                 ))}
             </ul>

@@ -11,6 +11,13 @@ import {
     type TurnoDestilado,
 } from './chat.service';
 import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
+import {
+    listarTarefasAbertasCom,
+    criarTarefaCom,
+    concluirTarefaCom,
+} from '@/modules/tarefas/tarefas.service';
+import type { TarefaAbertaRef } from './chat.turno';
+import type { TarefasDoTurno } from './chat.service';
 import { escreverOuContinuarNotaCom } from '@/modules/knowledge/knowledge.continuar';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
@@ -66,6 +73,19 @@ export async function executarDestilacaoTurnoCom(
     // da destilação (não-fatal: sem Kernel, comportamento de sempre).
     const kernel = await blocoKernelCom(db);
 
+    // Tarefas em aberto (#21): o agente decide criar/concluir com a lista à
+    // frente (não duplica, não inventa ids). Não-fatal.
+    let tarefasAbertas: TarefaAbertaRef[] = [];
+    try {
+        tarefasAbertas = (await listarTarefasAbertasCom(db)).map((t) => ({
+            id: t.id,
+            titulo: t.titulo,
+            projeto: t.projeto,
+        }));
+    } catch (e) {
+        console.error('listar tarefas abertas falhou:', e);
+    }
+
     // Caminho agentic (issue #27, atrás de flag): a sessão CLI lê as candidatas
     // e escreve via tools MCP — sem fallback para o one-shot, para o A/B medir
     // o caminho real (um erro aqui falha o job, visível, em vez de mascarar).
@@ -92,6 +112,7 @@ export async function executarDestilacaoTurnoCom(
             classificarIntencao(question),
             historico,
             kernel,
+            tarefasAbertas,
         );
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);
@@ -114,14 +135,50 @@ export async function executarDestilacaoTurnoCom(
         console.error('escrita da nota destilada falhou:', e);
     }
 
+    let daily = null;
     try {
-        const daily = await aplicarDailyTurno(question, answer, nota, {
+        daily = await aplicarDailyTurno(question, answer, nota, {
             resumir: async () => resumoMd,
             escrever: (linha) => acrescentarAoDailyCom(db, linha),
         });
-        return { nota, daily };
     } catch (e) {
         console.error('append daily falhou:', e);
-        return { nota, daily: null };
     }
+
+    // Tarefas (#21): criar as propostas (dedupe por título contra as abertas;
+    // na dúvida o prompt já criou — aqui só evitamos o duplicado exato) e
+    // concluir os ids válidos (a conclusão escreve o daily no serviço).
+    const tarefas: TarefasDoTurno = { criadas: [], concluidas: [] };
+    for (const t of turno.tarefas) {
+        const duplicada = tarefasAbertas.some(
+            (a) => a.titulo.trim().toLowerCase() === t.titulo.trim().toLowerCase(),
+        );
+        if (duplicada) continue;
+        try {
+            const criada = await criarTarefaCom(db, {
+                titulo: t.titulo,
+                projeto: t.projeto,
+                prioridade: t.prioridade,
+                visibility: 'privado',
+            });
+            tarefas.criadas.push({ id: criada.id, titulo: criada.titulo });
+        } catch (e) {
+            console.error('criar tarefa destilada falhou:', e);
+        }
+    }
+    for (const id of turno.concluirIds) {
+        if (!tarefasAbertas.some((a) => a.id === id)) continue;
+        try {
+            const concluida = await concluirTarefaCom(db, id);
+            tarefas.concluidas.push({ id: concluida.id, titulo: concluida.titulo });
+        } catch (e) {
+            console.error('concluir tarefa destilada falhou:', e);
+        }
+    }
+
+    return {
+        nota,
+        daily,
+        tarefas: tarefas.criadas.length || tarefas.concluidas.length ? tarefas : null,
+    };
 }

@@ -28,6 +28,9 @@ type Modo = 'oneshot' | 'agentic';
 interface Turno {
     q: string;
     a: string;
+    // expectativa de tarefas (#21): nº de criadas/concluídas esperado ('qualquer' = sem assert)
+    tarefasCriadas?: number | 'qualquer';
+    tarefasConcluidas?: number | 'qualquer';
     // expectativa de placement deste turno:
     //  'create'        → nasce nota nova
     //  'continuar'     → atualiza a nota do turno anterior (mesmo slug)
@@ -176,6 +179,36 @@ const CENARIOS: Cenario[] = [
         },
     },
     {
+        id: 'tarefas',
+        descricao: 'pedido de ação cria tarefa; "já fiz" conclui; trivial não cria (#21)',
+        turnos: [
+            {
+                q: 'Lembra-me de ligar ao contabilista amanhã de manhã.',
+                a: 'Fica registado: ligar ao contabilista amanhã de manhã.',
+                nota: 'qualquer',
+                daily: 'qualquer',
+                tarefasCriadas: 1,
+                tarefasConcluidas: 0,
+            },
+            {
+                q: 'Obrigado!',
+                a: 'De nada!',
+                nota: null,
+                daily: false,
+                tarefasCriadas: 0,
+                tarefasConcluidas: 0,
+            },
+            {
+                q: 'Já liguei ao contabilista, está tratado.',
+                a: 'Boa — dou a tarefa como concluída.',
+                nota: 'qualquer',
+                daily: 'qualquer',
+                tarefasCriadas: 0,
+                tarefasConcluidas: 1,
+            },
+        ],
+    },
+    {
         id: 'kernel',
         descricao: 'regra do Kernel muda a escrita (bullets do daily com [K])',
         setup: async (db) => {
@@ -316,6 +349,21 @@ async function correrCenario(cenario: Cenario, modo: Modo): Promise<ResultadoCen
                 detalhes.push(`t${i + 1}: esperava daily, não registou`);
             if (turno.daily === false && r.daily)
                 detalhes.push(`t${i + 1}: turno trivial registou daily`);
+
+            // tarefas (#21)
+            const criadas = r.tarefas?.criadas.length ?? 0;
+            const concluidas = r.tarefas?.concluidas.length ?? 0;
+            if (typeof turno.tarefasCriadas === 'number' && criadas !== turno.tarefasCriadas)
+                detalhes.push(
+                    `t${i + 1}: esperava ${turno.tarefasCriadas} tarefa(s) criada(s), houve ${criadas}`,
+                );
+            if (
+                typeof turno.tarefasConcluidas === 'number' &&
+                concluidas !== turno.tarefasConcluidas
+            )
+                detalhes.push(
+                    `t${i + 1}: esperava ${turno.tarefasConcluidas} concluída(s), houve ${concluidas}`,
+                );
 
             if (r.nota) slugAnterior = r.nota.slug;
         }

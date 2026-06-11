@@ -38,9 +38,16 @@ export interface DailyEscrito {
     criado: boolean;
 }
 
+export interface TarefasDoTurno {
+    criadas: { id: string; titulo: string }[];
+    concluidas: { id: string; titulo: string }[];
+}
+
 export interface TurnoDestilado {
     nota: NotaEscrita | null;
     daily: DailyEscrito | null;
+    // #21: tarefas criadas/concluídas pelo agente neste turno (ausente = nenhuma).
+    tarefas?: TarefasDoTurno | null;
 }
 
 export interface ChatResult {

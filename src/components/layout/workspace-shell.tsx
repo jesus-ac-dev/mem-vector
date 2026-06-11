@@ -37,6 +37,7 @@ import {
 import type { DailyItem } from '@/components/layout/file-explorer';
 import { ArquivadosLista } from '@/components/layout/arquivados-lista';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
+import { TarefasPanel } from '@/components/layout/tarefas-panel';
 import { WorkspaceGraph } from '@/components/layout/workspace-graph';
 import { ClientErrorListener } from '@/components/layout/client-error-listener';
 import {
@@ -62,10 +63,11 @@ import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 // ──────────────────────────────────────────────
 // Ribbon — icons that commute the left panel
 // ──────────────────────────────────────────────
-type LeftPanel = 'explorer' | 'chats';
+type LeftPanel = 'explorer' | 'chats' | 'tarefas';
 
 const panelItems: { id: LeftPanel; label: string; Icon: React.ElementType }[] = [
     { id: 'explorer', label: 'Explorador', Icon: FolderTree },
+    { id: 'tarefas', label: 'Tarefas', Icon: ListTodo },
     { id: 'chats', label: 'Conversas', Icon: MessagesSquare },
 ];
 
@@ -228,6 +230,8 @@ function LeftSidebar({
     const [knowledgeOpen, setKnowledgeOpen] = useState(true);
     const [forceOpenFolderIds, setForceOpenFolderIds] = useState<string[]>([]);
     const [criandoPasta, setCriandoPasta] = useState(false);
+    // Painel de tarefas (#21): o "+" do header abre o input de criação.
+    const [criarTarefaAberto, setCriarTarefaAberto] = useState(false);
 
     function atualizarArvoreLocal(updater: (atual: Arvore) => Arvore) {
         setArvoreState((state) => {
@@ -407,6 +411,18 @@ function LeftSidebar({
                                 <Archive className="h-3.5 w-3.5" />
                             </Button>
                         </>
+                    ) : activePanel === 'tarefas' ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Nova tarefa"
+                            aria-label="Nova tarefa"
+                            onClick={() => setCriarTarefaAberto(true)}
+                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Tarefa
+                        </Button>
                     ) : (
                         <Button
                             variant="ghost"
@@ -469,6 +485,11 @@ function LeftSidebar({
                             onCancelarCriarPasta={() => setCriandoPasta(false)}
                         />
                     )
+                ) : activePanel === 'tarefas' ? (
+                    <TarefasPanel
+                        criarAberto={criarTarefaAberto}
+                        onFecharCriar={() => setCriarTarefaAberto(false)}
+                    />
                 ) : (
                     <ConversasPanel />
                 )}
