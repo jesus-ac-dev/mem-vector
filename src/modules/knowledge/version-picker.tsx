@@ -8,6 +8,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { rotuloAutor } from './versao-autor';
 
 interface Version {
     id: string;
@@ -22,6 +23,9 @@ interface VersionPickerProps {
     currentBase?: string;
     /** When true, keeps ?view=history in the URL while changing the base version. */
     keepView?: boolean;
+    /** A versão atual (a mais recente): mostra quem a escreveu, para a autoria
+     * do dropdown (a BASE de comparação) não se ler como autoria do diff (#23). */
+    atual?: Version;
     /** @deprecated Use basePath instead. */
     slug?: string;
 }
@@ -32,6 +36,7 @@ export function VersionPicker({
     slug,
     currentBase,
     keepView,
+    atual,
 }: VersionPickerProps) {
     const router = useRouter();
 
@@ -52,6 +57,18 @@ export function VersionPicker({
 
     return (
         <div className="space-y-1">
+            {atual && (
+                <p className="text-xs text-muted-foreground">
+                    Versão atual:{' '}
+                    <span className="font-mono">
+                        {new Date(atual.createdAt).toLocaleString('pt-PT', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                        })}
+                    </span>{' '}
+                    · <span className="text-foreground">{rotuloAutor(atual.author)}</span>
+                </p>
+            )}
             <p className="text-xs text-muted-foreground">Comparar a versão atual com:</p>
             <Select value={value} onValueChange={handleChange}>
                 <SelectTrigger className="w-64 text-xs">
@@ -66,7 +83,9 @@ export function VersionPicker({
                                     timeStyle: 'short',
                                 })}
                             </span>
-                            <span className="ml-2 text-muted-foreground">{v.author}</span>
+                            <span className="ml-2 text-muted-foreground">
+                                {rotuloAutor(v.author)}
+                            </span>
                         </SelectItem>
                     ))}
                 </SelectContent>

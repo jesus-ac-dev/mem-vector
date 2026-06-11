@@ -82,6 +82,7 @@ export default async function DailyPage({
                                 basePath={basePath}
                                 currentBase={baseId}
                                 keepView
+                                atual={current ?? undefined}
                             />
                             <DiffView diff={diff} />
                         </>
