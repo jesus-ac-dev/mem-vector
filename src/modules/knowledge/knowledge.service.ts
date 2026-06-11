@@ -22,6 +22,13 @@ export interface ResultadoEscrita extends NotaKnowledge {
     diff: DiffLine[] | null;
 }
 
+// Patch de frontmatter do summary gerado pelo agente (#22). Vazio quando o
+// envelope não traz summary — o merge não toca no que existe.
+export function summaryDoAgente(summary?: string): Record<string, string> {
+    const s = summary?.trim();
+    return s ? { summary: s, summary_author: 'agent' } : {};
+}
+
 interface WriteKnowledgeEntryRow {
     id: string;
     slug: string;
@@ -130,9 +137,10 @@ export async function escreverNotaCom(
     if (!user) throw new Error('sem sessão');
 
     const slug = slugify(dados.title);
-    // Só o título: o RPC faz merge com o frontmatter existente, preservando
-    // propriedades (tags/summary) definidas pelo utilizador.
-    const frontmatter = { title: dados.title };
+    // Título + summary do agente quando o envelope o traz: o RPC faz merge com
+    // o frontmatter existente, preservando propriedades do utilizador —
+    // incluindo o summary quando summary_author = 'user'.
+    const frontmatter = { title: dados.title, ...summaryDoAgente(dados.summary) };
 
     // Escrita transacional no Postgres: nota viva + file_version no mesmo
     // statement, serializada por (user,slug). A RPC devolve o conteúdo anterior
@@ -188,7 +196,7 @@ export async function escreverNotaEmPastaCom(
     if (!user) throw new Error('sem sessão');
 
     const slug = slugify(dados.title);
-    const frontmatter = { title: dados.title };
+    const frontmatter = { title: dados.title, ...summaryDoAgente(dados.summary) };
 
     const up = await db
         .rpc('write_knowledge_entry_in_folder', {
@@ -411,7 +419,13 @@ export async function atualizarPropriedadesNotaCom(
 
     const patch: Record<string, unknown> = {};
     if (dados.tags !== undefined) patch.tags = normalizarTags(dados.tags);
-    if (dados.summary !== undefined) patch.summary = dados.summary.trim();
+    if (dados.summary !== undefined) {
+        const s = dados.summary.trim();
+        patch.summary = s;
+        // Resumo escrito à mão é do utilizador (o agente passa a respeitá-lo);
+        // limpar o campo devolve-o ao agente (#22).
+        patch.summary_author = s ? 'user' : null;
+    }
 
     const up = await db
         .rpc('update_knowledge_properties', {
@@ -431,6 +445,7 @@ export async function atualizarNotaPorIdCom(
     id: string,
     contentMd: string,
     author: 'agent' | 'user' = 'user',
+    frontmatterPatch?: Record<string, unknown>,
 ): Promise<ResultadoEscrita> {
     const {
         data: { user },
@@ -445,6 +460,7 @@ export async function atualizarNotaPorIdCom(
             p_id: id,
             p_content_md: contentNormalizado,
             p_author: author,
+            p_frontmatter_patch: frontmatterPatch ?? null,
         })
         .single();
     if (up.error || !up.data) throw new Error(`atualizar nota por id: ${up.error?.message}`);

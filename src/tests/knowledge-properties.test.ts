@@ -116,3 +116,101 @@ describe('propriedades de notas (integração RLS)', () => {
         );
     }, 60_000);
 });
+
+describe('summary auto no ciclo de escrita (#22, integração RLS)', () => {
+    let alice: Awaited<ReturnType<typeof userClient>>;
+    beforeAll(async () => {
+        alice = await userClient('alice-props@test.local', 'pw-alice-123');
+        const admin = getSupabaseAdmin();
+        const aliceUser = (await alice.auth.getUser()).data.user!;
+        const existing = await admin
+            .from('knowledge')
+            .select('id')
+            .eq('owner_id', aliceUser.id)
+            .eq('slug', 'nota-summary');
+        for (const row of existing.data ?? []) {
+            await admin.from('file_versions').delete().eq('entity_id', row.id);
+            await admin.from('chunks').delete().eq('metadata->>entity_id', row.id);
+            await admin.from('edges').delete().eq('from_id', row.id);
+            await admin.from('knowledge').delete().eq('id', row.id);
+        }
+    });
+
+    it('nasce com summary do agente, refresca a cada escrita, respeita o do utilizador', async () => {
+        const { escreverNotaCom, getPropriedadesNotaPorIdCom, atualizarPropriedadesNotaCom } =
+            await import('@/modules/knowledge/knowledge.service');
+        const { escreverOuContinuarNotaCom } =
+            await import('@/modules/knowledge/knowledge.continuar');
+
+        // 1. Nota nova nasce com summary do agente.
+        const r1 = await escreverNotaCom(alice, {
+            title: 'Nota Summary',
+            content_md: 'v1',
+            links: [],
+            reason: 'x',
+            summary: 'resumo v1',
+        });
+        const p1 = await getPropriedadesNotaPorIdCom(alice, r1.id);
+        expect(p1!.summary).toBe('resumo v1');
+
+        // 2. Escrita seguinte do agente refresca o summary (autoria agent).
+        await escreverNotaCom(alice, {
+            title: 'Nota Summary',
+            content_md: 'v2',
+            links: [],
+            reason: 'x',
+            summary: 'resumo v2',
+        });
+        const p2 = await getPropriedadesNotaPorIdCom(alice, r1.id);
+        expect(p2!.summary).toBe('resumo v2');
+
+        // 3. CONTINUAR via candidata (caminho por id) também refresca.
+        await escreverOuContinuarNotaCom(
+            alice,
+            {
+                title: 'Nota Summary',
+                content_md: 'v3',
+                links: [],
+                reason: 'x',
+                summary: 'resumo v3',
+            },
+            [{ id: r1.id, slug: r1.slug, title: 'Nota Summary', contentMd: 'v2' }],
+        );
+        const p3 = await getPropriedadesNotaPorIdCom(alice, r1.id);
+        expect(p3!.summary).toBe('resumo v3');
+
+        // 4. Utilizador escreve o summary à mão → o agente passa a respeitá-lo.
+        await atualizarPropriedadesNotaCom(alice, r1.id, { summary: 'resumo do carlos' });
+        await escreverNotaCom(alice, {
+            title: 'Nota Summary',
+            content_md: 'v4',
+            links: [],
+            reason: 'x',
+            summary: 'resumo do agente intruso',
+        });
+        const p4 = await getPropriedadesNotaPorIdCom(alice, r1.id);
+        expect(p4!.summary).toBe('resumo do carlos');
+
+        // 5. Limpar o summary devolve-o ao agente.
+        await atualizarPropriedadesNotaCom(alice, r1.id, { summary: '' });
+        await escreverNotaCom(alice, {
+            title: 'Nota Summary',
+            content_md: 'v5',
+            links: [],
+            reason: 'x',
+            summary: 'resumo v5',
+        });
+        const p5 = await getPropriedadesNotaPorIdCom(alice, r1.id);
+        expect(p5!.summary).toBe('resumo v5');
+
+        // 6. Escrita do agente SEM summary não apaga o que existe.
+        await escreverNotaCom(alice, {
+            title: 'Nota Summary',
+            content_md: 'v6',
+            links: [],
+            reason: 'x',
+        });
+        const p6 = await getPropriedadesNotaPorIdCom(alice, r1.id);
+        expect(p6!.summary).toBe('resumo v5');
+    }, 120_000);
+});

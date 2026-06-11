@@ -173,3 +173,33 @@ describe('parseTurno', () => {
         expect(out.nota?.content_md).toContain('x=1');
     });
 });
+
+describe('buildTurnoPrompt: summary auto (#22)', () => {
+    it('pede o summary no envelope e manda re-resumir a nota inteira', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toContain('"summary": "resumo de 1 frase"');
+        expect(prompt).toContain('REGRA PARA summary');
+        expect(prompt).toContain('NOTA INTEIRA');
+        expect(prompt).toContain('re-resume o todo');
+    });
+});
+
+describe('parseTurno: summary auto (#22)', () => {
+    it('passa o summary da nota quando o envelope o traz', () => {
+        const raw =
+            '{"daily":["x"],"nota":{"title":"T","content_md":"c","links":[],"reason":"r","summary":"resumo da nota"}}';
+        expect(parseTurno(raw).nota).toEqual({
+            title: 'T',
+            content_md: 'c',
+            links: [],
+            reason: 'r',
+            summary: 'resumo da nota',
+        });
+    });
+
+    it('nota sem summary continua válida (campo opcional)', () => {
+        const raw = '{"daily":["x"],"nota":{"title":"T","content_md":"c","links":[],"reason":"r"}}';
+        expect(parseTurno(raw).nota?.summary).toBeUndefined();
+        expect(parseTurno(raw).nota?.title).toBe('T');
+    });
+});

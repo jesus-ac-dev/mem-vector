@@ -18,11 +18,14 @@ export const AtualizarPropriedadesSchema = z.object({
 export type AtualizarPropriedades = z.infer<typeof AtualizarPropriedadesSchema>;
 
 // Bloco que o claude CLI devolve quando decide destilar (ou null).
+// `summary` (#22): resumo de 1 linha da NOTA INTEIRA como ficou — refresca a
+// cada create/CONTINUAR sem chamada extra; o guard de autoria vive no SQL.
 export const EscritaKnowledgeSchema = z.object({
     title: z.string().min(1).max(200),
     content_md: z.string().min(1),
     links: z.array(z.string()).default([]),
     reason: z.string().min(1),
+    summary: z.string().max(500).optional(),
 });
 export type EscritaKnowledge = z.infer<typeof EscritaKnowledgeSchema>;
 
