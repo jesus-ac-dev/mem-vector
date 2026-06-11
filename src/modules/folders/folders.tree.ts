@@ -56,15 +56,23 @@ export function construirArvore(pastas: Pasta[], notas: NotaItem[]): Arvore {
     return { raizPastas, raizNotas };
 }
 
-// Tags distintas de toda a árvore (para a barra de filtro), case-insensitive
-// mantendo a primeira grafia, ordenadas (pt).
-export function tagsDaArvore(arvore: Arvore): string[] {
-    const porChave = new Map<string, string>();
+export interface TagComNotas {
+    tag: string; // primeira grafia encontrada (match case-insensitive)
+    notas: NotaItem[]; // ordenadas por título (pt)
+}
+
+// Painel de tags à Obsidian (#32): todas as tags da árvore com as notas onde
+// aparecem. Case-insensitive mantendo a primeira grafia; tags ordenadas por
+// nº de ocorrências (desc) e depois alfabeticamente (pt).
+export function tagsComNotasDaArvore(arvore: Arvore): TagComNotas[] {
+    const porChave = new Map<string, TagComNotas>();
     const recolher = (notas: NotaItem[]) => {
         for (const n of notas)
             for (const t of n.tags ?? []) {
                 const chave = t.toLowerCase();
-                if (!porChave.has(chave)) porChave.set(chave, t);
+                const entrada = porChave.get(chave);
+                if (entrada) entrada.notas.push(n);
+                else porChave.set(chave, { tag: t, notas: [n] });
             }
     };
     const visitar = (no: NoArvore) => {
@@ -73,24 +81,9 @@ export function tagsDaArvore(arvore: Arvore): string[] {
     };
     recolher(arvore.raizNotas);
     arvore.raizPastas.forEach(visitar);
-    return [...porChave.values()].sort((a, b) => a.localeCompare(b, 'pt'));
-}
 
-// Filtra a árvore para as notas com a tag (case-insensitive). Pastas sem
-// notas nem subpastas com match são podadas; pastas-pai de um match ficam.
-export function filtrarArvorePorTag(arvore: Arvore, tag: string): Arvore {
-    const alvo = tag.toLowerCase();
-    const temTag = (n: NotaItem) => (n.tags ?? []).some((t) => t.toLowerCase() === alvo);
-
-    const filtrarNo = (no: NoArvore): NoArvore | null => {
-        const notas = no.notas.filter(temTag);
-        const subpastas = no.subpastas.map(filtrarNo).filter((s): s is NoArvore => s !== null);
-        if (!notas.length && !subpastas.length) return null;
-        return { pasta: no.pasta, subpastas, notas };
-    };
-
-    return {
-        raizPastas: arvore.raizPastas.map(filtrarNo).filter((s): s is NoArvore => s !== null),
-        raizNotas: arvore.raizNotas.filter(temTag),
-    };
+    const lista = [...porChave.values()];
+    for (const t of lista) t.notas.sort((a, b) => a.title.localeCompare(b.title, 'pt'));
+    lista.sort((a, b) => b.notas.length - a.notas.length || a.tag.localeCompare(b.tag, 'pt'));
+    return lista;
 }
