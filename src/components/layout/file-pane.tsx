@@ -26,6 +26,7 @@ import {
 } from '@/modules/workspace/workspace.actions';
 import type { ConteudoFicheiro } from '@/modules/workspace/workspace.files';
 import { DiffView } from '@/modules/knowledge/diff-view';
+import { rotuloAutor } from '@/modules/knowledge/versao-autor';
 import { diffLines } from '@/modules/knowledge/knowledge.diff';
 import type { Versao } from '@/modules/knowledge/knowledge.schema';
 import type { PropriedadesNota } from '@/modules/knowledge/knowledge.props';
@@ -418,7 +419,12 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setVista(vista === 'history' ? 'conteudo' : 'history')}
+                            onClick={() => {
+                                // Reset: sem isto, reabrir o histórico depois de um
+                                // guardar mantinha um baseId de uma lista antiga.
+                                setBaseId(null);
+                                setVista(vista === 'history' ? 'conteudo' : 'history');
+                            }}
                             title="Histórico"
                             aria-label="Histórico"
                             className={cn(
@@ -522,6 +528,26 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                         {historyEstado.tipo === 'ok' && historyEstado.versoes.length >= 2 && (
                             <div className="space-y-4">
                                 <div className="space-y-1">
+                                    {/* Quem fez a versão ATUAL — sem isto, o autor da base de
+                                        comparação lia-se como autoria do edit (#23). */}
+                                    <p className="text-xs text-muted-foreground">
+                                        Versão atual:{' '}
+                                        <span className="font-mono">
+                                            {new Date(
+                                                historyEstado.versoes[0].createdAt,
+                                            ).toLocaleString('pt-PT', {
+                                                dateStyle: 'short',
+                                                timeStyle: 'short',
+                                            })}
+                                        </span>{' '}
+                                        ·{' '}
+                                        <span className="text-foreground">
+                                            {rotuloAutor(
+                                                historyEstado.versoes[0].author,
+                                                historyEstado.versoes[0].autorNome,
+                                            )}
+                                        </span>
+                                    </p>
                                     <p className="text-xs text-muted-foreground">
                                         Comparar a versão atual com:
                                     </p>
@@ -549,7 +575,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                                                         )}
                                                     </span>
                                                     <span className="ml-2 text-muted-foreground">
-                                                        {v.author}
+                                                        {rotuloAutor(v.author, v.autorNome)}
                                                     </span>
                                                 </SelectItem>
                                             ))}

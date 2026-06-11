@@ -153,6 +153,8 @@ A resposta não espera pela destilação (evita dobrar a latência).
 upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikilinks) → devolve diff
 ```
 
+**Proveniência por pessoa (#23):** cada `file_version` leva `author` (`agent`|`user`) **e** `author_id` (DEFAULT `auth.uid()` — carimba quem escreveu sem mudar nenhum RPC). O histórico mostra «Versão atual: data · autor» e rótulos humanos: `agent` → "agente"; `user` → display name/email de `author_id` (com grupos, vê-se QUEM da equipa editou; nomes de outros membros dependem da RLS de `profiles`, slice de grupos).
+
 **Propriedades de notas (frontmatter jsonb + coluna `visibility`):**
 
 - `tags` e `summary` vivem no `frontmatter` (lista, sem `#`); `created` é a row; `visibility` é coluna (RLS). UI: bloco à Obsidian no file-pane; filtro por tag no explorer.
