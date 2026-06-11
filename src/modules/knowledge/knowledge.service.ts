@@ -535,7 +535,13 @@ async function reapontarBacklinksRenameCom(
     oldTargetPath?: string | null,
 ): Promise<void> {
     const ids = [...new Set((referencingIds ?? []).map(String).filter(Boolean))];
-    let query = db.from('knowledge').select('id, title, content_md').eq('owner_id', ownerId);
+    // Arquivadas ficam de fora (#28): a escrita recusa-as e os links delas são
+    // dormentes — o restore resolve edges pendentes por slug.
+    let query = db
+        .from('knowledge')
+        .select('id, title, content_md')
+        .eq('owner_id', ownerId)
+        .eq('archived', false);
 
     if (ids.length) query = query.in('id', ids);
 

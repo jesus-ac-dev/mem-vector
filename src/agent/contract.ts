@@ -44,6 +44,9 @@ export const AGENT_CONTRACT = [
         'desta escrita — não o que mudou neste turno.',
     '- Escreve factos autocontidos: resolve pronomes em nomes usando a conversa recente.',
     '- Podes ligar notas com [[wikilinks]] no corpo (e os slugs no campo links).',
+    '- Se uma escrita falhar com "no arquivo", o nome pertence a uma nota arquivada: NÃO insistas ' +
+        'nem escrevas por cima — cria a nota com um título ligeiramente diferente e menciona na ' +
+        'resposta final que existe uma arquivada homónima.',
     '',
     'No fim responde com UMA linha sobre o que fizeste (ex.: "Continuei a nota Carlos e Sofia e ' +
         'registei o daily." ou "Trivial, nada a registar."). Sem JSON, sem relatório.',
