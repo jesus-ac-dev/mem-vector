@@ -5,6 +5,7 @@ import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 import { listarDailies } from '@/modules/daily/daily.service';
 import { listarPastas } from '@/modules/folders/folders.service';
 import { construirArvore } from '@/modules/folders/folders.tree';
+import { garantirKernelCom } from '@/agent/kernel';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
 // Header em cima + WorkspaceShell (client) com as 4 zonas Obsidian:
@@ -25,6 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             .single();
         displayName = data?.display_name ?? user.email ?? '';
     }
+
+    // Seed do Kernel (#36): a pasta e as notas iniciais nascem sozinhas no
+    // primeiro carregamento (idempotente, 1 query quando já existe; arquivar a
+    // pasta é opt-out respeitado). Antes do listar, para aparecer já na árvore.
+    if (user) await garantirKernelCom(supabase, user.id);
 
     const [pastas, notas, dailies] = await Promise.all([
         listarPastas(),

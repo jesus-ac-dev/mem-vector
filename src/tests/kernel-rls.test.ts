@@ -92,3 +92,51 @@ describe('lerKernelCom (integração RLS)', () => {
         expect(kernel[0].contentMd).toContain('Trata o Carlos por tu.');
     });
 });
+
+describe('garantirKernelCom (seed #36, integração RLS)', () => {
+    it('cria pasta + notas seed uma vez; segunda chamada é no-op; arquivada é opt-out', async () => {
+        const { garantirKernelCom, lerKernelCom, KERNEL_SEED } = await import('@/agent/kernel');
+        const admin = getSupabaseAdmin();
+        const bob = await userClient('bob-kernel-seed@test.local', 'pw-bob-123');
+        const bobId = (await bob.auth.getUser()).data.user!.id;
+
+        // limpar runs anteriores: notas + pastas kernel do bob
+        const { data: pastas } = await admin
+            .from('folders')
+            .select('id')
+            .eq('owner_id', bobId)
+            .ilike('name', 'kernel');
+        for (const p of pastas ?? []) {
+            const { data: notas } = await admin
+                .from('knowledge')
+                .select('id')
+                .eq('folder_id', p.id);
+            for (const n of notas ?? []) {
+                await admin.from('file_versions').delete().eq('entity_id', n.id);
+                await admin.from('chunks').delete().eq('metadata->>entity_id', n.id);
+                await admin.from('edges').delete().eq('from_id', n.id);
+                await admin.from('knowledge').delete().eq('id', n.id);
+            }
+            await admin.from('folders').delete().eq('id', p.id);
+        }
+
+        // 1ª chamada: cria pasta + seeds
+        expect(await garantirKernelCom(bob)).toBe(true);
+        const kernel = await lerKernelCom(bob);
+        expect(kernel.map((n) => n.title).sort()).toEqual(KERNEL_SEED.map((s) => s.title).sort());
+
+        // 2ª chamada: idempotente
+        expect(await garantirKernelCom(bob)).toBe(false);
+
+        // arquivar a pasta = opt-out: não recria
+        const { data: pasta } = await bob
+            .from('folders')
+            .select('id')
+            .eq('owner_id', bobId)
+            .ilike('name', 'kernel')
+            .single();
+        await bob.from('folders').update({ archived: true }).eq('id', pasta!.id);
+        expect(await garantirKernelCom(bob)).toBe(false);
+        expect(await lerKernelCom(bob)).toEqual([]);
+    });
+});

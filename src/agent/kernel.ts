@@ -82,3 +82,84 @@ export async function blocoKernelCom(db: SupabaseClient): Promise<string> {
         return '';
     }
 }
+
+// Notas iniciais do Kernel (#36): nascem com a pasta para o utilizador ver o
+// que o Kernel é sem ler documentação — o smoke do Carlos chumbou na
+// descoberta. Conteúdo curto: explica o propósito e convida a editar.
+export const KERNEL_SEED: { title: string; contentMd: string }[] = [
+    {
+        title: 'Sobre mim',
+        contentMd:
+            '# Sobre mim\n\nQuem és, o que fazes, o contexto que o agente deve saber sempre. ' +
+            'Esta nota é lida em todos os arranques do agente — escreve aqui o que nunca ' +
+            'queres repetir no chat.\n',
+    },
+    {
+        title: 'Prioridades',
+        contentMd:
+            '# Prioridades\n\nO que importa agora (projetos, prazos, foco). O agente lê isto ' +
+            'antes de responder e de registar — mantém curto e atual.\n',
+    },
+    {
+        title: 'Regras do agente',
+        contentMd:
+            '# Regras do agente\n\nComo queres que o agente se comporte: tom, língua, o que ' +
+            'registar ou evitar. Ex.: "Trata-me por tu." Estas regras mandam em todas as ' +
+            'respostas e escritas.\n',
+    },
+    {
+        title: 'Decisões',
+        contentMd:
+            '# Decisões\n\nRegisto das decisões importantes (a memória de alto nível): o quê, ' +
+            'porquê, quando. Acrescenta aqui — ou pede ao agente para registar — e elas passam ' +
+            'a moldar o comportamento futuro.\n',
+    },
+];
+
+// Seed idempotente (#36): cria a pasta Kernel + notas iniciais quando o
+// workspace ainda não tem NENHUMA pasta Kernel na raiz — em qualquer estado:
+// arquivada conta como opt-out do utilizador e não se recria. Não-fatal.
+export async function garantirKernelCom(db: SupabaseClient, userId?: string): Promise<boolean> {
+    try {
+        // O layout já tem o user — aceitar o id poupa um auth.getUser por
+        // request no hot path (audit #36).
+        let uid = userId;
+        if (!uid) {
+            const {
+                data: { user },
+            } = await db.auth.getUser();
+            if (!user) return false;
+            uid = user.id;
+        }
+
+        const { data: pastas, error } = await db
+            .from('folders')
+            .select('id')
+            .eq('owner_id', uid)
+            .is('parent_id', null)
+            .ilike('name', 'kernel');
+        if (error) throw new Error(`procurar pasta Kernel: ${error.message}`);
+        if (pastas?.length) return false;
+
+        const { criarPastaCom } = await import('@/modules/folders/folders.service');
+        const { escreverNotaEmPastaCom } = await import('@/modules/knowledge/knowledge.service');
+        const pasta = await criarPastaCom(db, 'Kernel');
+        for (const seed of KERNEL_SEED) {
+            await escreverNotaEmPastaCom(
+                db,
+                {
+                    title: seed.title,
+                    content_md: seed.contentMd,
+                    links: [],
+                    reason: 'seed do Kernel (#36)',
+                },
+                pasta.id,
+                'agent',
+            );
+        }
+        return true;
+    } catch (e) {
+        console.error('seed do Kernel falhou (segue sem):', e);
+        return false;
+    }
+}
