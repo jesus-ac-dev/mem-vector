@@ -39,7 +39,8 @@
         "folders-rename": "tsx scripts/folders-rename.ts",
         "arquivo": "tsx scripts/arquivo.ts",
         "cores": "tsx scripts/cores.ts",
-        "destilar-agentic": "tsx scripts/destilar-agentic.ts"
+        "destilar-agentic": "tsx scripts/destilar-agentic.ts",
+        "evals": "tsx scripts/evals-placement.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
