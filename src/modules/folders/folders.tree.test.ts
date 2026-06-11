@@ -97,3 +97,29 @@ describe('tagsComNotasDaArvore', () => {
         expect(tagsComNotasDaArvore(arv)).toEqual([]);
     });
 });
+
+describe('separarKernel', () => {
+    it('extrai a pasta kernel (case-insensitive) e devolve o resto intacto', async () => {
+        const { separarKernel } = await import('./folders.tree');
+        const arv = construirArvore(
+            [pasta({ id: 'k', name: 'Kernel' }), pasta({ id: 'a', name: 'A' })],
+            [
+                nota({ id: 'n1', title: 'Sobre mim', folderId: 'k' }),
+                nota({ id: 'n2', title: 'Solta' }),
+            ],
+        );
+        const { kernel, resto } = separarKernel(arv);
+        expect(kernel?.pasta.id).toBe('k');
+        expect(kernel?.notas.map((n) => n.id)).toEqual(['n1']);
+        expect(resto.raizPastas.map((p) => p.pasta.id)).toEqual(['a']);
+        expect(resto.raizNotas.map((n) => n.id)).toEqual(['n2']);
+    });
+
+    it('sem pasta kernel devolve kernel null e a árvore original', async () => {
+        const { separarKernel } = await import('./folders.tree');
+        const arv = construirArvore([pasta({ id: 'a', name: 'A' })], [nota({ id: 'n1' })]);
+        const { kernel, resto } = separarKernel(arv);
+        expect(kernel).toBeNull();
+        expect(resto).toEqual(arv);
+    });
+});

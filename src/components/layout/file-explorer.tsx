@@ -14,7 +14,12 @@ import {
     renomearNotaPorH1Action,
     renomearPastaAction,
 } from '@/modules/workspace/workspace.actions';
-import { type Arvore, type NoArvore, type NotaItem } from '@/modules/folders/folders.tree';
+import {
+    separarKernel,
+    type Arvore,
+    type NoArvore,
+    type NotaItem,
+} from '@/modules/folders/folders.tree';
 
 export interface DailyItem {
     id: string;
@@ -451,15 +456,35 @@ export function FileExplorer({
         onFolderManualToggle,
     };
 
-    // As tags saíram daqui para a tab "Tags" do pane direito (#32) — o overlay
-    // de chips por cima do explorer era o sítio errado.
-    const arvoreVisivel = arvore;
+    // Kernel é secção root (#39), par de Knowledge/Daily Notes — a pasta sai
+    // da árvore do Knowledge e ganha casa própria no topo (é a personalidade
+    // do agente). Arquivada = não aparece (opt-out, paridade com o motor #34).
+    const { kernel, resto: arvoreVisivel } = separarKernel(arvore);
 
     const vazioKnowledge =
         arvoreVisivel.raizPastas.length === 0 && arvoreVisivel.raizNotas.length === 0;
     return (
         <nav className="flex h-full flex-col overflow-y-auto">
             <div className="flex-1 overflow-y-auto py-1">
+                {kernel && (
+                    <Seccao
+                        label="Kernel"
+                        onDropRaiz={(slug, id) => ops.mover(slug, kernel.pasta.id, id)}
+                        // Drop de pasta também aterra dentro do Kernel — sem isto o
+                        // highlight aceitava e o drop morria em silêncio (audit #39).
+                        onDropPastaRaiz={(id) => ops.moverPasta(id, kernel.pasta.id)}
+                    >
+                        {kernel.subpastas.map((no) => (
+                            <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
+                        ))}
+                        {kernel.notas.map((nota) => (
+                            <NotaLink key={nota.id} nota={nota} depth={1} ops={ops} />
+                        ))}
+                        {kernel.subpastas.length === 0 && kernel.notas.length === 0 && (
+                            <p className="px-6 py-1.5 text-xs text-muted-foreground">Sem itens.</p>
+                        )}
+                    </Seccao>
+                )}
                 <Seccao
                     label="Knowledge"
                     onDropRaiz={(slug, id) => ops.mover(slug, null, id)}

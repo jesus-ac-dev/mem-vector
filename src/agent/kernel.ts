@@ -83,36 +83,72 @@ export async function blocoKernelCom(db: SupabaseClient): Promise<string> {
     }
 }
 
-// Notas iniciais do Kernel (#36): nascem com a pasta para o utilizador ver o
-// que o Kernel é sem ler documentação — o smoke do Carlos chumbou na
-// descoberta. Conteúdo curto: explica o propósito e convida a editar.
+// Notas iniciais do Kernel (#36, personalizadas no #39): nascem com a pasta —
+// e como vêm aí resets de BD, o conteúdo real do Carlos vive AQUI no seeder
+// (pedido dele, 2026-06-11). O onboarding de novos utilizadores preencherá
+// isto por entrevista (#40); até lá, esta é a instância do Carlos.
 export const KERNEL_SEED: { title: string; contentMd: string }[] = [
     {
         title: 'Sobre mim',
         contentMd:
-            '# Sobre mim\n\nQuem és, o que fazes, o contexto que o agente deve saber sempre. ' +
-            'Esta nota é lida em todos os arranques do agente — escreve aqui o que nunca ' +
-            'queres repetir no chat.\n',
+            '# Sobre mim\n\n' +
+            'Sou o Carlos Jesus, 42 anos, CTO e co-fundador da Além do Código ' +
+            '(alemdocodigo.pt), uma software house AI-first em Faro — somos 3, ' +
+            'co-localizados. Faço a produção e a manutenção dos produtos (as vendas não ' +
+            'são comigo). GitHub: jesus-ac-dev.\n\n' +
+            'Construo o MythosEngine/mem-vector em horas extra para provar a tese da ' +
+            'camada pessoal de produtividade: o modelo é commodity; o contexto, as ' +
+            'especializações e os workflows é que diferenciam.\n\nTrata-me por tu.\n',
     },
     {
         title: 'Prioridades',
         contentMd:
-            '# Prioridades\n\nO que importa agora (projetos, prazos, foco). O agente lê isto ' +
-            'antes de responder e de registar — mantém curto e atual.\n',
+            '# Prioridades\n\n' +
+            'Trimestre Jun-Ago 2026:\n\n' +
+            '1. **CRMCredito vendável** — o produto-chave (CRM para mediação de crédito + ' +
+            'imobiliárias, em migração Bubble → Next.js). Foco imediato.\n' +
+            '2. **mem-vector** — o núcleo do MythosEngine: chat + agente-autor + RAG + ' +
+            'tasks/daily. Norte: coordenador de agentes com kanban próprio.\n' +
+            '3. **Camada pessoal de produtividade** — contexto + especialização + ' +
+            'workflows como diferenciador.\n\n' +
+            'Foco deste workspace, por agora: desenvolvimento de software. Vendas e ' +
+            'financeiro vêm depois.\n',
     },
     {
         title: 'Regras do agente',
         contentMd:
-            '# Regras do agente\n\nComo queres que o agente se comporte: tom, língua, o que ' +
-            'registar ou evitar. Ex.: "Trata-me por tu." Estas regras mandam em todas as ' +
-            'respostas e escritas.\n',
+            '# Regras do agente\n\n' +
+            '- Português de Portugal; trata-me por tu.\n' +
+            '- Direto, conciso e claro — zero fluff; lidera com o que precisa de ação.\n' +
+            '- Sê crítico construtivo, não cheerleader: aponta os weak spots e puxa-me a ' +
+            'pensar; não inventes consenso.\n' +
+            '- Proativo a registar factos duráveis — não peças licença; na dúvida, regista ' +
+            '(as versões são a rede).\n' +
+            '- UPDATE > CREATE: continua a nota dona do assunto em vez de criar duplicados.\n' +
+            '- As notas são páginas vivas de wiki: prosa integrada, sem carimbos de ' +
+            'proveniência no corpo (o versionamento trata disso).\n' +
+            '- Daily só com o que aconteceu de facto — sem encher.\n',
     },
     {
         title: 'Decisões',
         contentMd:
-            '# Decisões\n\nRegisto das decisões importantes (a memória de alto nível): o quê, ' +
-            'porquê, quando. Acrescenta aqui — ou pede ao agente para registar — e elas passam ' +
-            'a moldar o comportamento futuro.\n',
+            '# Decisões\n\n' +
+            'Registo de alto nível (importado do vault do MythosEngine; acrescenta aqui — ' +
+            'ou pede ao agente para registar):\n\n' +
+            '- **2026-06-10 — Declarativa sem marcas de pergunta = facto a registar.** Com ' +
+            'hedge ("acho que"), regista na mesma e sinaliza a assunção. Perder factos ' +
+            'custa mais do que registar a mais.\n' +
+            '- **2026-06-10 — Update > create.** O facto novo continua a nota dona do ' +
+            'assunto; notas sobre pessoas têm como título os nomes delas.\n' +
+            '- **2026-06-10 — Estilo de escrita.** A nota é uma página viva, para leitura ' +
+            'humana futura; a proveniência vive no versionamento, não no corpo.\n' +
+            '- **2026-06-11 — Arquivo ≠ esquecimento.** Arquivar tira a nota do espaço de ' +
+            'trabalho, mas a memória (daily/conversas) persiste e pode rematerializar o ' +
+            'assunto.\n' +
+            '- **2026-06-11 — Arquivadas fora do pipeline de escrita.** Nenhuma escrita ' +
+            'aterra numa nota arquivada; repor devolve-lhe a escrita.\n' +
+            '- **2026-06-11 — O Kernel manda.** Esta pasta é lida em todos os arranques ' +
+            'do agente.\n',
     },
 ];
 
