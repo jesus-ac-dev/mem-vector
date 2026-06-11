@@ -38,10 +38,12 @@
         "folders-ops": "tsx scripts/folders-ops.ts",
         "folders-rename": "tsx scripts/folders-rename.ts",
         "arquivo": "tsx scripts/arquivo.ts",
-        "cores": "tsx scripts/cores.ts"
+        "cores": "tsx scripts/cores.ts",
+        "destilar-agentic": "tsx scripts/destilar-agentic.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.2.2",
+        "@modelcontextprotocol/sdk": "^1.29.0",
         "@radix-ui/react-avatar": "^1.1.11",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
         "@radix-ui/react-select": "^2.2.6",

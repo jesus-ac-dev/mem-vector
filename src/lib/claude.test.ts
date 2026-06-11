@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildClaudeAgenticArgs,
     buildClaudeArgs,
+    claudeAgenticTimeoutMs,
     claudeConcurrency,
     claudeTimeoutMs,
     createAsyncSemaphore,
@@ -39,6 +41,41 @@ describe('buildClaudeArgs', () => {
         expect(args).toContain('--input-format');
         expect(args).toContain('text');
         expect(args).not.toContain('prompt enorme');
+    });
+});
+
+describe('buildClaudeAgenticArgs', () => {
+    const cfg = {
+        mcpConfig: '{"mcpServers":{}}',
+        allowedTools: ['mcp__memvector__criar_nota', 'mcp__memvector__ler_nota'],
+        systemPrompt: 'contrato',
+    };
+
+    it('liga as tools MCP em vez de proibir tudo, mantendo built-ins proibidas', () => {
+        const args = buildClaudeAgenticArgs(cfg);
+
+        expect(args).toContain('--mcp-config');
+        expect(args).toContain('--strict-mcp-config');
+        expect(args).toContain('mcp__memvector__criar_nota');
+        expect(args).toContain('mcp__memvector__ler_nota');
+        // Built-ins continuam fora: o "filesystem" do produto é a BD.
+        expect(args).toContain('--disallowedTools');
+        expect(args).toContain('Bash');
+        expect(args).toContain('Write');
+    });
+
+    it('limita o loop com --max-turns e mantém o prompt fora da argv', () => {
+        const args = buildClaudeAgenticArgs(cfg);
+        expect(args[args.indexOf('--max-turns') + 1]).toBe('15');
+        expect(buildClaudeAgenticArgs({ ...cfg, maxTurns: 7 })).toContain('7');
+        expect(args).not.toContain('prompt enorme');
+    });
+});
+
+describe('claudeAgenticTimeoutMs', () => {
+    it('usa valor do ambiente e cai no default agentic (5 min)', () => {
+        expect(claudeAgenticTimeoutMs('60000')).toBe(60_000);
+        expect(claudeAgenticTimeoutMs('nope')).toBe(300_000);
     });
 });
 
