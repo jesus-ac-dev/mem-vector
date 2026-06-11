@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { slugify } from './knowledge.links';
 import type { EscritaKnowledge, NotaCandidata } from './knowledge.schema';
-import { atualizarNotaPorIdCom, escreverNotaCom, type ResultadoEscrita } from './knowledge.service';
+import {
+    atualizarNotaPorIdCom,
+    escreverNotaCom,
+    summaryDoAgente,
+    type ResultadoEscrita,
+} from './knowledge.service';
 
 // O "CONTINUA a candidata" do update-bias tem de aterrar NA candidata: o upsert
 // por slug (write_knowledge_entry) escreve na raiz, e uma candidata dentro de
@@ -26,6 +31,16 @@ export async function escreverOuContinuarNotaCom(
     author: 'agent' | 'user' = 'agent',
 ): Promise<ResultadoEscrita> {
     const candidata = notaCandidataCorrespondente(input.title, candidatos);
-    if (candidata) return atualizarNotaPorIdCom(db, candidata.id, input.content_md, author);
+    if (candidata) {
+        // CONTINUAR refresca o summary na mesma escrita (#22); o guard de
+        // autoria (summary do utilizador) vive no RPC.
+        return atualizarNotaPorIdCom(
+            db,
+            candidata.id,
+            input.content_md,
+            author,
+            summaryDoAgente(input.summary),
+        );
+    }
     return escreverNotaCom(db, input, author);
 }

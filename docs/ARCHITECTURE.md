@@ -153,6 +153,12 @@ A resposta não espera pela destilação (evita dobrar a latência).
 upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikilinks) → devolve diff
 ```
 
+**Propriedades de notas (frontmatter jsonb + coluna `visibility`):**
+
+- `tags` e `summary` vivem no `frontmatter` (lista, sem `#`); `created` é a row; `visibility` é coluna (RLS). UI: bloco à Obsidian no file-pane; filtro por tag no explorer.
+- As escritas de conteúdo fazem **merge** do frontmatter (nunca substituem) — propriedades do utilizador sobrevivem às escritas do agente.
+- **Summary auto (#22):** o envelope da destilação traz `summary` (1 frase, a nota INTEIRA como ficou — re-resume ao continuar), sem chamada CLI extra. Autoria em `summary_author`: `agent` refresca a cada escrita; `user` (editado à mão nas propriedades) trava o agente — guard `respeitar_summary_do_user` nos 3 RPCs de escrita; limpar o campo devolve-o ao agente.
+
 **RAG:** RAG-preferred + LLM-fallback; o threshold `0.78` é rede de segurança (o e5-small comprime os scores), não classificador.
 
 ```mermaid

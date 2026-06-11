@@ -3,16 +3,17 @@ import { destilarResumirTurno } from '../src/modules/chat/chat.turno';
 process.loadEnvFile('.env.local');
 
 // Prova headless do pós-turno (1 chamada CLI) + proatividade do agente-autor:
-//   eixo 1 — saudação trivial: resumo presente, mas NÃO escreve nota;
+//   eixo 1 — saudação trivial: daily vazio (#19, "o daily não regista o nada") e SEM nota;
 //   eixo 2 — pedido explícito de registar: escreve nota;
-//   eixo 3 — facto durável SEM pedido explícito: escreve à mesma (proativo).
+//   eixo 3 — facto durável SEM pedido explícito: escreve à mesma (proativo);
+//   eixo 4 — a nota traz summary da nota inteira (#22, sem chamada extra).
 // Confirma também que o CLI real devolve o JSON combinado {daily, nota} parseável.
 
 async function main(): Promise<void> {
     const trivial = await destilarResumirTurno('olá, tudo bem?', 'Tudo ótimo, em que posso ajudar hoje?');
     console.log('trivial → resumo:', JSON.stringify(trivial.resumoMd), 'nota:', trivial.nota?.title ?? null);
-    const eixo1 = trivial.resumoMd.startsWith('- ') && trivial.nota === null;
-    console.log(`${eixo1 ? '✅' : '❌'} eixo 1 — saudação: resumo sim, nota não`);
+    const eixo1 = trivial.resumoMd === '' && trivial.nota === null;
+    console.log(`${eixo1 ? '✅' : '❌'} eixo 1 — saudação: daily vazio, nota não`);
 
     const q2 = 'Regista isto: decidimos usar busca híbrida pgvector+FTS por RRF no RAG do mem-vector.';
     const a2 = 'Registado. A busca híbrida funde a densa (pgvector) com FTS por Reciprocal Rank Fusion.';
@@ -29,7 +30,12 @@ async function main(): Promise<void> {
     const eixo3 = !!proativo.nota && proativo.nota.title.length > 0;
     console.log(`${eixo3 ? '✅' : '❌'} eixo 3 — facto durável SEM pedido explícito → escreve (proativo)`);
 
-    const ok = eixo1 && eixo2 && eixo3;
+    const summary = proativo.nota?.summary?.trim() ?? '';
+    console.log('summary →', JSON.stringify(summary));
+    const eixo4 = summary.length > 0 && summary.length <= 500;
+    console.log(`${eixo4 ? '✅' : '❌'} eixo 4 — nota traz summary (#22)`);
+
+    const ok = eixo1 && eixo2 && eixo3 && eixo4;
     console.log(ok ? 'PROVA VERDE' : 'PROVA VERMELHA');
     process.exit(ok ? 0 : 1);
 }

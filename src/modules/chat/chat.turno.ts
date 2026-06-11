@@ -80,7 +80,10 @@ export function buildTurnoPrompt(
         'houver candidata) e as versões são a rede; escrever no sítio certo consolida, não espalha. ' +
         'Só "nota": null para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
         'facto novo. Quando escreves, "nota": ' +
-        '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável"}.\n' +
+        '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase"}.\n' +
+        'REGRA PARA summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA ' +
+        'como fica depois desta escrita — não o que mudou neste turno. Ao continuar uma nota, ' +
+        're-resume o todo (conteúdo antigo + facto novo).\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
         '"Decisão:", e sem descrever o contexto — só o tópico. Para factos sobre pessoas, o título ' +
