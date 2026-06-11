@@ -87,3 +87,18 @@ export function tagsComNotasDaArvore(arvore: Arvore): TagComNotas[] {
     lista.sort((a, b) => b.notas.length - a.notas.length || a.tag.localeCompare(b.tag, 'pt'));
     return lista;
 }
+
+// Kernel como secção root do explorer (#39): separa a pasta kernel da árvore
+// para a UI a apresentar como par de Knowledge/Daily Notes. Só apresentação —
+// os dados continuam a ser a pasta kernel (RAG, links, versões intactos).
+export function separarKernel(arvore: Arvore): { kernel: NoArvore | null; resto: Arvore } {
+    const idx = arvore.raizPastas.findIndex((no) => no.pasta.name.toLowerCase() === 'kernel');
+    if (idx === -1) return { kernel: null, resto: arvore };
+    return {
+        kernel: arvore.raizPastas[idx],
+        resto: {
+            raizPastas: arvore.raizPastas.filter((_, i) => i !== idx),
+            raizNotas: arvore.raizNotas,
+        },
+    };
+}
