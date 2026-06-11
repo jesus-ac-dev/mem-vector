@@ -99,10 +99,13 @@ async function reescreverWikilinksDePastaRenomeadaCom(
 ): Promise<void> {
     if (oldPath === newPath) return;
 
+    // Arquivadas ficam de fora (#28): a escrita recusa-as e os links delas são
+    // dormentes — o restore resolve edges pendentes por slug.
     const { data, error } = await db
         .from('knowledge')
         .select('id, content_md')
-        .eq('owner_id', ownerId);
+        .eq('owner_id', ownerId)
+        .eq('archived', false);
     if (error) throw new Error(`ler notas para rename de pasta: ${error.message}`);
 
     for (const nota of data ?? []) {

@@ -153,6 +153,13 @@ A resposta não espera pela destilação (evita dobrar a latência).
 upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikilinks) → devolve diff
 ```
 
+**Arquivo = fora do pipeline de escrita (#28):** os 3 RPCs de escrita de knowledge
+recusam alvo `archived` ("slug no arquivo") — o upsert por slug não escreve por
+cima de nota arquivada (era assim que o agente "atualizava" arquivadas e que uma
+criação manual homónima esmagava o corpo); repor a nota devolve-lhe a escrita.
+O projector já saltava arquivadas (`skipped: 'archived'`) e o `arquivar` apaga
+os chunks — este guard fecha a porta que faltava, a do upsert.
+
 **Proveniência por pessoa (#23):** cada `file_version` leva `author` (`agent`|`user`) **e** `author_id` (DEFAULT `auth.uid()` — carimba quem escreveu sem mudar nenhum RPC). O histórico mostra «Versão atual: data · autor» e rótulos humanos: `agent` → "agente"; `user` → display name/email de `author_id` (com grupos, vê-se QUEM da equipa editou; nomes de outros membros dependem da RLS de `profiles`, slice de grupos).
 
 **Propriedades de notas (frontmatter jsonb + coluna `visibility`):**
