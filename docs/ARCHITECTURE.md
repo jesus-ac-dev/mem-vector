@@ -153,6 +153,18 @@ A resposta não espera pela destilação (evita dobrar a latência).
 upsert (tipada) → file_version → re-gera chunks (pesquisa) → edges (wikilinks) → devolve diff
 ```
 
+**Tarefas no kanban (#21):** a tabela `tarefas` anda pelo ciclo canónico
+(`backlog → analise → desenvolvimento → testes → documentacao → terminado`),
+com prioridade, tag de projeto livre, descrição e **dependência que bloqueia a
+conclusão** (RPC `concluir_tarefa` valida; a conclusão — e só ela — escreve no
+daily). O agente cria/conclui tarefas no pós-turno: o envelope one-shot ganhou
+`"tarefas"` + `"concluir"` (com a lista de abertas no prompt para não duplicar
+nem inventar ids); o caminho agentic ganhou as tools `listar_tarefas_abertas`/
+`criar_tarefa`/`concluir_tarefa`. Regra: na dúvida cria (apagar é barato e
+apaga MESMO — tarefas não têm arquivo); factos vão para notas, nunca para
+tarefas. UI: painel "Tarefas" na sidebar esquerda (+ no header, abertas,
+footer com concluídas); o kanban visual é a fatia seguinte.
+
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,
 prioridades e regras do utilizador, injetadas em todos os arranques do agente

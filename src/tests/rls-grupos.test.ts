@@ -64,10 +64,14 @@ describe('RLS protected colaborativo (grupos)', () => {
     });
 
     it('membro do grupo EDITA a tarefa protected', async () => {
-        const upd = await bob.from('tarefas').update({ feita: true }).eq('id', tarefaId);
+        // #21: `feita` deu lugar a `estado` (kanban) — a edição colaborativa testa-se igual.
+        const upd = await bob
+            .from('tarefas')
+            .update({ estado: 'desenvolvimento' })
+            .eq('id', tarefaId);
         expect(upd.error).toBeNull();
-        const { data } = await bob.from('tarefas').select('feita').eq('id', tarefaId).single();
-        expect(data?.feita).toBe(true);
+        const { data } = await bob.from('tarefas').select('estado').eq('id', tarefaId).single();
+        expect(data?.estado).toBe('desenvolvimento');
     });
 
     it('membro do grupo NÃO apaga (só o dono)', async () => {

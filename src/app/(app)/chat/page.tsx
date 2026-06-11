@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { ask, processarDestilacaoJob, carregarConversaAction } from '@/modules/chat/chat.actions';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
-import type { DailyEscrito, NotaEscrita } from '@/modules/chat/chat.service';
+import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import { Button } from '@/components/ui/button';
 import { isUnexpectedServerActionResponse, logClientError } from '@/lib/client-error-log';
@@ -24,6 +24,7 @@ interface Message {
     sources?: Source[];
     escrita?: NotaEscrita | null;
     daily?: DailyEscrito | null;
+    tarefas?: TarefasDoTurno | null;
     distillationJobId?: string;
     destilando?: boolean;
     destilacaoErro?: boolean;
@@ -164,18 +165,18 @@ function ChatContent() {
 
             // Step 2: process the already-persisted distillation job in the background.
             processarDestilacaoJob(res.distillationJobId)
-                .then(({ nota, daily }) => {
+                .then(({ nota, daily, tarefas }) => {
                     setMessages((prev) =>
                         prev.map((m) =>
                             m.id === asstMsgId
-                                ? { ...m, destilando: false, escrita: nota, daily }
+                                ? { ...m, destilando: false, escrita: nota, daily, tarefas }
                                 : m,
                         ),
                     );
                     // O agente escreveu estado: o ambiente reage ao vivo — explorer,
                     // grafo, sidebar e panes abertos ouvem o workspaceVersion; o
                     // router.refresh cobre os server components (calendário, /daily).
-                    if (nota || daily) {
+                    if (nota || daily || tarefas) {
                         notificarWorkspaceMudou();
                         router.refresh();
                     }
@@ -267,6 +268,18 @@ function ChatContent() {
                                     <DailyEscritoChip daily={m.daily} />
                                 </div>
                             )}
+                            {m.role === 'assistant' &&
+                                m.tarefas &&
+                                [
+                                    ...m.tarefas.criadas.map((t) => ({ t, acao: 'criada' })),
+                                    ...m.tarefas.concluidas.map((t) => ({ t, acao: 'concluída' })),
+                                ].map(({ t, acao }) => (
+                                    <div key={`${acao}-${t.id}`}>
+                                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-primary">
+                                            ☑️ Tarefa {acao}: {t.titulo}
+                                        </span>
+                                    </div>
+                                ))}
                         </div>
                     ))}
                     {pending && <p className="text-sm text-muted-foreground">a pensar...</p>}

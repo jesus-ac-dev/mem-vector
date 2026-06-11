@@ -4,13 +4,24 @@ import {
     type EscritaKnowledge,
     type NotaCandidata,
 } from '@/modules/knowledge/knowledge.schema';
+import { TarefaDestiladaSchema, type TarefaDestilada } from '@/modules/tarefas/tarefas.schema';
 import { parseDailyCapture } from '@/modules/daily/daily.capture';
 import type { Intencao } from './chat.intencao';
 import type { MensagemConversa } from './chat.prompt';
 
+// Referência leve das tarefas em aberto para o prompt (#21): o agente decide
+// criar/concluir com a lista à frente, sem inventar ids.
+export interface TarefaAbertaRef {
+    id: string;
+    titulo: string;
+    projeto: string | null;
+}
+
 export interface TurnoDestiladoRaw {
     resumoMd: string;
     nota: EscritaKnowledge | null;
+    tarefas: TarefaDestilada[];
+    concluirIds: string[];
 }
 
 // Secção de UPDATE-bias: oferece as notas existentes relacionadas para o agente
@@ -59,6 +70,17 @@ function blocoFactoDeclarado(intencao?: Intencao): string {
 // Prompt único que funde as duas tarefas de pós-resposta (resumo do daily +
 // decisão/escrita de nota knowledge) numa só chamada ao CLI, em vez de duas.
 // Com candidatos, enviesa para UPDATE (continuar a nota dona do assunto).
+// Bloco das tarefas em aberto (#21): o agente vê o que existe para não
+// duplicar e para poder concluir por id real.
+function blocoTarefasAbertas(tarefas: TarefaAbertaRef[]): string {
+    if (!tarefas.length) return '';
+    const lista = tarefas
+        .slice(0, 20)
+        .map((t) => `- id: ${t.id} | ${t.titulo}${t.projeto ? ` | #${t.projeto}` : ''}`)
+        .join('\n');
+    return `TAREFAS EM ABERTO (para não duplicar; concluir por id quando a conversa diz que está feito):\n${lista}\n\n`;
+}
+
 export function buildTurnoPrompt(
     question: string,
     answer: string,
@@ -66,13 +88,15 @@ export function buildTurnoPrompt(
     intencao?: Intencao,
     historico: MensagemConversa[] = [],
     kernel = '',
+    tarefasAbertas: TarefaAbertaRef[] = [],
 ): string {
     return (
         // Kernel do workspace (#34): as regras/identidade do utilizador também
         // moldam o que se regista e como se escreve.
         (kernel ? `${kernel}\n` : '') +
-        'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes DUAS coisas, ' +
-        'devolvidas num ÚNICO bloco ```json``` com a forma {"daily": [...], "nota": null | {...}}.\n\n' +
+        'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes QUATRO coisas, ' +
+        'devolvidas num ÚNICO bloco ```json``` com a forma ' +
+        '{"daily": [...], "nota": null | {...}, "tarefas": [...], "concluir": [...]}.\n\n' +
         '1) "daily": array de 0 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
         'neste turno — factos, decisões, alterações, bloqueios, próximos passos. Só o recap, não ' +
         'respondas ao utilizador. Escreve só o que aconteceu de facto, nunca mais do que foi dito ' +
@@ -98,10 +122,19 @@ export function buildTurnoPrompt(
         '"# <título>". NUNCA escrevas carimbos de proveniência no corpo — nada de "(declarado a ' +
         '<data>)", "o utilizador disse" ou datas de registo: a proveniência fica no versionamento, ' +
         'fora do texto. Ao continuar uma nota, INTEGRA o facto novo na prosa existente ' +
-        '(reescreve a frase certa se preciso), não acrescentes linhas-log no fim.\n\n' +
+        '(reescreve a frase certa se preciso), não acrescentes linhas-log no fim.\n' +
+        '3) "tarefas": array (pode ser vazio) de AÇÕES do utilizador — coisas a fazer, lembretes, ' +
+        'coisas a acompanhar (ex.: "ligar ao contabilista", "rever proposta"). Na dúvida entre ' +
+        'criar e não criar, CRIA — apagar é barato. Cada uma: {"titulo": "verbo + objeto, curto", ' +
+        '"projeto": "tag-curta" | null, "prioridade": "baixa" | "normal" | "alta"}. NÃO dupliques ' +
+        'tarefa já em aberto (lista abaixo). FACTOS e conhecimento vão para "nota", NUNCA para ' +
+        '"tarefas" — tarefa é o que o utilizador tem de FAZER.\n' +
+        '4) "concluir": array (pode ser vazio) com os IDS das tarefas em aberto que a conversa diz ' +
+        'estarem FEITAS (ex.: "já liguei ao contabilista" → o id dessa tarefa). Só ids da lista.\n\n' +
         blocoConversaTurno(historico) +
         blocoFactoDeclarado(intencao) +
         blocoCandidatos(candidatos) +
+        blocoTarefasAbertas(tarefasAbertas) +
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Responde só com o bloco ```json```.'
     );
@@ -136,7 +169,7 @@ function extrairObjeto(txt: string): Record<string, unknown> | null {
 // como bullets (o recap nunca se perde por causa de uma nota mal-formada).
 export function parseTurno(raw: string): TurnoDestiladoRaw {
     const rec = extrairObjeto(raw.trim());
-    if (!rec) return { resumoMd: parseDailyCapture(raw), nota: null };
+    if (!rec) return { resumoMd: parseDailyCapture(raw), nota: null, tarefas: [], concluirIds: [] };
 
     const dailyRaw = Array.isArray(rec.daily)
         ? rec.daily.join('\n')
@@ -145,6 +178,18 @@ export function parseTurno(raw: string): TurnoDestiladoRaw {
           : '';
     const notaParsed = EscritaKnowledgeSchema.safeParse(rec.nota);
 
+    // Tarefas (#21): cada entrada válida conta; uma malformada não custa as
+    // restantes (mesmo espírito tolerante do resto do parse).
+    const tarefas: TarefaDestilada[] = Array.isArray(rec.tarefas)
+        ? rec.tarefas.flatMap((t) => {
+              const p = TarefaDestiladaSchema.safeParse(t);
+              return p.success ? [p.data] : [];
+          })
+        : [];
+    const concluirIds: string[] = Array.isArray(rec.concluir)
+        ? rec.concluir.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+        : [];
+
     // "daily": [] é deliberado (turno trivial) — não passa pelo parseDailyCapture,
     // que tem fallback não-vazio e mataria o "não regista o nada".
     const dailyVazio = Array.isArray(rec.daily) && rec.daily.length === 0;
@@ -152,6 +197,8 @@ export function parseTurno(raw: string): TurnoDestiladoRaw {
     return {
         resumoMd: dailyVazio ? '' : parseDailyCapture(dailyRaw),
         nota: notaParsed.success ? notaParsed.data : null,
+        tarefas,
+        concluirIds,
     };
 }
 
@@ -164,9 +211,10 @@ export async function destilarResumirTurno(
     intencao?: Intencao,
     historico: MensagemConversa[] = [],
     kernel = '',
+    tarefasAbertas: TarefaAbertaRef[] = [],
 ): Promise<TurnoDestiladoRaw> {
     const { text } = await generate(
-        buildTurnoPrompt(question, answer, candidatos, intencao, historico, kernel),
+        buildTurnoPrompt(question, answer, candidatos, intencao, historico, kernel, tarefasAbertas),
     );
     return parseTurno(text);
 }

@@ -24,7 +24,11 @@ export const AGENT_CONTRACT = [
         'sítio certo consolida, não espalha. Cria nota nova com criar_nota só se o assunto ainda ' +
         'não existir. Uma nota de teste, quase vazia ou com título genérico NÃO captura factos ' +
         'novos: nesse caso cria nota nova com o título do assunto.',
-    '4. REGISTA O TURNO: no fim, acrescentar_daily com 1 a 5 bullets curtos do que aconteceu — ' +
+    '4. TAREFAS: se a troca traz AÇÕES do utilizador (fazer/lembrar/acompanhar), cria-as com ' +
+        'criar_tarefa — na dúvida, cria (apagar é barato). Antes de criar, listar_tarefas_abertas ' +
+        'para não duplicar; se a conversa diz que algo está FEITO, concluir_tarefa com o id. ' +
+        'Factos e conhecimento vão para notas, NUNCA para tarefas.',
+    '5. REGISTA O TURNO: no fim, acrescentar_daily com 1 a 5 bullets curtos do que aconteceu — ' +
         'factos, decisões, alterações, bloqueios, próximos passos. Só o que aconteceu de facto, ' +
         'nunca mais do que foi dito, sem encher. Se tiveres dúvida sobre o que já lá está, ' +
         'usa ler_daily_hoje.',

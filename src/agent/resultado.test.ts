@@ -48,7 +48,11 @@ describe('registarEscrita / lerEscritas', () => {
 
 describe('reduzirEscritas', () => {
     it('sem escritas devolve nota e daily nulos', () => {
-        expect(reduzirEscritas([])).toEqual({ nota: null, daily: null });
+        expect(reduzirEscritas([])).toEqual({
+            nota: null,
+            daily: null,
+            tarefas: { criadas: [], concluidas: [] },
+        });
     });
 
     it('fica com a última nota e o último daily (a sessão pode corrigir-se)', () => {

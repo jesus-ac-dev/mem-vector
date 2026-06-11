@@ -11,6 +11,11 @@ import {
     summaryDoAgente,
 } from '../modules/knowledge/knowledge.service';
 import { acrescentarAoDailyCom, getDailyCom, hojeLisboa } from '../modules/daily/daily.service';
+import {
+    listarTarefasAbertasCom,
+    criarTarefaCom,
+    concluirTarefaCom,
+} from '../modules/tarefas/tarefas.service';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita } from './resultado';
 
@@ -133,6 +138,36 @@ const TOOLS = [
         description: 'Lê o conteúdo atual do daily de hoje (para não duplicar registos).',
         inputSchema: { type: 'object', properties: {} },
     },
+    {
+        name: 'listar_tarefas_abertas',
+        description:
+            'Lista as tarefas em aberto do utilizador (id, título, projeto, estado). Usa antes de criar (não duplicar) e para concluir por id.',
+        inputSchema: { type: 'object', properties: {} },
+    },
+    {
+        name: 'criar_tarefa',
+        description:
+            'Cria uma tarefa (AÇÃO do utilizador: fazer/lembrar/acompanhar). Na dúvida cria — apagar é barato. Factos vão para notas, nunca para tarefas.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                titulo: { type: 'string', description: 'Verbo + objeto, curto' },
+                projeto: { type: 'string', description: 'Tag curta do projeto (opcional)' },
+                prioridade: { type: 'string', enum: ['baixa', 'normal', 'alta'] },
+            },
+            required: ['titulo'],
+        },
+    },
+    {
+        name: 'concluir_tarefa',
+        description:
+            'Conclui uma tarefa em aberto quando a conversa diz que está feita. O id vem de listar_tarefas_abertas. A conclusão fica registada no daily automaticamente.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'Id da tarefa' } },
+            required: ['id'],
+        },
+    },
 ];
 
 type Args = Record<string, unknown>;
@@ -233,6 +268,52 @@ async function executarTool(
         case 'ler_daily_hoje': {
             const daily = await getDailyCom(db, hojeLisboa());
             return daily?.contentMd ?? '(ainda não há daily hoje)';
+        }
+        case 'listar_tarefas_abertas': {
+            const tarefas = await listarTarefasAbertasCom(db);
+            if (!tarefas.length) return 'Sem tarefas em aberto.';
+            return JSON.stringify(
+                tarefas.map((t) => ({
+                    id: t.id,
+                    titulo: t.titulo,
+                    projeto: t.projeto,
+                    estado: t.estado,
+                })),
+                null,
+                2,
+            );
+        }
+        case 'criar_tarefa': {
+            const t = await criarTarefaCom(db, {
+                titulo: texto(args, 'titulo'),
+                projeto: typeof args.projeto === 'string' ? args.projeto : undefined,
+                prioridade:
+                    args.prioridade === 'baixa' || args.prioridade === 'alta'
+                        ? args.prioridade
+                        : 'normal',
+                visibility: 'privado',
+            });
+            if (RESULT_FILE) {
+                registarEscrita(RESULT_FILE, {
+                    tipo: 'tarefa',
+                    acao: 'criada',
+                    id: t.id,
+                    titulo: t.titulo,
+                });
+            }
+            return `Tarefa criada: "${t.titulo}" (id: ${t.id}).`;
+        }
+        case 'concluir_tarefa': {
+            const t = await concluirTarefaCom(db, texto(args, 'id'));
+            if (RESULT_FILE) {
+                registarEscrita(RESULT_FILE, {
+                    tipo: 'tarefa',
+                    acao: 'concluida',
+                    id: t.id,
+                    titulo: t.titulo,
+                });
+            }
+            return `Tarefa concluída: "${t.titulo}" (registada no daily).`;
         }
         default:
             throw new Error(`tool desconhecida: ${name}`);
