@@ -188,8 +188,12 @@ ganham o campo, e os prompts dos dois caminhos levam a data de hoje (sem ela o
 modelo não resolve prazos relativos).
 
 **Definições (#60):** mega modal aberta pelo badge do user — menu lateral
-(Agentes, Módulos; módulo ativo ganha grupo com página própria), forms à
-direita, gravação imediata. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+(Comportamento, Agentes, Módulos; módulo ativo ganha grupo com página
+própria), forms à direita, gravação imediata. **Comportamento** acumula o
+COMO do agente-autor (método de destilação hoje; proatividade/estilo/
+personalidade a entrar); **Agentes** declara os providers/orquestradores
+(claude/codex/gemini/ollama, cli|api + key — o relay consome; keys plaintext
+na BD local, encriptar antes de multi-tenant). **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
 por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e

@@ -32,32 +32,40 @@ describe('definições (#60, integração RLS)', () => {
         await admin.from('definicoes').delete().in('owner_id', ids);
     });
 
-    it('sem linha devolve os defaults (one-shot, sem módulos)', { timeout: 30_000 }, async () => {
+    it('sem linha devolve os defaults (one-shot, claude/cli)', { timeout: 30_000 }, async () => {
         const { lerDefinicoesCom } = await import('@/modules/definicoes/definicoes.service');
-        expect(await lerDefinicoesCom(alice)).toEqual({
-            metodoDestilacao: 'one-shot',
-            modulosAtivos: [],
-        });
+        const d = await lerDefinicoesCom(alice);
+        expect(d.metodoDestilacao).toBe('one-shot');
+        expect(d.modulosAtivos).toEqual([]);
+        expect(d.agentes.claude?.ativo).toBe(true); // o orquestrador vivo
     });
 
     it('grava, relê e isola por dono', { timeout: 30_000 }, async () => {
         const { gravarDefinicoesCom, lerDefinicoesCom } =
             await import('@/modules/definicoes/definicoes.service');
+        const agentes = {
+            claude: { ativo: true, modo: 'cli' as const, apiKey: undefined },
+            gemini: { ativo: true, modo: 'api' as const, apiKey: 'key-teste' },
+        };
         await gravarDefinicoesCom(alice, {
             metodoDestilacao: 'agentic',
             modulosAtivos: ['github'],
+            agentes,
         });
-        expect(await lerDefinicoesCom(alice)).toEqual({
-            metodoDestilacao: 'agentic',
-            modulosAtivos: ['github'],
-        });
+        const lida = await lerDefinicoesCom(alice);
+        expect(lida.metodoDestilacao).toBe('agentic');
+        expect(lida.modulosAtivos).toEqual(['github']);
+        expect(lida.agentes.gemini).toEqual({ ativo: true, modo: 'api', apiKey: 'key-teste' });
         // upsert: segunda gravação substitui, não duplica
-        await gravarDefinicoesCom(alice, { metodoDestilacao: 'one-shot', modulosAtivos: [] });
-        expect((await lerDefinicoesCom(alice)).metodoDestilacao).toBe('one-shot');
-        // o Bruno continua nos defaults dele
-        expect(await lerDefinicoesCom(bruno)).toEqual({
+        await gravarDefinicoesCom(alice, {
             metodoDestilacao: 'one-shot',
             modulosAtivos: [],
+            agentes,
         });
+        expect((await lerDefinicoesCom(alice)).metodoDestilacao).toBe('one-shot');
+        // o Bruno continua nos defaults dele
+        const doBruno = await lerDefinicoesCom(bruno);
+        expect(doBruno.metodoDestilacao).toBe('one-shot');
+        expect(doBruno.agentes.gemini).toBeUndefined();
     });
 });

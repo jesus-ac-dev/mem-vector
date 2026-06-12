@@ -152,6 +152,7 @@ export function KanbanBoard() {
     const [archiveOver, setArchiveOver] = useState(false);
     // Hover no cadeado destaca a tarefa-mãe (a dependência que bloqueia).
     const [maeDestacada, setMaeDestacada] = useState<string | null>(null);
+    const [corteSemana, setCorteSemana] = useState(0);
     const [erro, setErro] = useState<string | null>(null);
     const [confirmar, setConfirmar] = useState<{
         tipo: 'concluir' | 'apagar';
@@ -167,6 +168,7 @@ export function KanbanBoard() {
             setAbertas(r.abertas);
             setConcluidas(r.concluidas);
             setProjetos(r.projetos.map((p) => p.nome));
+            setCorteSemana(Date.now() - 7 * 24 * 60 * 60 * 1000);
         });
         return () => {
             cancelado = true;
@@ -177,8 +179,14 @@ export function KanbanBoard() {
     const visiveis = abertas.filter(
         (t) => filtroProjeto === 'todos' || t.projeto === filtroProjeto,
     );
+    // Terminado mostra só a última semana (#60 r2, pedido do Carlos): num mês
+    // a coluna virava um scroll gigante. O histórico completo continua no
+    // painel ("Ver concluídas") e no daily. O corte calcula-se no load (o
+    // lint da casa não deixa Date.now() no render).
     const concluidasVisiveis = concluidas.filter(
-        (t) => filtroProjeto === 'todos' || t.projeto === filtroProjeto,
+        (t) =>
+            (filtroProjeto === 'todos' || t.projeto === filtroProjeto) &&
+            (!t.concluidaEm || new Date(t.concluidaEm).getTime() >= corteSemana),
     );
     const grupos = agruparPorEstado(visiveis, concluidasVisiveis);
 

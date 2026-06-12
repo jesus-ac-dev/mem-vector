@@ -1,6 +1,6 @@
 # Módulo `definicoes`
 
-> Definições por utilizador (#60): a mega modal do badge — Agentes e Módulos.
+> Definições por utilizador (#60): a mega modal do badge — Comportamento, Agentes e Módulos.
 
 ## O que faz
 
@@ -9,12 +9,20 @@ utilizador novo não precisa de seed). A UI é a mega modal aberta pela dropdown
 badge: menu lateral à esquerda (Principais: Agentes, Módulos; grupo "Módulos ativos"
 com a página de cada módulo ligado), forms à direita, gravação imediata.
 
-## Opções
+## Secções e opções
 
-| Opção | Valores | Quem a lê |
-|---|---|---|
-| `metodo_destilacao` | `one-shot` (default, decisão #38 — ¼ do custo) / `agentic` | `chat.postturno.ts` escolhe o caminho da destilação. A env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals/scripts forçam o caminho por célula). |
-| `modulos_ativos` | `github`, `emails` (reservado) | A modal (grupo no menu); o módulo GitHub vai ler daqui quando existir. |
+- **Comportamento** — COMO o agente-autor age; a secção ACUMULA (ver memória
+  `definicoes-comportamento-acumula`): hoje `metodo_destilacao` (`one-shot`
+  default, decisão #38 — ¼ do custo / `agentic`), lido por `chat.postturno.ts`;
+  a env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals).
+  A entrar: proatividade, estilo, personalidade.
+- **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
+  vivo, cli), codex, gemini, ollama — `{ativo, modo: cli|api, apiKey}`. Quem
+  consome é o relay/orquestração. Keys em plaintext na BD local: encriptar
+  antes de multi-tenant.
+- **Módulos** (`modulos_ativos`) — toggles: `github` (disponível), `emails`,
+  `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão
+  do calendário).
 
 ## Ficheiros
 
