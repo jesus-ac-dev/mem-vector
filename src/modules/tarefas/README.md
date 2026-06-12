@@ -11,12 +11,12 @@ fica registada no daily.
 
 ## Ficheiros
 
-| Ficheiro | Responsabilidade |
-|---|---|
-| `tarefas.schema.ts` | `NovaTarefaSchema` (Zod), estados/prioridades, tipo `Tarefa`, `ordenarTarefasAbertas` |
-| `tarefas.service.ts` | variantes `...Com` (listar/criar/mudarEstado/concluir/apagar) — RLS é a guarda de dados |
-| `tarefas.actions.ts` | Server Actions — porta do servidor: valida com Zod, chama o serviço |
-| `tarefas-quickadd.ts` | lógica pura do quick-add: `parseNovaTarefa`, gatilhos `!`/`#`, sugestões |
+| Ficheiro              | Responsabilidade                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `tarefas.schema.ts`   | `NovaTarefaSchema` (Zod), estados/prioridades, tipo `Tarefa`, `ordenarTarefasAbertas`   |
+| `tarefas.service.ts`  | variantes `...Com` (listar/criar/mudarEstado/concluir/apagar) — RLS é a guarda de dados |
+| `tarefas.actions.ts`  | Server Actions — porta do servidor: valida com Zod, chama o serviço                     |
+| `tarefas-quickadd.ts` | lógica pura do quick-add: `parseNovaTarefa`, gatilhos `!`/`#`, sugestões                |
 
 UI: `src/components/layout/tarefas-panel.tsx` (painel esquerdo).
 
@@ -25,18 +25,18 @@ UI: `src/components/layout/tarefas-panel.tsx` (painel esquerdo).
 Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim em
 `20260612110000`):
 
-| Coluna | Tipo | Notas |
-|---|---|---|
-| `id` | `uuid` | PK |
-| `titulo` | `text` | obrigatório |
-| `estado` | `text` | `backlog → analise → desenvolvimento → testes → documentacao → terminado` |
-| `prioridade` | `text` | `baixa` / `normal` / `alta` |
-| `projeto_id` | `uuid` | FK → `projetos` (#47); o nome vem por join — sem nome resolve para o Pessoal |
-| `descricao` | `text` | curta, opcional |
-| `depende_de` | `uuid` | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`) |
-| `data_fim` | `date` | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação |
-| `concluida_em` | `timestamptz` | carimbada pela RPC |
-| `owner_id` / `visibility` / `group_id` / `created_at` | | iguais ao resto do projeto |
+| Coluna                                                | Tipo          | Notas                                                                        |
+| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------- |
+| `id`                                                  | `uuid`        | PK                                                                           |
+| `titulo`                                              | `text`        | obrigatório                                                                  |
+| `estado`                                              | `text`        | `backlog → analise → desenvolvimento → testes → documentacao → terminado`    |
+| `prioridade`                                          | `text`        | `baixa` / `normal` / `alta`                                                  |
+| `projeto_id`                                          | `uuid`        | FK → `projetos` (#47); o nome vem por join — sem nome resolve para o Pessoal |
+| `descricao`                                           | `text`        | curta, opcional                                                              |
+| `depende_de`                                          | `uuid`        | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`) |
+| `data_fim`                                            | `date`        | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação           |
+| `concluida_em`                                        | `timestamptz` | carimbada pela RPC                                                           |
+| `owner_id` / `visibility` / `group_id` / `created_at` |               | iguais ao resto do projeto                                                   |
 
 **RLS:** ler — dono ou grupo (`protected`); criar/apagar — só o dono; editar — dono ou
 membro do grupo. Terminada não se reabre por `mudarEstado`.

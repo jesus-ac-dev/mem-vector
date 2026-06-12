@@ -40,6 +40,37 @@ export function modoEfetivo(provider: Provider, modo: ModoAgente): ModoAgente {
     return suportados.includes(modo) ? modo : suportados[0];
 }
 
+// Garantia por resposta (#60 r12): escolher um modelo não chega — cada
+// resposta confirma se o pedido foi honrado. O real vem da metadata do
+// provider e pode trazer prefixo de família e sufixo de versão ('haiku' →
+// 'claude-haiku-4-5', 'gemini-2.5-flash' → 'gemini-2.5-flash-002'). A
+// comparação é por tokens: o pedido tem de aparecer contíguo no real e o que
+// sobra a seguir só pode ser versão (números/latest) — nunca uma variante com
+// nome ('gpt-5.5' vs 'gpt-5.5-mini' é downgrade, não confirmação).
+function tokensModelo(s: string): string[] {
+    return s
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean);
+}
+
+export function confirmacaoModelo(
+    pedido: string | undefined,
+    real: string | undefined,
+): 'confirmado' | 'divergente' | 'nao-reportado' {
+    if (!real) return 'nao-reportado';
+    if (!pedido) return 'confirmado'; // default do provider — nada para comparar
+    const p = tokensModelo(pedido);
+    const r = tokensModelo(real);
+    for (let i = 0; i + p.length <= r.length; i++) {
+        if (p.every((t, j) => r[i + j] === t)) {
+            const resto = r.slice(i + p.length);
+            if (resto.every((t) => /^[0-9]+$/.test(t) || t === 'latest')) return 'confirmado';
+        }
+    }
+    return 'divergente';
+}
+
 // Esforço de raciocínio (referência: codex aceita model_reasoning_effort).
 export const ESFORCOS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export type Esforco = (typeof ESFORCOS)[number];

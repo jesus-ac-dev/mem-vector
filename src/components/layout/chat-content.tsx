@@ -17,7 +17,11 @@ import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
 import { EscolhaModeloModal } from '@/components/layout/escolha-modelo-modal';
 import { lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
-import { PROVIDER_LABEL, type Provider } from '@/modules/definicoes/definicoes.schema';
+import {
+    confirmacaoModelo,
+    PROVIDER_LABEL,
+    type Provider,
+} from '@/modules/definicoes/definicoes.schema';
 
 interface Message {
     id: number;
@@ -98,7 +102,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [pending, setPending] = useState(false);
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastCost, setLastCost] = useState<number | null>(null);
-    const [lastModelo, setLastModelo] = useState<string | null>(null);
+    // Garantia por resposta (r12): real (metadata) + pedido (definições) para
+    // a legenda confirmar/denunciar; null = ainda não houve resposta.
+    const [lastModelo, setLastModelo] = useState<{ real?: string; pedido?: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -176,7 +182,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 abrirConversa(res.conversationId);
             }
             setLastCost(res.costUsd);
-            setLastModelo(res.modelo ?? null);
+            setLastModelo({ real: res.modelo, pedido: res.modeloPedido });
             asstMsgId = nextIdRef.current++;
             setMessages((prev) => [
                 ...prev,
@@ -326,9 +332,18 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             {error && <p className="shrink-0 text-sm text-destructive">{error}</p>}
             {(lastCost !== null || lastModelo) && (
                 <p className="shrink-0 text-xs text-muted-foreground">
-                    {/* O modelo REAL do envelope — prova de quem respondeu
-                        (o auto-relato dos modelos mente, #60 r8). */}
-                    {lastModelo && <>modelo: {lastModelo}</>}
+                    {/* Garantia por resposta (r8/r12): o real vem da metadata do
+                        provider, nunca do auto-relato; divergência dita alto. */}
+                    {lastModelo &&
+                        (confirmacaoModelo(lastModelo.pedido, lastModelo.real) === 'divergente' ? (
+                            <span className="text-destructive">
+                                ⚠ pediste {lastModelo.pedido}, respondeu {lastModelo.real}
+                            </span>
+                        ) : lastModelo.real ? (
+                            <>modelo: {lastModelo.real}</>
+                        ) : (
+                            <>modelo não confirmado pelo provider</>
+                        ))}
                     {lastModelo && lastCost !== null && ' · '}
                     {lastCost !== null && <>último custo: ${lastCost.toFixed(4)}</>}
                 </p>

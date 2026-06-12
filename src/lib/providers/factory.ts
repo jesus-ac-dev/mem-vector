@@ -585,11 +585,18 @@ export function criarProvider(nome: Provider, cfg: AgenteServidor): ProviderLLM 
     return REGISTO[nome](cfg);
 }
 
-/** O provider do chat segundo as definições; claude/cli como rede de segurança. */
-export async function providerDoChatCom(db: SupabaseClient): Promise<ProviderLLM> {
+/** O provider do chat segundo as definições; claude/cli como rede de segurança.
+ *  Devolve também o modelo PEDIDO (r12): a legenda compara-o com o real da
+ *  metadata — é a garantia por resposta de que a escolha foi honrada. */
+export async function providerDoChatCom(
+    db: SupabaseClient,
+): Promise<{ instancia: ProviderLLM; modeloPedido?: string }> {
     const defs = await lerDefinicoesServidorCom(db);
     const escolhido = defs.chatProvider;
     const cfg = defs.agentes[escolhido];
-    if (cfg?.ativo) return criarProvider(escolhido, cfg);
-    return criarProvider('claude', defs.agentes.claude ?? { ativo: true, modo: 'cli' });
+    if (cfg?.ativo) {
+        return { instancia: criarProvider(escolhido, cfg), modeloPedido: cfg.modelo };
+    }
+    const fallback = defs.agentes.claude ?? { ativo: true, modo: 'cli' as const };
+    return { instancia: criarProvider('claude', fallback), modeloPedido: fallback.modelo };
 }

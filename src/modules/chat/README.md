@@ -10,14 +10,14 @@
 
 ## Ficheiros
 
-| Ficheiro             | Responsabilidade                                                                                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chat.service.ts`    | `respond(question)` — pipeline RAG+geração; `aplicarDestilacao(question, answer)` — destilar→escrever; tipos `ChatResult`, `NotaEscrita`                             |
-| `chat.jobs.ts`       | Criação/claim/conclusão/falha dos jobs duráveis de destilação em `agent_jobs`                                                                                       |
-| `chat.indexing.ts`   | Indexação dos turnos de chat em `chunks`, com metadata de conversa/mensagem e pruning por conversa                                                                   |
-| `chat.actions.ts`    | Server actions: `ask(input)` — responde e cria job; `processarDestilacaoJob(jobId)` — processa/retry de destilação; `destilarTurno` fica só para compatibilidade     |
-| `chat.prompt.ts`     | `buildPrompt(question, sources)`, `relevantSources(sources, threshold?)`, `RELEVANCE_THRESHOLD` (0.78)                                                            |
-| `chat.provenance.ts` | `provenance(sources)` → `Provenance` (`fromWorkspace`, `label`), `sourceHref`, `linkCitations` — tradução do retrieval para a UI                                  |
+| Ficheiro             | Responsabilidade                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat.service.ts`    | `respond(question)` — pipeline RAG+geração; `aplicarDestilacao(question, answer)` — destilar→escrever; tipos `ChatResult`, `NotaEscrita`                         |
+| `chat.jobs.ts`       | Criação/claim/conclusão/falha dos jobs duráveis de destilação em `agent_jobs`                                                                                    |
+| `chat.indexing.ts`   | Indexação dos turnos de chat em `chunks`, com metadata de conversa/mensagem e pruning por conversa                                                               |
+| `chat.actions.ts`    | Server actions: `ask(input)` — responde e cria job; `processarDestilacaoJob(jobId)` — processa/retry de destilação; `destilarTurno` fica só para compatibilidade |
+| `chat.prompt.ts`     | `buildPrompt(question, sources)`, `relevantSources(sources, threshold?)`, `RELEVANCE_THRESHOLD` (0.78)                                                           |
+| `chat.provenance.ts` | `provenance(sources)` → `Provenance` (`fromWorkspace`, `label`), `sourceHref`, `linkCitations` — tradução do retrieval para a UI                                 |
 
 ## Fluxo
 
@@ -95,13 +95,13 @@ interface Provenance {
 
 ## Dependências
 
-| Módulo / lib          | O que usa                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------- |
+| Módulo / lib          | O que usa                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `@/lib/claude`        | `generate(prompt)` — executa o claude CLI em modo restrito (sem tools, sem MCP, cwd limpa), com prompt por stdin e fila |
-| `@/lib/embeddings`    | `embedQuery` (prefix `query:`) para retrieval; `embedPassage` (prefix `passage:`) para indexar mensagens de chat |
-| `@/modules/knowledge` | `destilar(q, a)` — decide se há nota; `escreverNota(input)` — persiste nota                               |
-| `@/modules/daily`     | `acrescentarAoDaily(linha)` — append de registo ao daily note do dia                                      |
-| Supabase              | tabelas `conversations`, `messages`, `chunks`, `agent_jobs`; RPCs `match_chunks`, `claim_agent_job`        |
+| `@/lib/embeddings`    | `embedQuery` (prefix `query:`) para retrieval; `embedPassage` (prefix `passage:`) para indexar mensagens de chat        |
+| `@/modules/knowledge` | `destilar(q, a)` — decide se há nota; `escreverNota(input)` — persiste nota                                             |
+| `@/modules/daily`     | `acrescentarAoDaily(linha)` — append de registo ao daily note do dia                                                    |
+| Supabase              | tabelas `conversations`, `messages`, `chunks`, `agent_jobs`; RPCs `match_chunks`, `claim_agent_job`                     |
 
 ## Ligações
 

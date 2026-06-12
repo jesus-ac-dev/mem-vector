@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { criarProvider } from './factory';
-import type { AgenteServidor } from '@/modules/definicoes/definicoes.schema';
+import { confirmacaoModelo, type AgenteServidor } from '@/modules/definicoes/definicoes.schema';
 
 // #60 r9: o modo api tem de ser REAL — uma key ao calhas não pode passar no
 // Testar ligação (o repro do Carlos: api + pass inventada + sucesso falso).
@@ -150,6 +150,31 @@ describe('codex em modo api (#60 r9)', () => {
         );
         const p = criarProvider('codex', cfgApi());
         expect(await p.listarModelos()).toEqual(['gpt-5.4-mini', 'gpt-5.5', 'o4-mini']);
+    });
+});
+
+describe('confirmacaoModelo — garantia por resposta (r12)', () => {
+    it('pedido contido no real (sufixos de versão) = confirmado', () => {
+        expect(confirmacaoModelo('haiku', 'claude-haiku-4-5')).toBe('confirmado');
+        expect(confirmacaoModelo('gemini-2.5-flash', 'gemini-2.5-flash-002')).toBe('confirmado');
+        expect(confirmacaoModelo('llama3.2', 'llama3.2:latest')).toBe('confirmado');
+    });
+
+    it('real de outra família = divergente (o medo do Carlos: pedir haiku, vir opus)', () => {
+        expect(confirmacaoModelo('haiku', 'claude-opus-4-8')).toBe('divergente');
+        expect(confirmacaoModelo('gpt-5.4-mini', 'gpt-5.5')).toBe('divergente');
+    });
+
+    it('variante com nome a seguir ao pedido = divergente, não confirmação (audit r12)', () => {
+        expect(confirmacaoModelo('gpt-5.5', 'gpt-5.5-mini')).toBe('divergente');
+        expect(confirmacaoModelo('gemini-2.5-flash', 'gemini-2.5-flash-lite-preview')).toBe(
+            'divergente',
+        );
+    });
+
+    it('sem real = nao-reportado; sem pedido = confirmado (default do provider)', () => {
+        expect(confirmacaoModelo('haiku', undefined)).toBe('nao-reportado');
+        expect(confirmacaoModelo(undefined, 'claude-opus-4-8')).toBe('confirmado');
     });
 });
 

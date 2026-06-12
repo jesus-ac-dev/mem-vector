@@ -11,8 +11,8 @@
 
 ## Ficheiros
 
-| Ficheiro | Responsabilidade |
-|---|---|
+| Ficheiro          | Responsabilidade                                                                                           |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
 | `auth.actions.ts` | `signIn(prev, formData)` e `signOut()` — Server Actions que interagem com o Supabase Auth e fazem redirect |
 
 > `src/lib/supabase/server.ts` e `src/lib/supabase/middleware.ts` são infra partilhada, não feature deste módulo.
