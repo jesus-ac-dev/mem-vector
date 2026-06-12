@@ -31,7 +31,8 @@ onChange, só entre providers já parametrizados.
   "Testar ligação" por provider (cli = binário/versão; api = chamada barata).
   Quota/limite dita alto (padrão skills-compare). **O teste com sucesso DESCOBRE a
   lista de modelos do provider e persiste-a** (#60 r5 — gemini/ollama via API real;
-  claude = aliases do CLI; codex = curado, sem listagem no CLI): as dropdowns da
+  claude = aliases do CLI — verificado, o binário não expõe listagem; codex = REAL
+  via `codex debug models`, solução do Carlos r6): as dropdowns da
   escolha ficam vivas — modelo novo nas notícias → Testar ligação → aparece. Modelo
   e esforço escolhem-se SEMPRE na mini-modal (nunca nas Definições, sem texto livre). O agente-autor
   (destilação/contrato) continua claude — tools e envelope afinados para ele.

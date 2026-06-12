@@ -85,6 +85,9 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
             return { text: g.text, costUsd: g.costUsd };
         },
         testar: () => testarVersao('claude'),
+        // Verificado (r6): o claude CLI não expõe listagem de modelos — os
+        // aliases são o contrato documentado do --model; lista real exigiria
+        // a API /v1/models (modo api futuro).
         listarModelos: async () => ['opus', 'sonnet', 'haiku'],
     };
 }
@@ -130,7 +133,28 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
             }
         },
         testar: () => testarVersao('codex'),
-        listarModelos: async () => ['gpt-5.1-codex', 'gpt-5.1-codex-mini'],
+        // Descoberta REAL (r6, solução do Carlos): `codex debug models` lista
+        // os slugs + níveis de esforço suportados.
+        async listarModelos() {
+            try {
+                const { code, stdout } = await execComando(
+                    'codex',
+                    ['debug', 'models'],
+                    undefined,
+                    30_000,
+                );
+                if (code !== 0) return [];
+                const json = JSON.parse(stdout) as {
+                    models?: { slug?: string; visibility?: string }[];
+                };
+                return (json.models ?? [])
+                    .filter((m) => m.slug && m.visibility !== 'hidden')
+                    .map((m) => m.slug!)
+                    .sort();
+            } catch {
+                return [];
+            }
+        },
     };
 }
 

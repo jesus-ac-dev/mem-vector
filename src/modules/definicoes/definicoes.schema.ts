@@ -29,11 +29,12 @@ export const ESFORCOS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export type Esforco = (typeof ESFORCOS)[number];
 
 // Fallback de modelos por provider, usado até o "Testar ligação" descobrir a
-// lista real (#60 r5): gemini/ollama dão lista VIVA via API; claude usa os
-// aliases oficiais do CLI; codex é curado (o CLI não expõe listagem).
+// lista real (#60 r5/r6): codex/gemini/ollama dão lista VIVA (codex via
+// `codex debug models` — solução do Carlos); claude usa os aliases oficiais
+// do CLI (sem listagem no binário; a real viria da API /v1/models).
 export const MODELOS_SUGERIDOS: Record<Provider, string[]> = {
     claude: ['opus', 'sonnet', 'haiku'],
-    codex: ['gpt-5.1-codex', 'gpt-5.1-codex-mini'],
+    codex: [],
     gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
     ollama: [],
 };
