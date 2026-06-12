@@ -104,6 +104,40 @@ export async function criarTarefaCom(db: SupabaseClient, input: NovaTarefa): Pro
     return toTarefa(data as TarefaRow);
 }
 
+// Edição pelo quick-add (#55): reescreve os campos dos tokens; terminadas não
+// se editam (coerente com mudarEstado — reabrir/alterar histórico é feature
+// deliberada, não efeito colateral).
+export async function atualizarTarefaCom(
+    db: SupabaseClient,
+    id: string,
+    campos: {
+        titulo: string;
+        projeto: string | null;
+        prioridade: Tarefa['prioridade'];
+        dataFim: string | null;
+        descricao: string | null;
+    },
+): Promise<Tarefa> {
+    const { data, error } = await db
+        .from('tarefas')
+        .update({
+            titulo: campos.titulo,
+            projeto: campos.projeto,
+            prioridade: campos.prioridade,
+            data_fim: campos.dataFim,
+            descricao: campos.descricao,
+        })
+        .eq('id', id)
+        .neq('estado', 'terminado')
+        .select(COLUNAS)
+        .single();
+    if (error || !data)
+        throw new Error(
+            `atualizar tarefa falhou (terminada não se edita): ${error?.message ?? 'sem dados'}`,
+        );
+    return toTarefa(data as TarefaRow);
+}
+
 // Mudar de coluna no kanban. A passagem a 'terminado' vai SEMPRE pelo
 // concluirTarefaCom (valida dependência bloqueante + daily) — aqui recusa-se.
 export async function mudarEstadoTarefaCom(

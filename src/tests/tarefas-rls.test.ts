@@ -95,4 +95,29 @@ describe('tarefas kanban (#21, integração RLS)', () => {
         const abertas = await listarTarefasAbertasCom(alice);
         expect(abertas.map((x) => x.id)).not.toContain(t.id);
     });
+
+    it('atualizar (#55) edita campos e limpa os removidos', { timeout: 30_000 }, async () => {
+        const { criarTarefaCom, atualizarTarefaCom } =
+            await import('@/modules/tarefas/tarefas.service');
+        const t = await criarTarefaCom(alice, {
+            titulo: 'Rever proposta',
+            projeto: 'zeta',
+            prioridade: 'alta',
+            dataFim: '2026-06-20',
+            visibility: 'privado',
+        });
+        const editada = await atualizarTarefaCom(alice, t.id, {
+            titulo: 'Rever proposta final',
+            projeto: null, // token removido limpa de propósito
+            prioridade: 'normal',
+            dataFim: '2026-06-14',
+            descricao: 'antes da reunião',
+        });
+        expect(editada.titulo).toBe('Rever proposta final');
+        expect(editada.projeto).toBeNull();
+        expect(editada.prioridade).toBe('normal');
+        expect(editada.dataFim).toBe('2026-06-14');
+        expect(editada.descricao).toBe('antes da reunião');
+        expect(editada.estado).toBe(t.estado); // a edição não mexe no kanban
+    });
 });

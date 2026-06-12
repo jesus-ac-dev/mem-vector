@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { detetarGatilhoTarefa, parseNovaTarefa, sugestoesParaGatilho } from './tarefas-quickadd';
+import {
+    detetarGatilhoTarefa,
+    faltaObrigatorios,
+    hintQuickAdd,
+    parseNovaTarefa,
+    serializarTarefa,
+    sugestoesParaGatilho,
+} from './tarefas-quickadd';
 import { ordenarTarefasAbertas, TarefaDestiladaSchema, type Tarefa } from './tarefas.schema';
 
 describe('parseNovaTarefa', () => {
@@ -16,10 +23,10 @@ describe('parseNovaTarefa', () => {
         });
     });
 
-    it('sem tokens devolve só o título com defaults', () => {
+    it('sem tokens devolve só o título; prioridade ausente fica undefined (#55 r4)', () => {
         expect(parseNovaTarefa('comprar pão')).toEqual({
             titulo: 'comprar pão',
-            prioridade: 'normal',
+            prioridade: undefined,
             projeto: undefined,
             dataFim: undefined,
             descricao: undefined,
@@ -40,7 +47,7 @@ describe('parseNovaTarefa', () => {
         const r = parseNovaTarefa('rever doc // falar com o João do #crm !alta');
         expect(r.titulo).toBe('rever doc');
         expect(r.projeto).toBeUndefined();
-        expect(r.prioridade).toBe('normal');
+        expect(r.prioridade).toBeUndefined();
         expect(r.descricao).toBe('falar com o João do #crm !alta');
     });
 
@@ -92,6 +99,53 @@ describe('sugestoesParaGatilho', () => {
         expect(sugestoesParaGatilho({ tipo: 'projeto', termo: 'vi', inicio: 0 }, projetos)).toEqual(
             ['viagens', 'vida'].map((p) => projetos.find((x) => x.toLowerCase() === p) ?? p),
         );
+    });
+});
+
+describe('serializarTarefa (clicar para editar, #55)', () => {
+    it('round-trip na ordem canónica: !prioridade #projeto tarefa @data // descrição', () => {
+        const t = tarefa({
+            id: 'x',
+            titulo: 'testar emails',
+            projeto: 'crmcredito',
+            prioridade: 'alta',
+            dataFim: '2026-06-14',
+            descricao: 'smoke completo',
+        });
+        expect(serializarTarefa(t)).toBe(
+            '!alta #crmcredito testar emails @2026-06-14 // smoke completo',
+        );
+        const r = parseNovaTarefa(serializarTarefa(t));
+        expect(r).toEqual({
+            titulo: 'testar emails',
+            projeto: 'crmcredito',
+            prioridade: 'alta',
+            dataFim: '2026-06-14',
+            descricao: 'smoke completo',
+        });
+    });
+
+    it('prioridade vai sempre (é obrigatória ao guardar); opcionais ausentes não', () => {
+        expect(serializarTarefa(tarefa({ id: 'x', titulo: 'comprar pão' }))).toBe(
+            '!normal comprar pão',
+        );
+    });
+});
+
+describe('hint e obrigatórios (#55, ronda 4)', () => {
+    it('input vazio mostra a hint completa na ordem canónica', () => {
+        expect(hintQuickAdd('')).toBe('!prioridade #projeto tarefa @data-fim // descrição');
+    });
+
+    it('a hint encolhe à medida que os tokens entram', () => {
+        expect(hintQuickAdd('!alta #vida')).toBe('tarefa @data-fim // descrição');
+        expect(hintQuickAdd('!alta #vida pagar renda @2026-06-30 // os papéis')).toBe('');
+    });
+
+    it('faltaObrigatorios exige !prioridade #projeto tarefa', () => {
+        expect(faltaObrigatorios('pagar renda')).toEqual(['!prioridade', '#projeto']);
+        expect(faltaObrigatorios('!alta #vida')).toEqual(['tarefa']);
+        expect(faltaObrigatorios('!alta #vida pagar renda')).toEqual([]);
     });
 });
 

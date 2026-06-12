@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, History, Pencil, FileText, Archive, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { dataPt } from '@/lib/datas';
 import { logClientError, runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
@@ -322,7 +323,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                 setWikilinkAmbiguo(null);
                 const dia = decodeURIComponent(mDaily[1]);
                 const id = url.searchParams.get('id') ?? undefined;
-                abrirFicheiro({ tipo: 'daily', id, chave: dia, titulo: dia });
+                abrirFicheiro({ tipo: 'daily', id, chave: dia, titulo: dataPt(dia) });
             }
         } catch (error) {
             logClientError(

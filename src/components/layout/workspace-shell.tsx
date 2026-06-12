@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
@@ -25,6 +25,7 @@ import {
     Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { dataPt } from '@/lib/datas';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -159,10 +160,11 @@ function Ribbon({
             {/* Divider */}
             <div className="my-1 w-8 border-t" />
 
-            {/* Route-nav icons */}
+            {/* Secção de baixo por importância de uso (#55): chat → kanban
+                (quase a chegar) → tarefas → emails (há de vir) → grupos. */}
             {navItems.map(({ href, label, Icon }) => {
                 const active = href === '/chat' ? chatAberto : pathname.startsWith(href);
-                return (
+                const link = (
                     <Link
                         key={href}
                         href={href}
@@ -178,22 +180,27 @@ function Ribbon({
                         <Icon className="h-5 w-5" />
                     </Link>
                 );
+                if (href !== '/grupos') return link;
+                // Tarefas (comuta o painel esquerdo) entra antes de Grupos.
+                return (
+                    <Fragment key={href}>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Tarefas"
+                            title="Tarefas"
+                            onClick={() => onPanelChange('tarefas')}
+                            className={cn(
+                                'h-10 w-10 text-muted-foreground',
+                                activePanel === 'tarefas' && 'bg-accent text-accent-foreground',
+                            )}
+                        >
+                            <ListTodo className="h-5 w-5" />
+                        </Button>
+                        {link}
+                    </Fragment>
+                );
             })}
-
-            {/* Tarefas (#53): comuta o painel esquerdo, mas mora aqui em baixo. */}
-            <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Tarefas"
-                title="Tarefas"
-                onClick={() => onPanelChange('tarefas')}
-                className={cn(
-                    'h-10 w-10 text-muted-foreground',
-                    activePanel === 'tarefas' && 'bg-accent text-accent-foreground',
-                )}
-            >
-                <ListTodo className="h-5 w-5" />
-            </Button>
 
             {/* Spacer */}
             <div className="flex-1" />
@@ -865,7 +872,7 @@ function RightSidebar({
                             {dadosAtivos.backlinks.map((n) => (
                                 <li key={`${n.tipo ?? 'knowledge'}:${n.slug}`}>
                                     <NotaLink
-                                        titulo={n.title}
+                                        titulo={n.tipo === 'daily' ? dataPt(n.title) : n.title}
                                         detalhe={
                                             n.tipo === 'daily' ? 'Backlink (daily)' : 'Backlink'
                                         }
@@ -878,7 +885,7 @@ function RightSidebar({
                                                         tipo: 'daily',
                                                         id: n.id,
                                                         chave: n.slug,
-                                                        titulo: n.title,
+                                                        titulo: dataPt(n.title),
                                                     });
                                                     router.push('/chat');
                                                 }
@@ -945,7 +952,7 @@ function RightSidebar({
                             // Dia sem daily: clique calmo, sem ação. Com daily: abre
                             // como ficheiro nos panes (não toma conta do centro).
                             if (!diasComDaily.includes(dia)) return;
-                            abrirFicheiro({ tipo: 'daily', chave: dia, titulo: dia });
+                            abrirFicheiro({ tipo: 'daily', chave: dia, titulo: dataPt(dia) });
                             router.push('/chat');
                         }}
                     />

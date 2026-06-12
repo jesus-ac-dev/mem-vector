@@ -4,9 +4,20 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Lock, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { dataCurtaPt, dataPt } from '@/lib/datas';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
     Select,
     SelectContent,
@@ -17,6 +28,7 @@ import {
 import { useWorkspace } from '@/components/layout/workspace-context';
 import {
     apagarTarefa,
+    atualizarTarefa,
     concluirTarefa,
     criarTarefa,
     listarTarefasPainel,
@@ -24,7 +36,10 @@ import {
 } from '@/modules/tarefas/tarefas.actions';
 import {
     detetarGatilhoTarefa,
+    faltaObrigatorios,
+    hintQuickAdd,
     parseNovaTarefa,
+    serializarTarefa,
     sugestoesParaGatilho,
     type GatilhoTarefa,
 } from '@/modules/tarefas/tarefas-quickadd';
@@ -71,8 +86,16 @@ export function TarefasPanel({
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
     const [verConcluidas, setVerConcluidas] = useState(false);
     const [novoTexto, setNovoTexto] = useState('');
+    // Clicar no card edita (#55): o input reabre com os tokens da tarefa.
+    const [editandoId, setEditandoId] = useState<string | null>(null);
     const [gatilho, setGatilho] = useState<GatilhoTarefa | null>(null);
     const [sel, setSel] = useState(0);
+    const [erro, setErro] = useState<string | null>(null);
+    // Concluir/apagar pedem confirmação (#55, ronda 4).
+    const [confirmar, setConfirmar] = useState<{
+        tipo: 'concluir' | 'apagar';
+        tarefa: Tarefa;
+    } | null>(null);
     const [filtroEstado, setFiltroEstado] = useState<string>('todos');
     const [filtroProjeto, setFiltroProjeto] = useState<string>('todos');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -92,9 +115,26 @@ export function TarefasPanel({
         };
     }, [workspaceVersion]);
 
+    const inputAberto = criarAberto || editandoId !== null;
+
     useEffect(() => {
-        if (criarAberto) inputRef.current?.focus();
-    }, [criarAberto]);
+        if (inputAberto) inputRef.current?.focus();
+    }, [inputAberto]);
+
+    function fecharInput() {
+        setEditandoId(null);
+        setNovoTexto('');
+        setGatilho(null);
+        setErro(null);
+        onFecharCriar();
+    }
+
+    function iniciarEdicao(t: Tarefa) {
+        setEditandoId(t.id);
+        setNovoTexto(serializarTarefa(t));
+        setGatilho(null);
+        requestAnimationFrame(() => inputRef.current?.focus());
+    }
 
     const abertasIds = new Set(abertas.map((t) => t.id));
     const projetos = [
@@ -136,26 +176,44 @@ export function TarefasPanel({
     async function submeterNova() {
         const texto = novoTexto.trim();
         if (!texto) {
-            onFecharCriar();
+            fecharInput();
             return;
         }
         const { titulo, projeto, prioridade, dataFim, descricao } = parseNovaTarefa(texto);
-        if (!titulo) return;
-        await runClientAction(
-            { area: 'left-sidebar', action: 'criarTarefa', meta: { titulo } },
-            () =>
-                criarTarefa({
-                    titulo,
-                    projeto,
-                    prioridade,
-                    dataFim,
-                    descricao,
-                    visibility: 'privado',
-                }),
-        );
-        setNovoTexto('');
-        setGatilho(null);
-        onFecharCriar();
+        // Os 3 obrigatórios (#55, ronda 4): sem !prioridade #projeto tarefa não guarda.
+        const falta = faltaObrigatorios(texto);
+        if (falta.length || !titulo || !prioridade || !projeto) {
+            setErro(`Falta: ${falta.join(' ')}`);
+            return;
+        }
+        if (editandoId) {
+            // Editar (#55): campos sem token limpam-se de propósito.
+            await runClientAction(
+                { area: 'left-sidebar', action: 'atualizarTarefa', meta: { id: editandoId } },
+                () =>
+                    atualizarTarefa(editandoId, {
+                        titulo,
+                        projeto,
+                        prioridade,
+                        dataFim: dataFim ?? null,
+                        descricao: descricao ?? null,
+                    }),
+            );
+        } else {
+            await runClientAction(
+                { area: 'left-sidebar', action: 'criarTarefa', meta: { titulo } },
+                () =>
+                    criarTarefa({
+                        titulo,
+                        projeto,
+                        prioridade,
+                        dataFim,
+                        descricao,
+                        visibility: 'privado',
+                    }),
+            );
+        }
+        fecharInput();
         notificarWorkspaceMudou();
     }
 
@@ -183,7 +241,7 @@ export function TarefasPanel({
             }
         }
         if (e.key === 'Enter') void submeterNova();
-        if (e.key === 'Escape') onFecharCriar();
+        if (e.key === 'Escape') fecharInput();
     }
 
     function mutacao(action: string, meta: Record<string, unknown>, fn: () => Promise<unknown>) {
@@ -192,25 +250,51 @@ export function TarefasPanel({
         );
     }
 
+    function executarConfirmacao() {
+        if (!confirmar) return;
+        const { tipo, tarefa } = confirmar;
+        setConfirmar(null);
+        if (tipo === 'concluir') {
+            mutacao('concluirTarefa', { id: tarefa.id }, () => concluirTarefa(tarefa.id));
+        } else {
+            mutacao('apagarTarefa', { id: tarefa.id }, () => apagarTarefa(tarefa.id));
+        }
+    }
+
     return (
         <div className="flex h-full flex-col">
-            {criarAberto && (
+            {inputAberto && (
                 <div className="relative border-b p-2">
-                    <Input
-                        ref={inputRef}
-                        value={novoTexto}
-                        onChange={(e) => {
-                            setNovoTexto(e.target.value);
-                            recalcularGatilho(e.target.value, e.target.selectionStart ?? 0);
-                        }}
-                        onClick={(e) =>
-                            recalcularGatilho(novoTexto, e.currentTarget.selectionStart ?? 0)
-                        }
-                        onKeyDown={onKeyDownNova}
-                        onBlur={() => setTimeout(() => setGatilho(null), 120)}
-                        placeholder="#projeto tarefa !prioridade @2026-06-30 // descrição"
-                        className="h-7 text-sm"
-                    />
+                    {/* Hint-fantasma (#55, ronda 4): o que falta preencher
+                        continua visível à frente do que já se escreveu. */}
+                    <div className="relative">
+                        <Input
+                            ref={inputRef}
+                            value={novoTexto}
+                            onChange={(e) => {
+                                setNovoTexto(e.target.value);
+                                setErro(null);
+                                recalcularGatilho(e.target.value, e.target.selectionStart ?? 0);
+                            }}
+                            onClick={(e) =>
+                                recalcularGatilho(novoTexto, e.currentTarget.selectionStart ?? 0)
+                            }
+                            onKeyDown={onKeyDownNova}
+                            onBlur={() => setTimeout(() => setGatilho(null), 120)}
+                            className="h-7 text-sm"
+                        />
+                        <div
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre px-3 text-sm"
+                        >
+                            <span className="invisible">{novoTexto}</span>
+                            <span className="text-muted-foreground/50">
+                                {(novoTexto && !novoTexto.endsWith(' ') ? ' ' : '') +
+                                    hintQuickAdd(novoTexto)}
+                            </span>
+                        </div>
+                    </div>
+                    {erro && <p className="mt-1 text-[0.65rem] text-destructive">{erro}</p>}
                     {gatilho && sugestoes.length > 0 && (
                         <ul className="absolute left-2 right-2 top-full z-20 -mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
                             {sugestoes.map((s, i) => (
@@ -285,7 +369,10 @@ export function TarefasPanel({
                             <li key={t.id} className="group px-2">
                                 <div className="rounded px-1 py-1 hover:bg-muted">
                                     {t.projeto && (
-                                        <p className="truncate text-[0.65rem] font-medium text-muted-foreground">
+                                        <p
+                                            className="cursor-pointer truncate text-[0.65rem] font-medium text-muted-foreground"
+                                            onClick={() => iniciarEdicao(t)}
+                                        >
                                             #{t.projeto}
                                         </p>
                                     )}
@@ -298,8 +385,9 @@ export function TarefasPanel({
                                             )}
                                         />
                                         <p
-                                            className="min-w-0 flex-1 truncate text-sm"
-                                            title={t.titulo}
+                                            className="min-w-0 flex-1 cursor-pointer truncate text-sm"
+                                            title={`${t.titulo} — clica para editar`}
+                                            onClick={() => iniciarEdicao(t)}
                                         >
                                             {t.titulo}
                                             {t.descricao && (
@@ -322,22 +410,18 @@ export function TarefasPanel({
                                                 }
                                                 disabled={bloqueada}
                                                 onClick={() =>
-                                                    mutacao('concluirTarefa', { id: t.id }, () =>
-                                                        concluirTarefa(t.id),
-                                                    )
+                                                    setConfirmar({ tipo: 'concluir', tarefa: t })
                                                 }
-                                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                                className="h-5 w-5 text-muted-foreground hover:text-green-400"
                                             >
                                                 <Check className="h-3.5 w-3.5" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                title="Apagar (apaga mesmo)"
+                                                title="Apagar"
                                                 onClick={() =>
-                                                    mutacao('apagarTarefa', { id: t.id }, () =>
-                                                        apagarTarefa(t.id),
-                                                    )
+                                                    setConfirmar({ tipo: 'apagar', tarefa: t })
                                                 }
                                                 className="h-5 w-5 text-muted-foreground hover:text-destructive"
                                             >
@@ -376,12 +460,12 @@ export function TarefasPanel({
                                             </span>
                                         )}
                                         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                                            <span title={`Criada em ${t.criadaEm.slice(0, 10)}`}>
-                                                ➕ {t.criadaEm.slice(5, 10)}
+                                            <span title={`Criada em ${dataPt(t.criadaEm)}`}>
+                                                ➕ {dataCurtaPt(t.criadaEm)}
                                             </span>
                                             {t.dataFim && (
-                                                <span title={`Data fim: ${t.dataFim}`}>
-                                                    📅 {t.dataFim.slice(5)}
+                                                <span title={`Data fim: ${dataPt(t.dataFim)}`}>
+                                                    📅 {dataCurtaPt(t.dataFim)}
                                                 </span>
                                             )}
                                         </span>
@@ -407,8 +491,11 @@ export function TarefasPanel({
                                 >
                                     <span className="line-through">{t.titulo}</span>
                                     {t.concluidaEm && (
-                                        <span className="ml-1.5">
-                                            ✅ {t.concluidaEm.slice(0, 10)}
+                                        <span
+                                            className="ml-1.5"
+                                            title={`Concluída em ${dataPt(t.concluidaEm)}`}
+                                        >
+                                            ✅ {dataCurtaPt(t.concluidaEm)}
                                         </span>
                                     )}
                                 </li>
@@ -431,6 +518,28 @@ export function TarefasPanel({
                         : `Ver concluídas (${concluidas.length})`}
                 </Button>
             </div>
+
+            {/* Confirmação de concluir/apagar (#55, ronda 4). */}
+            <AlertDialog open={!!confirmar} onOpenChange={(open) => !open && setConfirmar(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {confirmar?.tipo === 'apagar' ? 'Apagar tarefa?' : 'Concluir tarefa?'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {confirmar?.tipo === 'apagar'
+                                ? `«${confirmar.tarefa.titulo}» apaga-se de vez — as tarefas não têm arquivo.`
+                                : `«${confirmar?.tarefa.titulo}» passa a terminada e fica registada no daily.`}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={executarConfirmacao}>
+                            {confirmar?.tipo === 'apagar' ? 'Apagar' : 'Concluir'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
