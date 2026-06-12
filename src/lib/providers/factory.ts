@@ -106,6 +106,9 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
                 }
                 args.push(
                     'exec',
+                    // O exec corre num tempdir (não é repo git): sem isto o
+                    // codex recusa com "Not inside a trusted directory".
+                    '--skip-git-repo-check',
                     '--ignore-user-config',
                     '--sandbox',
                     'read-only',
