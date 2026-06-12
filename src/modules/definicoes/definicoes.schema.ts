@@ -24,6 +24,22 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
 export const MODOS_AGENTE = ['cli', 'api'] as const;
 export type ModoAgente = (typeof MODOS_AGENTE)[number];
 
+// Modos REAIS por provider (#60 r9): só se oferece o que o factory implementa.
+// claude/codex correm por CLI (subscrição) ou API (key); gemini só tem API;
+// ollama é o daemon local (sem key, sem escolha).
+export const MODOS_POR_PROVIDER: Record<Provider, readonly ModoAgente[]> = {
+    claude: ['cli', 'api'],
+    codex: ['cli', 'api'],
+    gemini: ['api'],
+    ollama: ['cli'],
+};
+
+/** Coage um modo gravado/default ao primeiro suportado pelo provider. */
+export function modoEfetivo(provider: Provider, modo: ModoAgente): ModoAgente {
+    const suportados = MODOS_POR_PROVIDER[provider];
+    return suportados.includes(modo) ? modo : suportados[0];
+}
+
 // Esforço de raciocínio (referência: codex aceita model_reasoning_effort).
 export const ESFORCOS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export type Esforco = (typeof ESFORCOS)[number];
@@ -119,6 +135,14 @@ export const MODULO_LABEL: Record<Modulo, string> = {
     'google-workspace': 'Google Workspace',
     campanhas: 'Campanhas',
 };
+
+// Input do Testar ligação (#60 r9): o teste corre contra a config PENDENTE do
+// form (modo/modelo/key por gravar), não contra a gravada — uma key escrita ao
+// calhas tem de rebentar ANTES do Guardar. apiKey undefined = usa a gravada.
+export const TestarProviderSchema = z.object({
+    provider: z.enum(PROVIDERS),
+    config: AgenteConfigSchema.optional(),
+});
 
 // Input de gravação (a porta valida isto).
 export const DefinicoesSchema = z.object({

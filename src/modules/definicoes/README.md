@@ -9,7 +9,8 @@ utilizador novo não precisa de seed). A UI é a mega modal aberta pela dropdown
 badge: menu lateral à esquerda (Principais: Agentes, Módulos; grupo "Módulos ativos"
 com a página de cada módulo ligado), forms à direita e **botão Guardar explícito** —
 ao guardar, providers ativos alterados que o utilizador não testou são **testados à
-força** (teste vermelho = não grava). A ESCOLHA de quem responde ao chat vive na
+força** (teste vermelho = não grava, **sem exceções** — r9 matou o bypass das keys
+novas: o teste corre contra a config PENDENTE do form, key incluída). A ESCOLHA de quem responde ao chat vive na
 **mini-modal do link sobre o Enviar** (`escolha-modelo-modal.tsx`) — essa sim grava
 onChange, só entre providers já parametrizados.
 
@@ -21,25 +22,31 @@ onChange, só entre providers já parametrizados.
   a env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals).
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
-  vivo, cli), codex, gemini, ollama — `{ativo, modo: cli|api, modelo, esforco,
-  apiKey}`. O **FactoryProvider** (`src/lib/providers/factory.ts`, referência:
-  `~/src/agent-skills-compare`) distribui; **o chat responde com o provider de
+  vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.
+  **O `modo` é real por provider** (r9, `MODOS_POR_PROVIDER`): claude/codex =
+  cli (subscrição) ou api (Anthropic `/v1/messages` · OpenAI `/v1/chat/completions`,
+  key obrigatória); gemini = só api; ollama = só daemon local (sem key). A UI só
+  oferece os modos que o factory implementa. O **FactoryProvider**
+  (`src/lib/providers/factory.ts`, referência: `~/src/agent-skills-compare`)
+  distribui **lendo o modo**; **o chat responde com o provider de
   `chat_provider`** (claude/cli como rede de segurança se o escolhido estiver
   inativo) e o link sobre o botão Enviar mostra/abre a escolha. **Keys cifradas
   at rest** (AES-256-GCM, `src/lib/cripto.ts`, segredo `MEMVECTOR_KEYS_SECRET`)
   e NUNCA voltam ao browser — a vista só leva `temApiKey` + sufixo. Botão
-  "Testar ligação" por provider — **a sério** (r8): nos CLIs faz uma mini-geração
-  pelo MESMO caminho do chat (auth/flags/trusted-dir rebentam no teste, não na
-  primeira mensagem — isto vai correr noutros computadores); o detalhe mostra o
-  **modelo REAL** do envelope (`modelUsage`), porque o auto-relato dos modelos
-  mente. O chat também mostra "modelo: <real>" junto ao custo.
+  "Testar ligação" por provider — **a sério** (r8/r9): corre contra a config
+  PENDENTE do form (key nova incluída) e faz uma mini-geração pelo MESMO caminho
+  do chat (cli: auth/flags/trusted-dir rebentam no teste; api: a key prova-se na
+  listagem de modelos E na geração — uma key ao calhas dá vermelho); o detalhe
+  mostra o **modelo REAL** (envelope no cli, campo `model` na api), porque o
+  auto-relato dos modelos mente. O chat também mostra "modelo: <real>" junto ao custo.
   Quota/limite dita alto (padrão skills-compare). **O teste com sucesso DESCOBRE a
   lista de modelos do provider e persiste-a** (#60 r5 — gemini/ollama via API real;
-  claude = aliases do CLI — verificado, o binário não expõe listagem; codex = REAL
-  via `codex debug models`, solução do Carlos r6): as dropdowns da
-  escolha ficam vivas — modelo novo nas notícias → Testar ligação → aparece. Modelo
-  e esforço escolhem-se SEMPRE na mini-modal (nunca nas Definições, sem texto livre). O agente-autor
-  (destilação/contrato) continua claude — tools e envelope afinados para ele.
+  claude/cli = aliases do binário (não expõe listagem); codex/cli = `codex debug
+  models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
+  dropdowns da escolha ficam vivas — modelo novo nas notícias → Testar ligação →
+  aparece. Modelo e esforço escolhem-se SEMPRE na mini-modal (nunca nas Definições,
+  sem texto livre). O agente-autor (destilação/contrato) continua claude — tools e
+  envelope afinados para ele.
 - **Módulos** (`modulos_ativos`) — toggles: `github` (disponível), `emails`,
   `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão
   do calendário).

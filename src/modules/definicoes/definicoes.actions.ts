@@ -1,12 +1,11 @@
 'use server';
 
-import { z } from 'zod';
-
 import {
     DefinicoesSchema,
-    PROVIDERS,
+    TestarProviderSchema,
+    modoEfetivo,
+    type AgenteServidor,
     type DefinicoesVista,
-    type Provider,
 } from './definicoes.schema';
 import {
     gravarDefinicoesCom,
@@ -29,17 +28,29 @@ export async function gravarDefinicoes(input: unknown): Promise<DefinicoesVista>
     return gravarDefinicoesCom(await createClient(), dados);
 }
 
-// Teste de ligação (#60 r3/r5): valida que o provider responde (cli = binário
-// no PATH; api = chamada barata com a key) e, com sucesso, DESCOBRE a lista
-// de modelos e persiste-a — as dropdowns ficam vivas ("vi um modelo novo nas
-// notícias → testo a ligação → aparece").
+// Teste de ligação (#60 r3/r5/r9): valida que o provider responde (cli =
+// mini-geração pelo binário; api = key provada + mini-geração) e, com sucesso,
+// DESCOBRE a lista de modelos e persiste-a — as dropdowns ficam vivas ("vi um
+// modelo novo nas notícias → testo a ligação → aparece"). O teste corre contra
+// a config PENDENTE do form (r9): uma key ao calhas rebenta ANTES do Guardar.
 export async function testarProvider(
     input: unknown,
 ): Promise<{ ok: boolean; detalhe: string; modelos?: string[] }> {
-    const provider = z.enum(PROVIDERS).parse(input) as Provider;
+    const { provider, config } = TestarProviderSchema.parse(input);
     const db = await createClient();
     const defs = await lerDefinicoesServidorCom(db);
-    const cfg = defs.agentes[provider] ?? { ativo: false, modo: 'cli' as const };
+    const salvo = defs.agentes[provider] ?? { ativo: false, modo: 'cli' as const };
+    // Pendente sobrepõe o gravado; apiKey undefined = usa a gravada, '' = sem key.
+    const cfg: AgenteServidor = config
+        ? {
+              ativo: config.ativo,
+              modo: modoEfetivo(provider, config.modo),
+              modelo: config.modelo,
+              esforco: config.esforco,
+              modelos: salvo.modelos,
+              apiKey: config.apiKey === undefined ? salvo.apiKey : config.apiKey || undefined,
+          }
+        : salvo;
     const instancia = criarProvider(provider, cfg);
     const resultado = await instancia.testar();
     if (!resultado.ok) return resultado;

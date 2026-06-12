@@ -27,8 +27,8 @@ export interface ProviderLLM {
     testar(): Promise<{ ok: boolean; detalhe: string }>;
     // Descoberta de modelos (#60 r5, ideia do Carlos): após o teste de ligação
     // com sucesso, a lista alimenta as dropdowns — gemini/ollama dão lista
-    // VIVA via API; claude usa os aliases do CLI; codex é curado (o CLI não
-    // expõe listagem).
+    // VIVA via API; codex/cli via `codex debug models`; claude/cli usa os
+    // aliases do binário; em modo api, claude/codex listam via /v1/models.
     listarModelos(): Promise<string[]>;
 }
 
@@ -77,8 +77,199 @@ async function testarVersao(bin: string): Promise<{ ok: boolean; detalhe: string
     }
 }
 
+// ── claude (api) — Messages API; a key prova-se AQUI, não na 1ª mensagem ──
+const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
+const ANTHROPIC_VERSION = '2023-06-01';
+// Alias oficial da API (não confundir com os aliases curtos do CLI).
+const CLAUDE_API_MODELO_DEFAULT = 'claude-opus-4-8';
+
+async function gerarClaudeApi(cfg: AgenteServidor, prompt: string): Promise<RespostaLLM> {
+    if (!cfg.apiKey) throw new Error('claude api: API key em falta nas definições');
+    const res = await fetch(`${ANTHROPIC_BASE}/messages`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'x-api-key': cfg.apiKey,
+            'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+            model: cfg.modelo || CLAUDE_API_MODELO_DEFAULT,
+            max_tokens: 16000,
+            messages: [{ role: 'user', content: prompt }],
+        }),
+    });
+    const corpo = await res.text();
+    if (!res.ok) {
+        if (res.status === 401) throw new Error('claude api: key inválida (401)');
+        if (res.status === 429 || QUOTA_REGEX.test(corpo)) {
+            throw new Error(`claude api: quota/limite excedido (HTTP ${res.status})`);
+        }
+        throw new Error(`claude api HTTP ${res.status}: ${corpo.slice(0, 300)}`);
+    }
+    const json = JSON.parse(corpo) as {
+        content?: { type: string; text?: string }[];
+        model?: string;
+    };
+    const text = (json.content ?? [])
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text ?? '')
+        .join('')
+        .trim();
+    if (!text) throw new Error('claude api: resposta vazia');
+    return { text, costUsd: null, model: json.model };
+}
+
+async function listarModelosAnthropic(apiKey: string): Promise<string[]> {
+    const res = await fetch(`${ANTHROPIC_BASE}/models?limit=100`, {
+        headers: { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
+    });
+    if (!res.ok) throw new Error(`claude api HTTP ${res.status} — key inválida?`);
+    const json = (await res.json()) as { data?: { id?: string }[] };
+    return (json.data ?? [])
+        .map((m) => m.id ?? '')
+        .filter(Boolean)
+        .sort();
+}
+
+function providerClaudeApi(cfg: AgenteServidor): ProviderLLM {
+    return {
+        nome: 'claude',
+        gerar: (prompt) => gerarClaudeApi(cfg, prompt),
+        // Teste a sério em modo api: a listagem valida a key (401 rebenta já)
+        // e a mini-geração prova o MESMO caminho do chat. Se o modelo guardado
+        // não existe na API (ex.: alias do CLI), o teste cai para um opus da
+        // lista REAL acabada de descobrir (a constante é só último recurso —
+        // não apodrece); a escolha re-faz-se na mini-modal com a lista.
+        async testar() {
+            if (!cfg.apiKey) return { ok: false, detalhe: 'API key em falta' };
+            try {
+                const modelos = await listarModelosAnthropic(cfg.apiKey);
+                const modelo =
+                    cfg.modelo && modelos.includes(cfg.modelo)
+                        ? cfg.modelo
+                        : (modelos.find((m) => m.startsWith('claude-opus')) ??
+                          modelos[0] ??
+                          CLAUDE_API_MODELO_DEFAULT);
+                const r = await gerarClaudeApi(
+                    { ...cfg, modelo },
+                    'Responde apenas com a palavra: ok',
+                );
+                return {
+                    ok: true,
+                    detalhe: `key válida (${modelos.length} modelos) — gerou com ${r.model ?? modelo}`,
+                };
+            } catch (e) {
+                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+            }
+        },
+        async listarModelos() {
+            if (!cfg.apiKey) return [];
+            try {
+                return await listarModelosAnthropic(cfg.apiKey);
+            } catch {
+                return [];
+            }
+        },
+    };
+}
+
+// ── codex (api) — API da OpenAI; mesma regra: key provada no teste ──
+const OPENAI_BASE = 'https://api.openai.com/v1';
+
+async function gerarCodexApi(cfg: AgenteServidor, prompt: string): Promise<RespostaLLM> {
+    if (!cfg.apiKey) throw new Error('codex api: API key em falta nas definições');
+    if (!cfg.modelo) {
+        throw new Error('codex api: escolhe um modelo (o Testar ligação descobre a lista real)');
+    }
+    const res = await fetch(`${OPENAI_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${cfg.apiKey}`,
+        },
+        body: JSON.stringify({
+            model: cfg.modelo,
+            max_completion_tokens: 16000,
+            messages: [{ role: 'user', content: prompt }],
+            // A API da OpenAI não tem xhigh (é nível do codex CLI).
+            ...(cfg.esforco
+                ? { reasoning_effort: cfg.esforco === 'xhigh' ? 'high' : cfg.esforco }
+                : {}),
+        }),
+    });
+    const corpo = await res.text();
+    if (!res.ok) {
+        if (res.status === 401) throw new Error('codex api: key inválida (401)');
+        if (res.status === 429 || QUOTA_REGEX.test(corpo)) {
+            throw new Error(`codex api: quota/limite excedido (HTTP ${res.status})`);
+        }
+        throw new Error(`codex api HTTP ${res.status}: ${corpo.slice(0, 300)}`);
+    }
+    const json = JSON.parse(corpo) as {
+        choices?: { message?: { content?: string } }[];
+        model?: string;
+    };
+    const text = (json.choices?.[0]?.message?.content ?? '').trim();
+    if (!text) throw new Error('codex api: resposta vazia');
+    return { text, costUsd: null, model: json.model };
+}
+
+async function listarModelosOpenAI(apiKey: string): Promise<string[]> {
+    const res = await fetch(`${OPENAI_BASE}/models`, {
+        headers: { authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) throw new Error(`codex api HTTP ${res.status} — key inválida?`);
+    const json = (await res.json()) as { data?: { id?: string }[] };
+    return (
+        (json.data ?? [])
+            .map((m) => m.id ?? '')
+            // A listagem traz embeddings/audio/imagem — só os geradores de texto.
+            .filter((id) => /^(gpt-|o\d)/.test(id))
+            .sort()
+    );
+}
+
+function providerCodexApi(cfg: AgenteServidor): ProviderLLM {
+    return {
+        nome: 'codex',
+        gerar: (prompt) => gerarCodexApi(cfg, prompt),
+        async testar() {
+            if (!cfg.apiKey) return { ok: false, detalhe: 'API key em falta' };
+            try {
+                const modelos = await listarModelosOpenAI(cfg.apiKey);
+                const modelo =
+                    cfg.modelo && modelos.includes(cfg.modelo)
+                        ? cfg.modelo
+                        : (modelos.find((m) => m.startsWith('gpt-5')) ?? modelos[0]);
+                if (!modelo) {
+                    return { ok: false, detalhe: 'key válida mas sem modelos disponíveis' };
+                }
+                const r = await gerarCodexApi(
+                    { ...cfg, modelo },
+                    'Responde apenas com a palavra: ok',
+                );
+                return {
+                    ok: true,
+                    detalhe: `key válida (${modelos.length} modelos) — gerou com ${r.model ?? modelo}`,
+                };
+            } catch (e) {
+                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+            }
+        },
+        async listarModelos() {
+            if (!cfg.apiKey) return [];
+            try {
+                return await listarModelosOpenAI(cfg.apiKey);
+            } catch {
+                return [];
+            }
+        },
+    };
+}
+
 // ── claude (cli) — o orquestrador vivo, via lib/claude ──
 function providerClaude(cfg: AgenteServidor): ProviderLLM {
+    if (cfg.modo === 'api') return providerClaudeApi(cfg);
     return {
         nome: 'claude',
         async gerar(prompt) {
@@ -105,14 +296,15 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
             }
         },
         // Verificado (r6): o claude CLI não expõe listagem de modelos — os
-        // aliases são o contrato documentado do --model; lista real exigiria
-        // a API /v1/models (modo api futuro).
+        // aliases são o contrato documentado do --model; a lista real vive no
+        // modo api (providerClaudeApi, /v1/models).
         listarModelos: async () => ['opus', 'sonnet', 'haiku'],
     };
 }
 
 // ── codex (cli) — padrão do skills-compare: exec efémero, quota dita alto ──
 function providerCodex(cfg: AgenteServidor): ProviderLLM {
+    if (cfg.modo === 'api') return providerCodexApi(cfg);
     return {
         nome: 'codex',
         async gerar(prompt) {
@@ -225,14 +417,22 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
             if (!text) throw new Error('gemini: resposta vazia');
             return { text, costUsd: null };
         },
+        // Teste a sério (r9, regra do r8 estendida às APIs): a listagem valida
+        // a key e a mini-geração prova o MESMO caminho do chat.
         async testar() {
             if (!cfg.apiKey) return { ok: false, detalhe: 'API key em falta' };
             try {
                 const res = await fetch(`${GEMINI_BASE}/models?pageSize=1`, {
                     headers: { 'x-goog-api-key': cfg.apiKey },
                 });
-                if (res.ok) return { ok: true, detalhe: `ligado (${modelo})` };
-                return { ok: false, detalhe: `HTTP ${res.status} — key inválida?` };
+                if (!res.ok) {
+                    return { ok: false, detalhe: `HTTP ${res.status} — key inválida?` };
+                }
+                const r = await this.gerar('Responde apenas com a palavra: ok');
+                return {
+                    ok: true,
+                    detalhe: `key válida — gerou com ${modelo} «${r.text.slice(0, 30)}»`,
+                };
             } catch (e) {
                 return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
             }
@@ -282,12 +482,14 @@ function providerOllama(cfg: AgenteServidor): ProviderLLM {
                 if (!res.ok) return { ok: false, detalhe: `HTTP ${res.status}` };
                 const json = (await res.json()) as { models?: { name: string }[] };
                 const tem = (json.models ?? []).some((m) => m.name.startsWith(modelo));
-                return {
-                    ok: true,
-                    detalhe: tem
-                        ? `ligado (${modelo} disponível)`
-                        : `ligado, mas o modelo "${modelo}" não está puxado`,
-                };
+                // Modelo em falta = o chat IA falhar — o teste não pode passar (r9).
+                if (!tem) {
+                    return {
+                        ok: false,
+                        detalhe: `daemon ligado, mas o modelo "${modelo}" não está puxado (ollama pull ${modelo})`,
+                    };
+                }
+                return { ok: true, detalhe: `ligado (${modelo} disponível)` };
             } catch {
                 return { ok: false, detalhe: `daemon não responde em ${OLLAMA_BASE}` };
             }

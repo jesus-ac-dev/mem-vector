@@ -28,8 +28,10 @@ import {
 } from '@/modules/definicoes/definicoes.actions';
 import {
     DEFINICOES_VISTA_DEFAULT,
+    MODOS_POR_PROVIDER,
     MODULO_LABEL,
     MODULOS,
+    modoEfetivo,
     PROVIDER_LABEL,
     PROVIDERS,
     type AgenteVista,
@@ -182,9 +184,23 @@ export function DefinicoesModal({
 
     async function correrTeste(p: Provider): Promise<boolean> {
         setTestes((t) => ({ ...t, [p]: 'a-testar' }));
+        // O teste leva a config PENDENTE do form (r9) — modo/modelo/key por
+        // gravar contam; uma key ao calhas rebenta AQUI, antes do Guardar.
+        const cfg = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
         const r = await runClientAction(
             { area: 'definicoes', action: 'testarProvider', meta: { p } },
-            () => testarProvider(p),
+            () =>
+                testarProvider({
+                    provider: p,
+                    config: {
+                        ativo: cfg.ativo,
+                        modo: modoEfetivo(p, cfg.modo),
+                        modelo: cfg.modelo,
+                        esforco: cfg.esforco,
+                        // undefined = usa a key gravada; '' = testar sem key.
+                        apiKey: keysNovas[p],
+                    },
+                }),
         );
         const resultado = r ?? { ok: false, detalhe: 'o teste não respondeu' };
         setTestes((t) => ({ ...t, [p]: resultado }));
@@ -209,17 +225,16 @@ export function DefinicoesModal({
 
     // Guardar (pedido do Carlos): persiste tudo, mas antes FORÇA o teste de
     // ligação aos providers ativos alterados que o utilizador não confirmou
-    // ele próprio. Teste vermelho = não grava (corrige ou desativa).
+    // ele próprio. Teste vermelho = não grava (corrige ou desativa) — sem
+    // exceções: o teste corre contra o pendente (r9), keys novas incluídas.
     async function guardarTudo() {
         setEstado('a-guardar');
         const porTestar = PROVIDERS.filter(
             (p) => defs.agentes[p]?.ativo && alterados.has(p) && !confirmados.has(p),
         );
-        // NOTA: os testes correm contra a config GRAVADA; keys novas ainda não
-        // persistidas só se validam depois de guardar — limitação anotada.
         for (const p of porTestar) {
             const ok = await correrTeste(p);
-            if (!ok && !keysNovas[p]) {
+            if (!ok) {
                 setEstado('falhou');
                 setPagina('agentes');
                 return;
@@ -234,7 +249,7 @@ export function DefinicoesModal({
                     p,
                     {
                         ativo: a.ativo,
-                        modo: a.modo,
+                        modo: modoEfetivo(p, a.modo),
                         modelo: a.modelo,
                         esforco: a.esforco,
                         // undefined = manter a key cifrada existente; '' = limpar.
@@ -255,10 +270,6 @@ export function DefinicoesModal({
         setAlterados(new Set());
         setSujo(false);
         setEstado('guardado');
-        // Key nova: agora gravada — testa já para o utilizador VER a ligação.
-        for (const p of PROVIDERS) {
-            if (keysNovas[p] && r.agentes[p]?.ativo) void correrTeste(p);
-        }
     }
 
     const itemMenu = (id: Pagina, label: string, grupo = false) => (
@@ -370,6 +381,8 @@ export function DefinicoesModal({
                                     {PROVIDERS.map((p) => {
                                         const cfg = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
                                         const teste = testes[p];
+                                        const modos = MODOS_POR_PROVIDER[p];
+                                        const modo = modoEfetivo(p, cfg.modo);
                                         return (
                                             <li key={p} className="space-y-2 rounded-md border p-3">
                                                 <div className="flex items-center justify-between gap-4">
@@ -393,26 +406,36 @@ export function DefinicoesModal({
                                                 {cfg.ativo && (
                                                     <div className="space-y-2">
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <Select
-                                                                value={cfg.modo}
-                                                                onValueChange={(modo) =>
-                                                                    mudarAgente(p, {
-                                                                        modo: modo as ModoAgente,
-                                                                    })
-                                                                }
-                                                            >
-                                                                <SelectTrigger className="h-8 w-24 text-xs">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="cli">
-                                                                        CLI
-                                                                    </SelectItem>
-                                                                    <SelectItem value="api">
-                                                                        API
-                                                                    </SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
+                                                            {/* Só se oferece o que o factory implementa
+                                                                (r9): gemini é só API, ollama é só local. */}
+                                                            {modos.length > 1 ? (
+                                                                <Select
+                                                                    value={modo}
+                                                                    onValueChange={(m) =>
+                                                                        mudarAgente(p, {
+                                                                            modo: m as ModoAgente,
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <SelectTrigger className="h-8 w-24 text-xs">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="cli">
+                                                                            CLI
+                                                                        </SelectItem>
+                                                                        <SelectItem value="api">
+                                                                            API
+                                                                        </SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {p === 'ollama'
+                                                                        ? 'daemon local'
+                                                                        : 'API'}
+                                                                </span>
+                                                            )}
                                                             {/* Modelo e esforço vivem na
                                                                 ESCOLHA (mini-modal do chat) —
                                                                 aqui só se parametriza a ligação. */}
@@ -428,7 +451,7 @@ export function DefinicoesModal({
                                                                     : 'Testar ligação'}
                                                             </Button>
                                                         </div>
-                                                        {cfg.modo === 'api' && (
+                                                        {modo === 'api' && (
                                                             <div className="flex items-center gap-2">
                                                                 <Input
                                                                     type="password"
