@@ -54,6 +54,7 @@ export interface ChatResult {
     answer: string;
     sources: Source[];
     costUsd: number | null; // providers fora do claude-cli não reportam custo
+    modelo?: string; // o modelo REAL que respondeu (prova, não auto-relato)
 }
 
 interface DestilDeps {
@@ -229,9 +230,9 @@ export async function respond(
     // autor (destilação/contrato) continua claude — as tools e o envelope
     // estão afinados para ele.
     const provider = await providerDoChatCom(db);
-    const { text, costUsd } = await provider.gerar(
+    const { text, costUsd, model } = await provider.gerar(
         buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
     );
 
-    return { answer: text, sources, costUsd };
+    return { answer: text, sources, costUsd, modelo: model };
 }

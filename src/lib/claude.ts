@@ -31,6 +31,7 @@ const DISALLOWED_TOOLS = [
 export interface Generation {
     text: string;
     costUsd: number;
+    model?: string; // o modelo REAL do envelope (modelUsage) — prova, não auto-relato
 }
 
 export function claudeTimeoutMs(envValue = process.env.CLAUDE_TIMEOUT_MS): number {
@@ -208,11 +209,19 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                 return;
             }
             try {
-                const envelope = JSON.parse(stdout) as { result?: string; total_cost_usd?: number };
+                const envelope = JSON.parse(stdout) as {
+                    result?: string;
+                    total_cost_usd?: number;
+                    modelUsage?: Record<string, unknown>;
+                };
+                // O modelo REAL vem do envelope (#60 r8): o auto-relato dos
+                // modelos é mentiroso — isto é a prova de qual respondeu.
+                const modelo = Object.keys(envelope.modelUsage ?? {})[0];
                 finish(() =>
                     resolve({
                         text: envelope.result ?? '',
                         costUsd: Number(envelope.total_cost_usd ?? 0),
+                        model: modelo,
                     }),
                 );
             } catch {

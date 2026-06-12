@@ -18,6 +18,7 @@ import type { AgenteServidor, Provider } from '@/modules/definicoes/definicoes.s
 export interface RespostaLLM {
     text: string;
     costUsd: number | null;
+    model?: string; // o modelo REAL que respondeu (quando o provider o reporta)
 }
 
 export interface ProviderLLM {
@@ -82,9 +83,27 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
         nome: 'claude',
         async gerar(prompt) {
             const g: Generation = await generate(prompt, { model: cfg.modelo });
-            return { text: g.text, costUsd: g.costUsd };
+            return { text: g.text, costUsd: g.costUsd, model: g.model };
         },
-        testar: () => testarVersao('claude'),
+        // Teste a sério (#60 r8, lição do Carlos: "isto vai para outros
+        // computadores"): mini-geração pelo MESMO caminho do chat — auth,
+        // flags e modelo rebentam AQUI, não na primeira mensagem. O detalhe
+        // mostra o modelo REAL (modelUsage), porque o auto-relato mente.
+        async testar() {
+            const versao = await testarVersao('claude');
+            if (!versao.ok) return versao;
+            try {
+                const g = await generate('Responde apenas com a palavra: ok', {
+                    model: cfg.modelo,
+                });
+                return {
+                    ok: true,
+                    detalhe: `${versao.detalhe} — gerou com ${g.model ?? 'modelo default'}`,
+                };
+            } catch (e) {
+                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+            }
+        },
         // Verificado (r6): o claude CLI não expõe listagem de modelos — os
         // aliases são o contrato documentado do --model; lista real exigiria
         // a API /v1/models (modo api futuro).
@@ -135,7 +154,21 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
                 await rm(tempDir, { recursive: true, force: true });
             }
         },
-        testar: () => testarVersao('codex'),
+        // Teste a sério (#60 r8): mini-exec pelo MESMO caminho do gerar —
+        // trusted dir/auth/quota rebentam aqui, não na primeira mensagem.
+        async testar() {
+            const versao = await testarVersao('codex');
+            if (!versao.ok) return versao;
+            try {
+                const r = await this.gerar('Responde apenas com a palavra: ok');
+                return {
+                    ok: true,
+                    detalhe: `${versao.detalhe} — exec real respondeu${cfg.modelo ? ` (${cfg.modelo})` : ''} «${r.text.slice(0, 30)}»`,
+                };
+            } catch (e) {
+                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+            }
+        },
         // Descoberta REAL (r6, solução do Carlos): `codex debug models` lista
         // os slugs + níveis de esforço suportados.
         async listarModelos() {

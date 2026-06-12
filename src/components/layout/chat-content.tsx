@@ -98,6 +98,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [pending, setPending] = useState(false);
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastCost, setLastCost] = useState<number | null>(null);
+    const [lastModelo, setLastModelo] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -175,6 +176,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 abrirConversa(res.conversationId);
             }
             setLastCost(res.costUsd);
+            setLastModelo(res.modelo ?? null);
             asstMsgId = nextIdRef.current++;
             setMessages((prev) => [
                 ...prev,
@@ -322,9 +324,13 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             </div>
 
             {error && <p className="shrink-0 text-sm text-destructive">{error}</p>}
-            {lastCost !== null && (
+            {(lastCost !== null || lastModelo) && (
                 <p className="shrink-0 text-xs text-muted-foreground">
-                    último custo: ${lastCost.toFixed(4)}
+                    {/* O modelo REAL do envelope — prova de quem respondeu
+                        (o auto-relato dos modelos mente, #60 r8). */}
+                    {lastModelo && <>modelo: {lastModelo}</>}
+                    {lastModelo && lastCost !== null && ' · '}
+                    {lastCost !== null && <>último custo: ${lastCost.toFixed(4)}</>}
                 </p>
             )}
 

@@ -28,7 +28,11 @@ onChange, só entre providers já parametrizados.
   inativo) e o link sobre o botão Enviar mostra/abre a escolha. **Keys cifradas
   at rest** (AES-256-GCM, `src/lib/cripto.ts`, segredo `MEMVECTOR_KEYS_SECRET`)
   e NUNCA voltam ao browser — a vista só leva `temApiKey` + sufixo. Botão
-  "Testar ligação" por provider (cli = binário/versão; api = chamada barata).
+  "Testar ligação" por provider — **a sério** (r8): nos CLIs faz uma mini-geração
+  pelo MESMO caminho do chat (auth/flags/trusted-dir rebentam no teste, não na
+  primeira mensagem — isto vai correr noutros computadores); o detalhe mostra o
+  **modelo REAL** do envelope (`modelUsage`), porque o auto-relato dos modelos
+  mente. O chat também mostra "modelo: <real>" junto ao custo.
   Quota/limite dita alto (padrão skills-compare). **O teste com sucesso DESCOBRE a
   lista de modelos do provider e persiste-a** (#60 r5 — gemini/ollama via API real;
   claude = aliases do CLI — verificado, o binário não expõe listagem; codex = REAL
