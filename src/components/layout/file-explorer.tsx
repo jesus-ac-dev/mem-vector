@@ -267,6 +267,7 @@ function Seccao({
     open: controlledOpen,
     onOpenChange,
     forceOpen = false,
+    defaultOpen = true,
     children,
 }: {
     label: string;
@@ -276,9 +277,10 @@ function Seccao({
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     forceOpen?: boolean;
+    defaultOpen?: boolean;
     children: React.ReactNode;
 }) {
-    const [uncontrolledOpen, setUncontrolledOpen] = useState(true);
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
     const [over, setOver] = useState(false);
     const open = controlledOpen ?? uncontrolledOpen;
     const aberto = open || forceOpen;
@@ -499,6 +501,9 @@ export function FileExplorer({
                 {kernel && (
                     <Seccao
                         label="Kernel"
+                        // Colapsado por defeito (#44): é infraestrutura do agente,
+                        // não navegação do dia-a-dia.
+                        defaultOpen={false}
                         onDropRaiz={(slug, id) => ops.mover(slug, kernel.pasta.id, id)}
                         // Drop de pasta também aterra dentro do Kernel — sem isto o
                         // highlight aceitava e o drop morria em silêncio (audit #39).

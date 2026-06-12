@@ -215,7 +215,10 @@ contrário. A página/kanban do projeto chega na fatia seguinte.
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,
 prioridades e regras do utilizador, injetadas em todos os arranques do agente
 (chat, destilação one-shot, system da sessão agentic). Caps por nota/total;
-arquivadas e subpastas ficam fora (só notas diretamente na pasta); sem pasta = comportamento de sempre. Conteúdo do Kernel manda no agente por design (workspace é do utilizador) — re-avaliar quando houver grupos partilhados. Lição da auditoria do
+arquivadas e subpastas ficam fora (só notas diretamente na pasta); sem pasta = comportamento de sempre. UX (#44): a secção
+Kernel inicia colapsada e os ficheiros do Kernel ficam FORA do grafo (com as
+arestas que lhes tocam) — é infraestrutura do agente, não conhecimento
+ligável; o grafo deve acabar todo ligado como uma rede neuronal. Conteúdo do Kernel manda no agente por design (workspace é do utilizador) — re-avaliar quando houver grupos partilhados. Lição da auditoria do
 arranque do vault: estado do utilizador é escrito e tem dono; estado de sessão
 (candidatos, daily, conversa) é gerado na hora.
 

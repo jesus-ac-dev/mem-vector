@@ -892,13 +892,41 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     } = await db.auth.getUser();
     if (!user) return { nodes: [], links: [] };
 
-    // Cor por pasta (id → hex).
-    const { data: pastas } = await db.from('folders').select('id, color').eq('owner_id', user.id);
+    // Cor por pasta (id → hex) + nome/pai para localizar a subárvore do Kernel.
+    const { data: pastas } = await db
+        .from('folders')
+        .select('id, color, name, parent_id')
+        .eq('owner_id', user.id);
     const corPorPasta = new Map<string, string | null>(
         (pastas ?? []).map((p) => [String(p.id), (p.color as string | null) ?? null]),
     );
 
-    // Nós knowledge (não arquivadas), cor = cor da pasta (ou default).
+    // Kernel fora do grafo (#44, decisão do Carlos): é infraestrutura do agente,
+    // não conhecimento ligável — deixaria nós soltos numa rede que deve acabar
+    // toda ligada. Exclui a pasta root "Kernel" e descendentes.
+    const kernelFolderIds = new Set<string>();
+    const raizKernel = (pastas ?? []).find(
+        (p) => !p.parent_id && String(p.name).toLowerCase() === 'kernel',
+    );
+    if (raizKernel) {
+        kernelFolderIds.add(String(raizKernel.id));
+        let cresceu = true;
+        while (cresceu) {
+            cresceu = false;
+            for (const p of pastas ?? []) {
+                if (
+                    p.parent_id &&
+                    kernelFolderIds.has(String(p.parent_id)) &&
+                    !kernelFolderIds.has(String(p.id))
+                ) {
+                    kernelFolderIds.add(String(p.id));
+                    cresceu = true;
+                }
+            }
+        }
+    }
+
+    // Nós knowledge (não arquivadas, fora do Kernel), cor = cor da pasta.
     // content_md vem só para medir o tamanho (PostgREST não expõe char_length).
     const { data: notas, error } = await db
         .from('knowledge')
@@ -906,15 +934,25 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         .eq('owner_id', user.id)
         .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
-    const nodesK: GrafoNode[] = (notas ?? []).map((n) => ({
-        id: String(n.id),
-        slug: n.slug,
-        title: n.title,
-        group: 'knowledge',
-        color: resolverCor(n.folder_id ? corPorPasta.get(String(n.folder_id)) : null, COR_DEFAULT),
-        size: (n.content_md ?? '').length,
-        createdAt: String(n.created_at),
-    }));
+    const notasKernel = (notas ?? []).filter(
+        (n) => n.folder_id && kernelFolderIds.has(String(n.folder_id)),
+    );
+    const kernelNotaIds = new Set(notasKernel.map((n) => String(n.id)));
+    const kernelSlugs = new Set(notasKernel.map((n) => String(n.slug)));
+    const nodesK: GrafoNode[] = (notas ?? [])
+        .filter((n) => !kernelNotaIds.has(String(n.id)))
+        .map((n) => ({
+            id: String(n.id),
+            slug: n.slug,
+            title: n.title,
+            group: 'knowledge',
+            color: resolverCor(
+                n.folder_id ? corPorPasta.get(String(n.folder_id)) : null,
+                COR_DEFAULT,
+            ),
+            size: (n.content_md ?? '').length,
+            createdAt: String(n.created_at),
+        }));
 
     // Cor do grupo daily (profile do utilizador).
     const prof = await db.from('profiles').select('daily_color').eq('id', user.id).maybeSingle();
@@ -944,12 +982,21 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         .select('from_id, to_id, to_slug')
         .in('from_type', ['knowledge', 'daily']);
     if (eErr) throw new Error(`grafo edges: ${eErr.message}`);
+    // Arestas que tocam no Kernel saem com ele (um alvo no Kernel viraria
+    // fantasma e o Kernel voltava ao grafo pela porta de trás).
     const { links, fantasmas } = montarArestasGrafo(
-        (ed ?? []).map((e) => ({
-            fromId: String(e.from_id),
-            toId: e.to_id ? String(e.to_id) : null,
-            toSlug: e.to_slug ?? null,
-        })),
+        (ed ?? [])
+            .filter(
+                (e) =>
+                    !kernelNotaIds.has(String(e.from_id)) &&
+                    !(e.to_id && kernelNotaIds.has(String(e.to_id))) &&
+                    !(e.to_slug && kernelSlugs.has(String(e.to_slug))),
+            )
+            .map((e) => ({
+                fromId: String(e.from_id),
+                toId: e.to_id ? String(e.to_id) : null,
+                toSlug: e.to_slug ?? null,
+            })),
         idsValidos,
         new Map(nodes.map((n) => [n.slug, n.id])),
     );
