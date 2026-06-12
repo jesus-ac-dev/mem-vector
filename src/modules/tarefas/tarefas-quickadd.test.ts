@@ -8,7 +8,12 @@ import {
     serializarTarefa,
     sugestoesParaGatilho,
 } from './tarefas-quickadd';
-import { ordenarTarefasAbertas, TarefaDestiladaSchema, type Tarefa } from './tarefas.schema';
+import {
+    agruparPorEstado,
+    ordenarTarefasAbertas,
+    TarefaDestiladaSchema,
+    type Tarefa,
+} from './tarefas.schema';
 
 describe('parseNovaTarefa', () => {
     it('extrai todos os tokens na ordem do quick-add', () => {
@@ -184,6 +189,23 @@ function tarefa(parcial: Partial<Tarefa> & { id: string }): Tarefa {
         ...parcial,
     };
 }
+
+describe('agruparPorEstado (kanban #58)', () => {
+    it('distribui abertas pelas colunas e concluídas em terminado', () => {
+        const grupos = agruparPorEstado(
+            [
+                tarefa({ id: 'a', estado: 'backlog' }),
+                tarefa({ id: 'b', estado: 'desenvolvimento' }),
+                tarefa({ id: 'c', estado: 'backlog' }),
+            ],
+            [tarefa({ id: 'feita', estado: 'terminado' })],
+        );
+        expect(grupos.backlog.map((t) => t.id)).toEqual(['a', 'c']);
+        expect(grupos.desenvolvimento.map((t) => t.id)).toEqual(['b']);
+        expect(grupos.analise).toEqual([]);
+        expect(grupos.terminado.map((t) => t.id)).toEqual(['feita']);
+    });
+});
 
 describe('ordenarTarefasAbertas', () => {
     it('data fim primeiro (mais próxima no topo), sem data vai para o fim', () => {

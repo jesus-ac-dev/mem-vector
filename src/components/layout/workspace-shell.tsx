@@ -18,6 +18,7 @@ import {
     CornerDownLeft,
     CornerUpRight,
     Share2,
+    SquareKanban,
     Tag,
     FilePlus,
     FolderPlus,
@@ -74,9 +75,11 @@ const panelItems: { id: LeftPanel; label: string; Icon: React.ElementType }[] = 
     { id: 'chats', label: 'Conversas', Icon: MessagesSquare },
 ];
 
-// Route nav items (Knowledge e Daily vivem no file-explorer, não no ribbon)
+// Route nav items (Knowledge e Daily vivem no file-explorer, não no ribbon).
+// Ordem por importância de uso (#55): chat → kanban → tarefas → grupos.
 const navItems = [
     { href: '/chat', label: 'Chat', Icon: MessageSquare },
+    { href: '/kanban', label: 'Kanban', Icon: SquareKanban },
     { href: '/grupos', label: 'Grupos', Icon: Users },
 ];
 
@@ -164,7 +167,12 @@ function Ribbon({
             {/* Secção de baixo por importância de uso (#55): chat → kanban
                 (quase a chegar) → tarefas → emails (há de vir) → grupos. */}
             {navItems.map(({ href, label, Icon }) => {
-                const active = href === '/chat' ? chatAberto : pathname.startsWith(href);
+                // Chat só acende na própria página (#58: no kanban o chat vive
+                // no rodapé — o ícone não deve parecer selecionado).
+                const active =
+                    href === '/chat'
+                        ? chatAberto && pathname.startsWith('/chat')
+                        : pathname.startsWith(href);
                 const link = (
                     <Link
                         key={href}

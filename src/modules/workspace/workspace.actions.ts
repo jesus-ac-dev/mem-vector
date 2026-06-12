@@ -193,16 +193,25 @@ export async function guardarFicheiro(
  * Cria uma nota knowledge nova e vazia com um título único ("Nova nota", "Nova nota 2"…)
  * e devolve a chave para a abrir numa tab. Usada pela ação "Criar Nota" da Home.
  */
+// O título gerado tem de fugir TAMBÉM às arquivadas: o slug delas continua
+// ocupado (índice único) e o guard do #28 recusa escrever por cima — sem isto,
+// uma "Nova nota" arquivada bloqueava o botão de criar para sempre.
+async function titulosUsados(folderId: string | null): Promise<Set<string>> {
+    const [vivas, arquivadas] = await Promise.all([listarKnowledge(), listarArquivados()]);
+    return new Set(
+        [...vivas, ...arquivadas]
+            .filter((n) => (n.folderId ?? null) === folderId)
+            .map((n) => n.title),
+    );
+}
+
 export async function criarNotaVazia(): Promise<{
     tipo: 'knowledge';
     id: string;
     chave: string;
     titulo: string;
 }> {
-    const existentes = await listarKnowledge();
-    const usados = new Set(
-        existentes.filter((n) => (n.folderId ?? null) === null).map((n) => n.title),
-    );
+    const usados = await titulosUsados(null);
     let titulo = 'Nova nota';
     let n = 2;
     while (usados.has(titulo)) {
@@ -233,10 +242,7 @@ export async function criarNotaNaPasta(folderId: string | null): Promise<{
 }> {
     if (!folderId) return criarNotaVazia();
 
-    const existentes = await listarKnowledge();
-    const usados = new Set(
-        existentes.filter((n) => (n.folderId ?? null) === folderId).map((n) => n.title),
-    );
+    const usados = await titulosUsados(folderId);
     let titulo = 'Nova nota';
     let n = 2;
     while (usados.has(titulo)) {
