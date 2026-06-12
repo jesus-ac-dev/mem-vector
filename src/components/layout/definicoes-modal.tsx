@@ -28,8 +28,6 @@ import {
 } from '@/modules/definicoes/definicoes.actions';
 import {
     DEFINICOES_VISTA_DEFAULT,
-    ESFORCOS,
-    MODELOS_SUGERIDOS,
     MODULO_LABEL,
     MODULOS,
     PROVIDER_LABEL,
@@ -37,12 +35,12 @@ import {
     type AgenteVista,
     type Definicoes,
     type DefinicoesVista,
-    type Esforco,
     type MetodoDestilacao,
     type ModoAgente,
     type Modulo,
     type Provider,
 } from '@/modules/definicoes/definicoes.schema';
+import { ProviderIcon } from '@/components/layout/provider-icon';
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
 // forms à direita. Aqui PARAMETRIZA-SE (Comportamento, Agentes, Módulos) com
@@ -76,8 +74,10 @@ const MODULO_DESCRICAO: Record<Modulo, string> = {
 
 const AGENTE_SEM_CONFIG: AgenteVista = { ativo: false, modo: 'cli', temApiKey: false };
 
-// Esforço de raciocínio: por agora só o codex o aceita (model_reasoning_effort).
-const PROVIDERS_COM_ESFORCO: Provider[] = ['codex'];
+// Verde claro no sucesso (pedido do Carlos) — fora do JSX, como o corPrioridade.
+function corTeste(ok: boolean): string {
+    return ok ? 'text-green-400' : 'text-destructive';
+}
 
 export function DefinicoesModal({
     open,
@@ -188,6 +188,16 @@ export function DefinicoesModal({
         );
         const resultado = r ?? { ok: false, detalhe: 'o teste não respondeu' };
         setTestes((t) => ({ ...t, [p]: resultado }));
+        // O teste descobriu modelos (#60 r5): refletir já nas dropdowns.
+        if (resultado.ok && r?.modelos?.length) {
+            setDefs((d) => ({
+                ...d,
+                agentes: {
+                    ...d.agentes,
+                    [p]: { ...(d.agentes[p] ?? AGENTE_SEM_CONFIG), modelos: r.modelos },
+                },
+            }));
+        }
         return resultado.ok;
     }
 
@@ -360,14 +370,14 @@ export function DefinicoesModal({
                                     {PROVIDERS.map((p) => {
                                         const cfg = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
                                         const teste = testes[p];
-                                        const sugeridos = MODELOS_SUGERIDOS[p];
                                         return (
                                             <li key={p} className="space-y-2 rounded-md border p-3">
                                                 <div className="flex items-center justify-between gap-4">
-                                                    <p className="text-sm font-medium">
+                                                    <p className="flex items-center gap-2 text-sm font-medium">
+                                                        <ProviderIcon provider={p} />
                                                         {PROVIDER_LABEL[p]}
                                                         {p === 'claude' && (
-                                                            <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                                            <span className="ml-1 text-xs font-normal text-muted-foreground">
                                                                 o orquestrador atual
                                                             </span>
                                                         )}
@@ -403,85 +413,15 @@ export function DefinicoesModal({
                                                                     </SelectItem>
                                                                 </SelectContent>
                                                             </Select>
-                                                            {sugeridos.length > 0 ? (
-                                                                <Select
-                                                                    value={cfg.modelo ?? 'default'}
-                                                                    onValueChange={(m) =>
-                                                                        mudarAgente(p, {
-                                                                            modelo:
-                                                                                m === 'default'
-                                                                                    ? undefined
-                                                                                    : m,
-                                                                        })
-                                                                    }
-                                                                >
-                                                                    <SelectTrigger className="h-8 w-44 text-xs">
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="default">
-                                                                            modelo default
-                                                                        </SelectItem>
-                                                                        {sugeridos.map((m) => (
-                                                                            <SelectItem
-                                                                                key={m}
-                                                                                value={m}
-                                                                            >
-                                                                                {m}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            ) : (
-                                                                <Input
-                                                                    value={cfg.modelo ?? ''}
-                                                                    onChange={(e) =>
-                                                                        mudarAgente(p, {
-                                                                            modelo:
-                                                                                e.target.value ||
-                                                                                undefined,
-                                                                        })
-                                                                    }
-                                                                    placeholder="modelo (default)"
-                                                                    className="h-8 w-44 text-xs"
-                                                                />
-                                                            )}
-                                                            {PROVIDERS_COM_ESFORCO.includes(p) && (
-                                                                <Select
-                                                                    value={cfg.esforco ?? 'default'}
-                                                                    onValueChange={(v) =>
-                                                                        mudarAgente(p, {
-                                                                            esforco:
-                                                                                v === 'default'
-                                                                                    ? undefined
-                                                                                    : (v as Esforco),
-                                                                        })
-                                                                    }
-                                                                >
-                                                                    <SelectTrigger className="h-8 w-32 text-xs">
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="default">
-                                                                            esforço default
-                                                                        </SelectItem>
-                                                                        {ESFORCOS.map((e) => (
-                                                                            <SelectItem
-                                                                                key={e}
-                                                                                value={e}
-                                                                            >
-                                                                                {e}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            )}
+                                                            {/* Modelo e esforço vivem na
+                                                                ESCOLHA (mini-modal do chat) —
+                                                                aqui só se parametriza a ligação. */}
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
                                                                 onClick={() => testarManual(p)}
                                                                 disabled={teste === 'a-testar'}
-                                                                className="h-8 text-xs"
+                                                                className="ml-auto h-8 text-xs"
                                                             >
                                                                 {teste === 'a-testar'
                                                                     ? 'A testar…'
@@ -526,9 +466,7 @@ export function DefinicoesModal({
                                                             <p
                                                                 className={cn(
                                                                     'text-xs',
-                                                                    teste.ok
-                                                                        ? 'text-primary'
-                                                                        : 'text-destructive',
+                                                                    corTeste(teste.ok),
                                                                 )}
                                                             >
                                                                 {teste.ok ? '✓' : '✗'}{' '}

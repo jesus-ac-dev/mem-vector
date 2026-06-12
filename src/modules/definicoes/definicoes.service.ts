@@ -23,6 +23,7 @@ interface AgenteRow {
     modo?: 'cli' | 'api';
     modelo?: string;
     esforco?: string;
+    modelos?: string[]; // descobertos pelo Testar ligação (#60 r5)
     apiKeyCifrada?: string;
 }
 
@@ -87,6 +88,7 @@ export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<Definic
             modo: cfg.modo ?? 'cli',
             modelo: cfg.modelo || undefined,
             esforco: cfg.esforco as AgenteVista['esforco'],
+            modelos: cfg.modelos,
             temApiKey: Boolean(key),
             apiKeySufixo: key ? sufixoKey(key) : undefined,
         };
@@ -113,6 +115,7 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
             modo: cfg.modo ?? 'cli',
             modelo: cfg.modelo || undefined,
             esforco: cfg.esforco as AgenteServidor['esforco'],
+            modelos: cfg.modelos,
             apiKey: cfg.apiKeyCifrada ? decifrar(cfg.apiKeyCifrada) : undefined,
         };
     }
@@ -151,6 +154,8 @@ export async function gravarDefinicoesCom(
             modo: novo.modo,
             modelo: novo.modelo,
             esforco: novo.esforco,
+            // A lista descoberta pelo teste sobrevive às gravações do cliente.
+            ...(anterior?.modelos ? { modelos: anterior.modelos } : {}),
             ...(apiKeyCifrada ? { apiKeyCifrada } : {}),
         };
     }
@@ -170,4 +175,28 @@ export async function gravarDefinicoesCom(
 // Compat: o pós-turno só precisa do método.
 export async function lerDefinicoesCom(db: SupabaseClient): Promise<DefinicoesServidor> {
     return lerDefinicoesServidorCom(db);
+}
+
+/** O Testar ligação descobriu modelos (#60 r5): persiste-os no provider. */
+export async function gravarModelosProviderCom(
+    db: SupabaseClient,
+    provider: Provider,
+    modelos: string[],
+): Promise<void> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const row = await lerRowCom(db);
+    const agentes: Record<string, AgenteRow> = row ? { ...(row.agentes ?? {}) } : {};
+    agentes[provider] = { ...(agentes[provider] ?? { ativo: true, modo: 'cli' }), modelos };
+    const { error } = await db.from('definicoes').upsert({
+        owner_id: user.id,
+        metodo_destilacao: row?.metodo_destilacao ?? 'one-shot',
+        modulos_ativos: row?.modulos_ativos ?? [],
+        chat_provider: row?.chat_provider ?? 'claude',
+        agentes,
+        updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(`gravar modelos falhou: ${error.message}`);
 }

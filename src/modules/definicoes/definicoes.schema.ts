@@ -28,11 +28,12 @@ export type ModoAgente = (typeof MODOS_AGENTE)[number];
 export const ESFORCOS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export type Esforco = (typeof ESFORCOS)[number];
 
-// Modelos curados por provider (vazio = default do provider). Codex e Ollama
-// têm texto livre na UI (os modelos locais variam).
+// Fallback de modelos por provider, usado até o "Testar ligação" descobrir a
+// lista real (#60 r5): gemini/ollama dão lista VIVA via API; claude usa os
+// aliases oficiais do CLI; codex é curado (o CLI não expõe listagem).
 export const MODELOS_SUGERIDOS: Record<Provider, string[]> = {
     claude: ['opus', 'sonnet', 'haiku'],
-    codex: [],
+    codex: ['gpt-5.1-codex', 'gpt-5.1-codex-mini'],
     gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
     ollama: [],
 };
@@ -76,6 +77,7 @@ export interface AgenteVista {
     modo: ModoAgente;
     modelo?: string;
     esforco?: Esforco;
+    modelos?: string[]; // descobertos pelo Testar ligação (#60 r5)
     temApiKey: boolean;
     apiKeySufixo?: string;
 }
@@ -93,6 +95,7 @@ export interface AgenteServidor {
     modo: ModoAgente;
     modelo?: string;
     esforco?: Esforco;
+    modelos?: string[];
     apiKey?: string;
 }
 

@@ -29,7 +29,11 @@ onChange, só entre providers já parametrizados.
   at rest** (AES-256-GCM, `src/lib/cripto.ts`, segredo `MEMVECTOR_KEYS_SECRET`)
   e NUNCA voltam ao browser — a vista só leva `temApiKey` + sufixo. Botão
   "Testar ligação" por provider (cli = binário/versão; api = chamada barata).
-  Quota/limite dita alto (padrão skills-compare). O agente-autor
+  Quota/limite dita alto (padrão skills-compare). **O teste com sucesso DESCOBRE a
+  lista de modelos do provider e persiste-a** (#60 r5 — gemini/ollama via API real;
+  claude = aliases do CLI; codex = curado, sem listagem no CLI): as dropdowns da
+  escolha ficam vivas — modelo novo nas notícias → Testar ligação → aparece. Modelo
+  e esforço escolhem-se SEMPRE na mini-modal (nunca nas Definições, sem texto livre). O agente-autor
   (destilação/contrato) continua claude — tools e envelope afinados para ele.
 - **Módulos** (`modulos_ativos`) — toggles: `github` (disponível), `emails`,
   `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão

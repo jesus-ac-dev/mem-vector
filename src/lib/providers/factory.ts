@@ -24,6 +24,11 @@ export interface ProviderLLM {
     nome: Provider;
     gerar(prompt: string): Promise<RespostaLLM>;
     testar(): Promise<{ ok: boolean; detalhe: string }>;
+    // Descoberta de modelos (#60 r5, ideia do Carlos): após o teste de ligação
+    // com sucesso, a lista alimenta as dropdowns — gemini/ollama dão lista
+    // VIVA via API; claude usa os aliases do CLI; codex é curado (o CLI não
+    // expõe listagem).
+    listarModelos(): Promise<string[]>;
 }
 
 // Padrão do skills-compare: quota/limite tem de dizer alto, não mascarar.
@@ -80,6 +85,7 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
             return { text: g.text, costUsd: g.costUsd };
         },
         testar: () => testarVersao('claude'),
+        listarModelos: async () => ['opus', 'sonnet', 'haiku'],
     };
 }
 
@@ -124,6 +130,7 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
             }
         },
         testar: () => testarVersao('codex'),
+        listarModelos: async () => ['gpt-5.1-codex', 'gpt-5.1-codex-mini'],
     };
 }
 
@@ -170,6 +177,21 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
                 return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
             }
         },
+        async listarModelos() {
+            if (!cfg.apiKey) return [];
+            const res = await fetch(`${GEMINI_BASE}/models?pageSize=100`, {
+                headers: { 'x-goog-api-key': cfg.apiKey },
+            });
+            if (!res.ok) return [];
+            const json = (await res.json()) as {
+                models?: { name?: string; supportedGenerationMethods?: string[] }[];
+            };
+            return (json.models ?? [])
+                .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+                .map((m) => (m.name ?? '').replace(/^models\//, ''))
+                .filter((n) => n.startsWith('gemini'))
+                .sort();
+        },
     };
 }
 
@@ -208,6 +230,16 @@ function providerOllama(cfg: AgenteServidor): ProviderLLM {
                 };
             } catch {
                 return { ok: false, detalhe: `daemon não responde em ${OLLAMA_BASE}` };
+            }
+        },
+        async listarModelos() {
+            try {
+                const res = await fetch(`${OLLAMA_BASE}/api/tags`);
+                if (!res.ok) return [];
+                const json = (await res.json()) as { models?: { name: string }[] };
+                return (json.models ?? []).map((m) => m.name).sort();
+            } catch {
+                return [];
             }
         },
     };

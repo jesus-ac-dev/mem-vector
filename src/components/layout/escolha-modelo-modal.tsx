@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -21,19 +20,24 @@ import {
 } from '@/components/ui/select';
 import { gravarDefinicoes, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
 import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
+import { ProviderIcon } from '@/components/layout/provider-icon';
 import {
+    ESFORCOS,
     MODELOS_SUGERIDOS,
     PROVIDER_LABEL,
     PROVIDERS,
     type AgenteVista,
     type DefinicoesVista,
+    type Esforco,
     type Provider,
 } from '@/modules/definicoes/definicoes.schema';
 
-// Mini-modal da ESCOLHA (#60 r4, design do Carlos): o link sobre o Enviar
-// abre isto — escolher o provider (entre os parametrizados/ativos) e o modelo
-// para o chat. Grava onChange; parametrizar novos providers (keys, testes) é
-// trabalho da modal grande das Definições.
+// Mini-modal da ESCOLHA (#60 r4/r5, design do Carlos): o link sobre o Enviar
+// abre isto — provider (entre os parametrizados/ativos), modelo (da lista
+// descoberta pelo Testar ligação; sem texto livre) e esforço (onde o provider
+// o aceita). Grava onChange; parametrizar é trabalho da modal das Definições.
+
+const PROVIDERS_COM_ESFORCO: Provider[] = ['codex'];
 
 export function EscolhaModeloModal({
     open,
@@ -86,9 +90,27 @@ export function EscolhaModeloModal({
         });
     }
 
+    function mudarAtual(campos: Partial<AgenteVista>) {
+        if (!defs) return;
+        const atual = defs.agentes[defs.chatProvider] ?? {
+            ativo: true,
+            modo: 'cli' as const,
+            temApiKey: false,
+        };
+        gravar({
+            ...defs,
+            agentes: { ...defs.agentes, [defs.chatProvider]: { ...atual, ...campos } },
+        });
+    }
+
     const ativos = defs ? PROVIDERS.filter((p) => defs.agentes[p]?.ativo) : [];
     const atual = defs?.agentes[defs.chatProvider];
-    const sugeridos = defs ? MODELOS_SUGERIDOS[defs.chatProvider] : [];
+    // Lista descoberta pelo Testar ligação; fallback curado até lá.
+    const modelos = defs
+        ? atual?.modelos?.length
+            ? atual.modelos
+            : MODELOS_SUGERIDOS[defs.chatProvider]
+        : [];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,28 +135,46 @@ export function EscolhaModeloModal({
                             <SelectContent>
                                 {(ativos.length ? ativos : (['claude'] as Provider[])).map((p) => (
                                     <SelectItem key={p} value={p}>
-                                        {PROVIDER_LABEL[p]}
+                                        <span className="flex items-center gap-2">
+                                            <ProviderIcon provider={p} className="h-5 w-5" />
+                                            {PROVIDER_LABEL[p]}
+                                        </span>
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {sugeridos.length > 0 ? (
+
+                        <Select
+                            value={atual?.modelo ?? 'default'}
+                            onValueChange={(m) =>
+                                mudarAtual({ modelo: m === 'default' ? undefined : m })
+                            }
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="default">modelo default</SelectItem>
+                                {modelos.map((m) => (
+                                    <SelectItem key={m} value={m}>
+                                        {m}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {!atual?.modelos?.length && (
+                            <p className="text-xs text-muted-foreground">
+                                Lista curada — corre &quot;Testar ligação&quot; nas Definições para
+                                descobrir os modelos reais do provider.
+                            </p>
+                        )}
+
+                        {PROVIDERS_COM_ESFORCO.includes(defs.chatProvider) && (
                             <Select
-                                value={atual?.modelo ?? 'default'}
-                                onValueChange={(m) =>
-                                    gravar({
-                                        ...defs,
-                                        agentes: {
-                                            ...defs.agentes,
-                                            [defs.chatProvider]: {
-                                                ...(atual ?? {
-                                                    ativo: true,
-                                                    modo: 'cli',
-                                                    temApiKey: false,
-                                                }),
-                                                modelo: m === 'default' ? undefined : m,
-                                            },
-                                        },
+                                value={atual?.esforco ?? 'default'}
+                                onValueChange={(v) =>
+                                    mudarAtual({
+                                        esforco: v === 'default' ? undefined : (v as Esforco),
                                     })
                                 }
                             >
@@ -142,36 +182,16 @@ export function EscolhaModeloModal({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="default">modelo default</SelectItem>
-                                    {sugeridos.map((m) => (
-                                        <SelectItem key={m} value={m}>
-                                            {m}
+                                    <SelectItem value="default">esforço default</SelectItem>
+                                    {ESFORCOS.map((e) => (
+                                        <SelectItem key={e} value={e}>
+                                            {e}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                        ) : (
-                            <Input
-                                value={atual?.modelo ?? ''}
-                                onChange={(e) =>
-                                    gravar({
-                                        ...defs,
-                                        agentes: {
-                                            ...defs.agentes,
-                                            [defs.chatProvider]: {
-                                                ...(atual ?? {
-                                                    ativo: true,
-                                                    modo: 'cli',
-                                                    temApiKey: false,
-                                                }),
-                                                modelo: e.target.value || undefined,
-                                            },
-                                        },
-                                    })
-                                }
-                                placeholder="modelo (default)"
-                            />
                         )}
+
                         <Button
                             variant="ghost"
                             size="sm"
