@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { EstadoTarefa, NovaTarefa, Tarefa } from './tarefas.schema';
-import { ESTADOS_TAREFA } from './tarefas.schema';
+import { ESTADOS_TAREFA, ordenarTarefasAbertas } from './tarefas.schema';
 import { createClient } from '@/lib/supabase/server';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import { horaLisboa } from '@/modules/daily/daily.capture';
@@ -12,7 +12,7 @@ import { horaLisboa } from '@/modules/daily/daily.capture';
 // conveniência de Server Actions.
 
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto, descricao, depende_de, created_at, concluida_em';
+    'id, titulo, estado, prioridade, projeto, descricao, depende_de, data_fim, created_at, concluida_em';
 
 interface TarefaRow {
     id: string;
@@ -22,6 +22,7 @@ interface TarefaRow {
     projeto: string | null;
     descricao: string | null;
     depende_de: string | null;
+    data_fim: string | null;
     created_at: string;
     concluida_em: string | null;
 }
@@ -35,6 +36,7 @@ function toTarefa(r: TarefaRow): Tarefa {
         projeto: r.projeto,
         descricao: r.descricao,
         dependeDe: r.depende_de,
+        dataFim: r.data_fim,
         criadaEm: r.created_at,
         concluidaEm: r.concluida_em,
     };
@@ -47,7 +49,8 @@ export async function listarTarefasAbertasCom(db: SupabaseClient): Promise<Taref
         .neq('estado', 'terminado')
         .order('created_at', { ascending: false });
     if (error) throw new Error(`listar tarefas abertas falhou: ${error.message}`);
-    return ((data ?? []) as TarefaRow[]).map(toTarefa);
+    // Ordem do painel (#51): data fim → prioridade → estado desc do kanban.
+    return ordenarTarefasAbertas(((data ?? []) as TarefaRow[]).map(toTarefa));
 }
 
 export async function listarTarefasConcluidasCom(
@@ -90,6 +93,7 @@ export async function criarTarefaCom(db: SupabaseClient, input: NovaTarefa): Pro
             prioridade: input.prioridade ?? 'normal',
             descricao: input.descricao ?? null,
             depende_de: input.dependeDe ?? null,
+            data_fim: input.dataFim ?? null,
             owner_id: user.id,
             visibility: input.visibility ?? 'privado',
             group_id: input.visibility === 'protected' ? input.groupId : null,

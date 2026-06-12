@@ -20,6 +20,10 @@ export const NovaTarefaSchema = z
         titulo: z.string().min(1, 'O título é obrigatório').max(200),
         projeto: z.string().max(60).optional(),
         prioridade: z.enum(PRIORIDADES_TAREFA).default('normal'),
+        dataFim: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data fim em AAAA-MM-DD')
+            .optional(),
         descricao: z.string().max(2000).optional(),
         dependeDe: z.string().uuid().optional(),
         visibility: z.enum(['privado', 'protected']).default('privado'),
@@ -53,6 +57,25 @@ export interface Tarefa {
     projeto: string | null;
     descricao: string | null;
     dependeDe: string | null;
+    dataFim: string | null; // AAAA-MM-DD
     criadaEm: string; // ISO
     concluidaEm: string | null; // ISO
+}
+
+const ORDEM_PRIORIDADE: Record<PrioridadeTarefa, number> = { alta: 0, normal: 1, baixa: 2 };
+
+// Ordenação do painel (#51, decisão do Carlos): data fim primeiro (quem a tem
+// vem antes, a mais próxima no topo), depois prioridade, depois estado em
+// ordem DESCENDENTE do kanban (mais perto do fim primeiro).
+export function ordenarTarefasAbertas(tarefas: Tarefa[]): Tarefa[] {
+    return [...tarefas].sort((a, b) => {
+        if (a.dataFim !== b.dataFim) {
+            if (!a.dataFim) return 1;
+            if (!b.dataFim) return -1;
+            return a.dataFim < b.dataFim ? -1 : 1;
+        }
+        const p = ORDEM_PRIORIDADE[a.prioridade] - ORDEM_PRIORIDADE[b.prioridade];
+        if (p !== 0) return p;
+        return ESTADOS_TAREFA.indexOf(b.estado) - ESTADOS_TAREFA.indexOf(a.estado);
+    });
 }

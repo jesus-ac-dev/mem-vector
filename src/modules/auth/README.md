@@ -41,7 +41,7 @@
 O middleware `src/lib/supabase/middleware.ts` (`updateSession`) cobre:
 
 ```ts
-const PROTECTED = ['/chat', '/tarefas', '/knowledge', '/daily', '/grupos'];
+const PROTECTED = ['/chat', '/knowledge', '/daily', '/grupos'];
 ```
 
 - Utilizador **sem sessão** numa rota protegida → redirect para `/login`.

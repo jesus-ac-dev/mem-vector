@@ -1,80 +1,56 @@
 # Módulo `tarefas`
 
-> Gestão de tarefas do utilizador autenticado, com visibilidade privada ou partilhada por grupo.
+> Tarefas leves do utilizador (kanban #21, painel v2 #51), com visibilidade privada ou partilhada por grupo.
 
 ## O que faz
 
-Permite criar e listar tarefas. É o **módulo de referência** do padrão feature-first do projeto:
-`ecrã → action (Zod) → serviço → DB`. Cada camada tem uma responsabilidade única e não há
-lógica de negócio espalhada.
+Tarefas andam pelo ciclo canónico do kanban e vivem no **painel da sidebar esquerda**
+(`tarefas-panel.tsx`) — não há página própria. Criam-se por quick-add à la Obsidian
+(tokens num input único) ou pelo agente na destilação do turno. A conclusão (e só ela)
+fica registada no daily.
 
 ## Ficheiros
 
 | Ficheiro | Responsabilidade |
 |---|---|
-| `tarefas.schema.ts` | `NovaTarefaSchema` (Zod) para validação de input + tipo `Tarefa` (saída do serviço) |
-| `tarefas.service.ts` | `listarTarefas` e `criarTarefa` — acesso ao Supabase com cliente autenticado; a RLS é a guarda de dados |
-| `tarefas.actions.ts` | Server Action Next.js — porta do servidor: valida com Zod, chama o serviço, invalida a cache |
-| `nova-tarefa-form.tsx` | Componente client-side com formulário (título + visibilidade + grupo) |
+| `tarefas.schema.ts` | `NovaTarefaSchema` (Zod), estados/prioridades, tipo `Tarefa`, `ordenarTarefasAbertas` |
+| `tarefas.service.ts` | variantes `...Com` (listar/criar/mudarEstado/concluir/apagar) — RLS é a guarda de dados |
+| `tarefas.actions.ts` | Server Actions — porta do servidor: valida com Zod, chama o serviço |
+| `tarefas-quickadd.ts` | lógica pura do quick-add: `parseNovaTarefa`, gatilhos `!`/`#`, sugestões |
+
+UI: `src/components/layout/tarefas-panel.tsx` (painel esquerdo).
 
 ## Modelo de dados
 
-Tabela `tarefas` (criada em `20260603120000_auth_profiles_visibility.sql`, políticas alargadas
-em `20260603140000_grupos_protected.sql`):
+Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim em
+`20260612110000`):
 
 | Coluna | Tipo | Notas |
 |---|---|---|
-| `id` | `uuid` | PK, gerado automaticamente |
+| `id` | `uuid` | PK |
 | `titulo` | `text` | obrigatório |
-| `feita` | `boolean` | default `false` |
-| `owner_id` | `uuid` | FK → `auth.users`; cascade delete |
-| `visibility` | `visibility` (enum) | `privado` ou `protected` |
-| `group_id` | `uuid` | obrigatório quando `visibility = 'protected'` |
-| `created_at` | `timestamptz` | default `now()` |
+| `estado` | `text` | `backlog → analise → desenvolvimento → testes → documentacao → terminado` |
+| `prioridade` | `text` | `baixa` / `normal` / `alta` |
+| `projeto` | `text` | tag livre até existir a página de Projetos (#47) |
+| `descricao` | `text` | curta, opcional |
+| `depende_de` | `uuid` | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`) |
+| `data_fim` | `date` | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação |
+| `concluida_em` | `timestamptz` | carimbada pela RPC |
+| `owner_id` / `visibility` / `group_id` / `created_at` | | iguais ao resto do projeto |
 
-**RLS:**
-- `ler` — dono (`owner_id = auth.uid()`) **ou** `protected` com `group_id in (meus_grupos())`.
-- `criar` / `apagar` — só o dono.
-- `editar` — dono ou membro do grupo para tarefas `protected`.
+**RLS:** ler — dono ou grupo (`protected`); criar/apagar — só o dono; editar — dono ou
+membro do grupo. Terminada não se reabre por `mudarEstado`.
 
-## API principal (exports)
+## Quick-add (#51)
 
-```ts
-// tarefas.schema.ts
-export const NovaTarefaSchema  // Zod — valida { titulo, visibility, groupId? }
-export type NovaTarefa          // z.infer<typeof NovaTarefaSchema>
-export interface Tarefa { id: string; titulo: string; feita: boolean; criadaEm: string }
-
-// tarefas.service.ts
-export async function listarTarefas(): Promise<Tarefa[]>
-export async function criarTarefa(input: NovaTarefa): Promise<Tarefa>
-
-// tarefas.actions.ts
-export async function criarTarefa(input: unknown): Promise<void>  // Server Action
-
-// nova-tarefa-form.tsx
-export function NovaTarefaForm({ grupos }: { grupos: { id: string; nome: string }[] })
-```
-
-## Fluxo
-
-```
-NovaTarefaForm (client)
-  └─ submete { titulo, visibility, groupId? } (unknown)
-       └─ criarTarefa (Server Action)
-            ├─ NovaTarefaSchema.parse(input)   ← rejeita dados inválidos na fronteira do servidor
-            ├─ criarTarefaService(dados)
-            │    ├─ createClient() — cliente Supabase SSR com sessão do utilizador
-            │    ├─ auth.getUser() — obtém owner_id
-            │    └─ INSERT tarefas (RLS aplica-se aqui)
-            └─ revalidatePath('/tarefas')       ← invalida cache do Next.js
-```
+`tarefa !prioridade #projeto @2026-06-30 // descrição` — `!` e `#` têm autocomplete
+(prioridades fixas; projetos já usados). ID e data de criação são automáticos. A view
+da row segue a mesma ordem; ordenação do painel: data fim → prioridade → estado
+descendente do kanban.
 
 ## Ligações
 
-- **Padrão arquitetura-por-feature** — este módulo é o exemplo vivo e mais simples do padrão
-  usado em todo o projeto (`knowledge/`, `daily/`, `conversations/`).
-- **RLS visibility/grupos** — o enum `visibility` e a função `meus_grupos()` são partilhados
-  com os módulos `knowledge` e `daily`; qualquer alteração ao modelo de grupos afeta todos.
-- **`NovaTarefaForm`** recebe `grupos` do Server Component pai (que chama `listarTarefas` e
-  vai buscar os grupos do utilizador) — sem fetch no cliente.
+- **Agente** — `src/agent/mcp-tools.ts` expõe `listar_tarefas_abertas` / `criar_tarefa` /
+  `concluir_tarefa`; o envelope one-shot traz `tarefas` + `concluir` (`chat.turno.ts`).
+- **RLS visibility/grupos** — enum `visibility` e `meus_grupos()` partilhados com
+  `knowledge` e `daily`.
