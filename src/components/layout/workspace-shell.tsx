@@ -21,6 +21,7 @@ import {
     Tag,
     FilePlus,
     FolderPlus,
+    Loader2,
     Archive,
     Plus,
 } from 'lucide-react';
@@ -254,6 +255,9 @@ function LeftSidebar({
     const [knowledgeOpen, setKnowledgeOpen] = useState(true);
     const [forceOpenFolderIds, setForceOpenFolderIds] = useState<string[]>([]);
     const [criandoPasta, setCriandoPasta] = useState(false);
+    // Anti-duplo-clique: a criação da nota tem latência de servidor e sem
+    // feedback nasciam ficheiros a dobrar (relato do Carlos, #47).
+    const [criandoNota, setCriandoNota] = useState(false);
     // Painel de tarefas (#21): o "+" do header abre o input de criação.
     const [criarTarefaAberto, setCriarTarefaAberto] = useState(false);
 
@@ -291,31 +295,37 @@ function LeftSidebar({
     }
 
     async function handleNovaNota() {
-        if (pastaSelecionada === null) {
-            setKnowledgeOpen(true);
-        } else {
-            setForceOpenFolderIds((ids) =>
-                ids.includes(pastaSelecionada) ? ids : [...ids, pastaSelecionada],
+        if (criandoNota) return;
+        setCriandoNota(true);
+        try {
+            if (pastaSelecionada === null) {
+                setKnowledgeOpen(true);
+            } else {
+                setForceOpenFolderIds((ids) =>
+                    ids.includes(pastaSelecionada) ? ids : [...ids, pastaSelecionada],
+                );
+            }
+            const nota = await criarNotaNaPasta(pastaSelecionada);
+            atualizarArvoreLocal((atual) =>
+                inserirNotaNaArvore(atual, {
+                    id: nota.id,
+                    slug: nota.chave,
+                    title: nota.titulo,
+                    folderId: pastaSelecionada,
+                }),
             );
-        }
-        const nota = await criarNotaNaPasta(pastaSelecionada);
-        atualizarArvoreLocal((atual) =>
-            inserirNotaNaArvore(atual, {
+            abrirFicheiro({
+                tipo: nota.tipo,
                 id: nota.id,
-                slug: nota.chave,
-                title: nota.titulo,
-                folderId: pastaSelecionada,
-            }),
-        );
-        abrirFicheiro({
-            tipo: nota.tipo,
-            id: nota.id,
-            chave: nota.chave,
-            titulo: nota.titulo,
-            vistaInicial: 'editor',
-        });
-        notificarWorkspaceMudou();
-        router.push('/chat');
+                chave: nota.chave,
+                titulo: nota.titulo,
+                vistaInicial: 'editor',
+            });
+            notificarWorkspaceMudou();
+            router.push('/chat');
+        } finally {
+            setCriandoNota(false);
+        }
     }
 
     function handleNovaPasta() {
@@ -380,8 +390,9 @@ function LeftSidebar({
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        title="Nova nota"
+                                        title={criandoNota ? 'A criar…' : 'Nova nota'}
                                         aria-label="Nova nota"
+                                        disabled={criandoNota}
                                         onClick={() =>
                                             void runClientAction(
                                                 {
@@ -394,7 +405,11 @@ function LeftSidebar({
                                         }
                                         className="h-6 w-6 text-muted-foreground"
                                     >
-                                        <FilePlus className="h-3.5 w-3.5" />
+                                        {criandoNota ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                            <FilePlus className="h-3.5 w-3.5" />
+                                        )}
                                     </Button>
                                 </>
                             )}
