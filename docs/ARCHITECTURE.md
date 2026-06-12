@@ -192,7 +192,10 @@ Tarefas), as tarefas pelas 6 colunas canónicas. Drag entre colunas =
 no daily; bloqueada por dependência recusa o drop com aviso — validação
 client-side + RPC); drop na zona Apagar = delete com modal (tarefas não têm
 arquivo). Filtro por projeto no topo: o kanban filtrado a um projeto É a
-página do projeto v1. `agruparPorEstado` (pura, testada) distribui as colunas.
+página do projeto v1. `agruparPorEstado` (pura, testada) distribui as colunas. Layout (visão fechada 2026-06-05): o board ocupa o centro e o
+**chat desce para a faixa inferior** (h-80, ao nível do grafo e do calendário)
+— `ChatContent` extraído da página /chat para componente reutilizável com modo
+rodapé.
 
 **Ronda 3 (#55):** datas à portuguesa em todo o display — `dd-MMM` nas tarefas
 (➕/📅/✅), `dd-mm-aaaa` nos títulos das dailies (explorer, tabs, calendário,
