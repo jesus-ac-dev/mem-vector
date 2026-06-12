@@ -112,6 +112,17 @@ describe('codex em modo api (#60 r9)', () => {
         expect(init.headers.authorization).toBe('Bearer sk-teste');
     });
 
+    it('gerar passa o esforço xhigh DIRETO — existe na API (SDK shared.ts, r10)', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, { choices: [{ message: { content: 'ok' } }] }),
+        );
+        const p = criarProvider('codex', cfgApi({ modelo: 'gpt-5.5', esforco: 'xhigh' }));
+        await p.gerar('x');
+        const corpo = JSON.parse(fetchMock.mock.calls[0][1].body);
+        expect(corpo.reasoning_effort).toBe('xhigh');
+        expect(corpo.max_completion_tokens).toBe(16000);
+    });
+
     it('gerar sem modelo pede a escolha em vez de inventar', async () => {
         const p = criarProvider('codex', cfgApi());
         await expect(p.gerar('x')).rejects.toThrow(/escolhe um modelo/);
@@ -163,6 +174,14 @@ describe('gemini e ollama — o teste deixa as coisas resolvidas (r8/r9)', () =>
         const p = criarProvider('gemini', cfgApi({ apiKey: 'pass-ao-calhas' }));
         const r = await p.testar();
         expect(r.ok).toBe(false);
+    });
+
+    it('gemini em modo CLI usa o binário, não a REST — lista é o contrato do --model (r10)', async () => {
+        const p = criarProvider('gemini', { ativo: true, modo: 'cli' });
+        const modelos = await p.listarModelos();
+        expect(modelos).toContain('gemini-2.5-flash');
+        expect(modelos).toContain('gemini-3-pro-preview');
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('ollama testar FALHA quando o modelo escolhido não está puxado', async () => {

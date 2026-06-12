@@ -24,13 +24,13 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
 export const MODOS_AGENTE = ['cli', 'api'] as const;
 export type ModoAgente = (typeof MODOS_AGENTE)[number];
 
-// Modos REAIS por provider (#60 r9): só se oferece o que o factory implementa.
-// claude/codex correm por CLI (subscrição) ou API (key); gemini só tem API;
-// ollama é o daemon local (sem key, sem escolha).
+// Modos REAIS por provider (#60 r9/r10): só se oferece o que o factory
+// implementa. claude/codex/gemini correm por CLI (subscrição/login) ou API
+// (key); ollama é o daemon local (sem key, sem escolha).
 export const MODOS_POR_PROVIDER: Record<Provider, readonly ModoAgente[]> = {
     claude: ['cli', 'api'],
     codex: ['cli', 'api'],
-    gemini: ['api'],
+    gemini: ['cli', 'api'],
     ollama: ['cli'],
 };
 

@@ -191,10 +191,9 @@ async function gerarCodexApi(cfg: AgenteServidor, prompt: string): Promise<Respo
             model: cfg.modelo,
             max_completion_tokens: 16000,
             messages: [{ role: 'user', content: prompt }],
-            // A API da OpenAI não tem xhigh (é nível do codex CLI).
-            ...(cfg.esforco
-                ? { reasoning_effort: cfg.esforco === 'xhigh' ? 'high' : cfg.esforco }
-                : {}),
+            // reasoning_effort verificado no SDK oficial (shared.ts, r10):
+            // none|minimal|low|medium|high|xhigh — passa direto, sem mapear.
+            ...(cfg.esforco ? { reasoning_effort: cfg.esforco } : {}),
         }),
     });
     const corpo = await res.text();
@@ -386,10 +385,72 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
     };
 }
 
+// ── gemini (cli) — binário oficial @google/gemini-cli (r10): headless por
+// `-p` + `--output-format json` ({response, stats, error?}), modelo por
+// `--model`; auth é do próprio binário (login Google ou GEMINI_API_KEY do
+// ambiente), fora da nossa gestão de keys — como claude/codex em cli ──
+const GEMINI_CLI_MODELOS = [
+    'gemini-3-pro-preview',
+    'gemini-3-flash-preview',
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+];
+
+function providerGeminiCli(cfg: AgenteServidor): ProviderLLM {
+    return {
+        nome: 'gemini',
+        async gerar(prompt) {
+            const args = ['-p', prompt, '--output-format', 'json'];
+            if (cfg.modelo) args.push('--model', cfg.modelo);
+            const { code, stdout, stderr } = await execComando('gemini', args);
+            if (code !== 0) {
+                const erro = `${stdout}\n${stderr}`.trim().slice(-500);
+                if (QUOTA_REGEX.test(erro)) {
+                    throw new Error(`gemini cli: quota/limite excedido — ${erro.slice(0, 200)}`);
+                }
+                throw new Error(`gemini cli falhou (exit ${code}): ${erro.slice(0, 300)}`);
+            }
+            // O binário pode escrever avisos antes do JSON — parse do 1.º '{'.
+            const inicio = stdout.indexOf('{');
+            if (inicio < 0) throw new Error('gemini cli: saída sem JSON');
+            const json = JSON.parse(stdout.slice(inicio)) as {
+                response?: string;
+                stats?: { models?: Record<string, unknown> };
+                error?: { message?: string };
+            };
+            if (json.error) throw new Error(`gemini cli: ${json.error.message ?? 'erro'}`);
+            const text = (json.response ?? '').trim();
+            if (!text) throw new Error('gemini cli: resposta vazia');
+            // O modelo REAL vem das stats (mapa por modelo), como o envelope do claude.
+            return { text, costUsd: null, model: Object.keys(json.stats?.models ?? {})[0] };
+        },
+        // Teste a sério: versão + mini-geração pelo MESMO caminho do chat
+        // (login Google/quota rebentam aqui, não na 1.ª mensagem).
+        async testar() {
+            const versao = await testarVersao('gemini');
+            if (!versao.ok) return versao;
+            try {
+                const r = await this.gerar('Responde apenas com a palavra: ok');
+                return {
+                    ok: true,
+                    detalhe: `${versao.detalhe} — gerou${r.model ? ` com ${r.model}` : ''} «${r.text.slice(0, 30)}»`,
+                };
+            } catch (e) {
+                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+            }
+        },
+        // Verificado (r10, docs/cli/cli-reference.md do gemini-cli): o binário
+        // não expõe listagem — os nomes documentados do --model são o contrato,
+        // como os aliases do claude CLI. A lista VIVA vem do modo api.
+        listarModelos: async () => GEMINI_CLI_MODELOS,
+    };
+}
+
 // ── gemini (api) — REST generateContent; 429/quota dita alto ──
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 function providerGemini(cfg: AgenteServidor): ProviderLLM {
+    if (cfg.modo === 'cli') return providerGeminiCli(cfg);
     const modelo = cfg.modelo || 'gemini-2.5-flash';
     return {
         nome: 'gemini',

@@ -23,10 +23,12 @@ onChange, só entre providers já parametrizados.
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
   vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.
-  **O `modo` é real por provider** (r9, `MODOS_POR_PROVIDER`): claude/codex =
-  cli (subscrição) ou api (Anthropic `/v1/messages` · OpenAI `/v1/chat/completions`,
-  key obrigatória); gemini = só api; ollama = só daemon local (sem key). A UI só
-  oferece os modos que o factory implementa. O **FactoryProvider**
+  **O `modo` é real por provider** (r9/r10, `MODOS_POR_PROVIDER`): claude/codex/gemini =
+  cli (subscrição/login do próprio binário) ou api (Anthropic `/v1/messages` ·
+  OpenAI `/v1/chat/completions` · Google `generateContent`, key obrigatória);
+  ollama = só daemon local (sem key). A UI só oferece os modos que o factory
+  implementa. O gemini/cli fala com o binário oficial `@google/gemini-cli`
+  (headless `-p` + `--output-format json`; contrato verificado nas docs do repo, r10). O **FactoryProvider**
   (`src/lib/providers/factory.ts`, referência: `~/src/agent-skills-compare`)
   distribui **lendo o modo**; **o chat responde com o provider de
   `chat_provider`** (claude/cli como rede de segurança se o escolhido estiver
@@ -40,9 +42,10 @@ onChange, só entre providers já parametrizados.
   mostra o **modelo REAL** (envelope no cli, campo `model` na api), porque o
   auto-relato dos modelos mente. O chat também mostra "modelo: <real>" junto ao custo.
   Quota/limite dita alto (padrão skills-compare). **O teste com sucesso DESCOBRE a
-  lista de modelos do provider e persiste-a** (#60 r5 — gemini/ollama via API real;
-  claude/cli = aliases do binário (não expõe listagem); codex/cli = `codex debug
-  models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
+  lista de modelos do provider e persiste-a** (#60 r5 — gemini/api e ollama via API
+  real; claude/cli e gemini/cli = nomes documentados do binário (nenhum expõe
+  listagem — verificado nas docs, r6/r10); codex/cli = `codex debug
+models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
   dropdowns da escolha ficam vivas — modelo novo nas notícias → Testar ligação →
   aparece. Modelo e esforço escolhem-se SEMPRE na mini-modal (nunca nas Definições,
   sem texto livre). O agente-autor (destilação/contrato) continua claude — tools e
@@ -53,11 +56,11 @@ onChange, só entre providers já parametrizados.
 
 ## Ficheiros
 
-| Ficheiro | Responsabilidade |
-|---|---|
-| `definicoes.schema.ts` | enums (`METODOS_DESTILACAO`, `MODULOS`), `DefinicoesSchema`, defaults |
+| Ficheiro                | Responsabilidade                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `definicoes.schema.ts`  | enums (`METODOS_DESTILACAO`, `MODULOS`), `DefinicoesSchema`, defaults                                       |
 | `definicoes.service.ts` | `lerDefinicoesCom` (parse tolerante — valores velhos não rebentam a modal) + `gravarDefinicoesCom` (upsert) |
-| `definicoes.actions.ts` | Server Actions finas |
+| `definicoes.actions.ts` | Server Actions finas                                                                                        |
 
 UI: `src/components/layout/definicoes-modal.tsx` (aberta pelo `profile-menu.tsx`).
 
