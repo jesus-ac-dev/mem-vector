@@ -202,11 +202,14 @@ modal de confirmação no concluir e no apagar (`ui/alert-dialog`, radix novo).
 projetos, órfãs foram para o Pessoal). "Pessoal" é o projeto-vida default,
 semeado por utilizador como o Kernel. A regra central é `resolverProjetoCom`:
 qualquer nome (quick-add, agente, edição) resolve sempre para um projeto —
-encontra case-insensitive, cria se não existir, sem nome = Pessoal. UI: secção
-root "Projetos" no explorer (clicar → painel Tarefas filtrado; a página do
-projeto chega com o kanban); o prompt da destilação leva a lista de projetos
-para o agente ancorar ao certo. Nasceu ANTES do módulo GitHub de propósito —
-o módulo vai usar os projetos, não o contrário.
+encontra case-insensitive, cria se não existir, sem nome = Pessoal. **Cada
+projeto é uma PASTA real do knowledge** (`projetos.folder_id`; criar projeto
+cria/aproveita a pasta root homónima): a secção root "Projetos" do explorer
+mostra as pastas a sério (notas, drag; arquivada = opt-out) e o agente
+lê/continua notas lá dentro pelo fluxo normal de candidatos. O prompt da
+destilação leva a lista de projetos para ancorar tarefas ao certo. Nasceu
+ANTES do módulo GitHub de propósito — o módulo vai usar os projetos, não o
+contrário. A página/kanban do projeto chega na fatia seguinte.
 
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,

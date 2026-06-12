@@ -66,7 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 arvore={arvore}
                 dailies={dailyItems}
                 diasComDaily={diasComDaily}
-                projetos={projetos.map((p) => ({ id: p.id, nome: p.nome }))}
+                projetos={projetos.map((p) => ({ id: p.id, nome: p.nome, folderId: p.folderId }))}
             >
                 {children}
             </WorkspaceShell>

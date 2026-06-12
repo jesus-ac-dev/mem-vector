@@ -17,6 +17,7 @@ import {
 import { criarProjeto } from '@/modules/projetos/projetos.actions';
 import {
     separarKernel,
+    separarProjetos,
     type Arvore,
     type NoArvore,
     type NotaItem,
@@ -336,34 +337,6 @@ function Seccao({
     );
 }
 
-// Linha de projeto na secção root (#47): clicar abre o painel Tarefas já
-// filtrado — a página do projeto a sério chega com o kanban.
-function ProjetoLink({
-    projeto,
-    ativo,
-    onAbrir,
-}: {
-    projeto: ProjetoExplorerItem;
-    ativo: boolean;
-    onAbrir: () => void;
-}) {
-    return (
-        <Button
-            type="button"
-            variant="ghost"
-            onClick={onAbrir}
-            title={`${projeto.nome} — abre as tarefas do projeto`}
-            style={{ paddingLeft: paddingNivel(1) }}
-            className={cn(
-                'h-auto w-full justify-start truncate rounded-none py-1.5 pr-3 text-sm transition-colors',
-                ativo ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted',
-            )}
-        >
-            #{projeto.nome}
-        </Button>
-    );
-}
-
 function DailyLink({ daily }: { daily: DailyItem }) {
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
@@ -396,14 +369,13 @@ function DailyLink({ daily }: { daily: DailyItem }) {
 export interface ProjetoExplorerItem {
     id: string;
     nome: string;
+    folderId: string | null;
 }
 
 interface FileExplorerProps {
     arvore: Arvore;
     dailies: DailyItem[];
     projetos: ProjetoExplorerItem[];
-    projetoFoco: string | null;
-    onAbrirProjeto: (nome: string) => void;
     pastaSelecionada: string | null;
     onSelecionarPasta: (id: string | null) => void;
     knowledgeOpen: boolean;
@@ -419,8 +391,6 @@ export function FileExplorer({
     arvore,
     dailies,
     projetos,
-    projetoFoco,
-    onAbrirProjeto,
     pastaSelecionada,
     onSelecionarPasta,
     knowledgeOpen,
@@ -512,7 +482,14 @@ export function FileExplorer({
     // Kernel é secção root (#39), par de Knowledge/Daily Notes — a pasta sai
     // da árvore do Knowledge e ganha casa própria no topo (é a personalidade
     // do agente). Arquivada = não aparece (opt-out, paridade com o motor #34).
-    const { kernel, resto: arvoreVisivel } = separarKernel(arvore);
+    const { kernel, resto: semKernel } = separarKernel(arvore);
+    // Projetos (#47): cada projeto é uma pasta real — sai do Knowledge e vive
+    // na secção própria. Pasta arquivada = projeto não aparece (opt-out, como
+    // o Kernel).
+    const { projetos: pastasProjetos, resto: arvoreVisivel } = separarProjetos(
+        semKernel,
+        projetos.map((p) => p.folderId).filter((id): id is string => !!id),
+    );
 
     const vazioKnowledge =
         arvoreVisivel.raizPastas.length === 0 && arvoreVisivel.raizNotas.length === 0;
@@ -538,17 +515,12 @@ export function FileExplorer({
                         )}
                     </Seccao>
                 )}
-                {/* Projetos é secção root (#47), como o Kernel — liga
-                    conceptualmente à pasta projects/ do vault; paridade com o
-                    GitHub chega com o módulo. */}
+                {/* Projetos é secção root (#47), como o Kernel — cada projeto é
+                    uma PASTA real do knowledge (notas, drag, agente escreve lá
+                    dentro); paridade com o GitHub chega com o módulo. */}
                 <Seccao label="Projetos">
-                    {projetos.map((p) => (
-                        <ProjetoLink
-                            key={p.id}
-                            projeto={p}
-                            ativo={projetoFoco === p.nome}
-                            onAbrir={() => onAbrirProjeto(p.nome)}
-                        />
+                    {pastasProjetos.map((no) => (
+                        <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
                     ))}
                     {criandoProjeto ? (
                         <InlineInput

@@ -77,12 +77,9 @@ function corPrioridade(p: PrioridadeTarefa): string {
 export function TarefasPanel({
     criarAberto,
     onFecharCriar,
-    projetoFoco,
 }: {
     criarAberto: boolean;
     onFecharCriar: () => void;
-    // #47: clicar num projeto da secção root abre o painel já filtrado.
-    projetoFoco?: string | null;
 }) {
     const { workspaceVersion, notificarWorkspaceMudou } = useWorkspace();
     const [abertas, setAbertas] = useState<Tarefa[]>([]);
@@ -119,14 +116,6 @@ export function TarefasPanel({
             cancelado = true;
         };
     }, [workspaceVersion]);
-
-    // Sincronizar o filtro com o foco vindo do explorer (#47) — padrão React
-    // de derivar estado de prop durante o render (sem effect).
-    const [ultimoFoco, setUltimoFoco] = useState(projetoFoco);
-    if (projetoFoco !== ultimoFoco) {
-        setUltimoFoco(projetoFoco);
-        if (projetoFoco) setFiltroProjeto(projetoFoco);
-    }
 
     const inputAberto = criarAberto || editandoId !== null;
 

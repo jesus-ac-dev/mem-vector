@@ -229,8 +229,6 @@ function LeftSidebar({
     arvore,
     dailies,
     projetos,
-    projetoFoco,
-    onAbrirProjeto,
     activePanel,
     collapsed,
     onToggle,
@@ -238,8 +236,6 @@ function LeftSidebar({
     arvore: Arvore;
     dailies: DailyItem[];
     projetos: ProjetoItem[];
-    projetoFoco: string | null;
-    onAbrirProjeto: (nome: string) => void;
     activePanel: LeftPanel;
     collapsed: boolean;
     onToggle: () => void;
@@ -490,8 +486,6 @@ function LeftSidebar({
                             arvore={arvoreAtual}
                             dailies={dailies}
                             projetos={projetos}
-                            projetoFoco={projetoFoco}
-                            onAbrirProjeto={onAbrirProjeto}
                             pastaSelecionada={pastaSelecionada}
                             onSelecionarPasta={setPastaSelecionada}
                             knowledgeOpen={knowledgeOpen}
@@ -520,7 +514,6 @@ function LeftSidebar({
                     <TarefasPanel
                         criarAberto={criarTarefaAberto}
                         onFecharCriar={() => setCriarTarefaAberto(false)}
-                        projetoFoco={projetoFoco}
                     />
                 ) : (
                     <ConversasPanel />
@@ -978,6 +971,7 @@ function RightSidebar({
 export interface ProjetoItem {
     id: string;
     nome: string;
+    folderId: string | null;
 }
 
 export interface WorkspaceShellProps {
@@ -998,8 +992,6 @@ export function WorkspaceShell({
     const [activePanel, setActivePanel] = useState<LeftPanel>('explorer');
     const [leftCollapsed, setLeftCollapsed] = useState(false);
     const [rightCollapsed, setRightCollapsed] = useState(false);
-    // #47: clicar num projeto da secção root abre o painel Tarefas filtrado.
-    const [projetoFoco, setProjetoFoco] = useState<string | null>(null);
 
     return (
         <WorkspaceProvider>
@@ -1018,11 +1010,6 @@ export function WorkspaceShell({
                     arvore={arvore}
                     dailies={dailies}
                     projetos={projetos}
-                    projetoFoco={projetoFoco}
-                    onAbrirProjeto={(nome) => {
-                        setProjetoFoco(nome);
-                        setActivePanel('tarefas');
-                    }}
                     activePanel={activePanel}
                     collapsed={leftCollapsed}
                     onToggle={() => setLeftCollapsed((v) => !v)}

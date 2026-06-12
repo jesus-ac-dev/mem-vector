@@ -16,5 +16,6 @@ export interface Projeto {
     id: string;
     nome: string;
     descricao: string | null;
+    folderId: string | null; // a pasta real do projeto no knowledge
     criadoEm: string; // ISO
 }

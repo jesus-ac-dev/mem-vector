@@ -37,7 +37,16 @@ describe('projetos (#47, integração RLS)', () => {
         await garantirPessoalCom(alice);
         await garantirPessoalCom(alice); // 2.ª chamada não duplica
         const projetos = await listarProjetosCom(alice);
-        expect(projetos.filter((p) => p.nome === 'Pessoal')).toHaveLength(1);
+        const pessoal = projetos.filter((p) => p.nome === 'Pessoal');
+        expect(pessoal).toHaveLength(1);
+        // Projeto é uma pasta real (retificação): nasce com folder root próprio.
+        expect(pessoal[0].folderId).not.toBeNull();
+        const { data: pasta } = await alice
+            .from('folders')
+            .select('name, parent_id')
+            .eq('id', pessoal[0].folderId!)
+            .single();
+        expect(pasta).toMatchObject({ name: 'Pessoal', parent_id: null });
     });
 
     it(

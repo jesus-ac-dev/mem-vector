@@ -17,8 +17,10 @@ contrário. Conceptualmente liga à pasta `projects/` do vault MythosEngine.
 | `projetos.service.ts` | listar/criar + **`resolverProjetoCom`** (a regra central) + `garantirPessoalCom` (seed) |
 | `projetos.actions.ts` | Server Actions finas (listar, criar) |
 
-UI: secção root "Projetos" no explorer (`file-explorer.tsx`, como o Kernel) — clicar
-abre o painel Tarefas filtrado; a página do projeto a sério chega com o kanban.
+UI: secção root "Projetos" no explorer (como o Kernel) — **cada projeto é uma PASTA
+real do knowledge** (retificação do Carlos): notas dentro, drag, e o agente lê/continua
+notas lá como em qualquer pasta. Pasta arquivada = projeto não aparece (opt-out). A
+página/kanban do projeto chega na fatia seguinte.
 
 ## A regra central — `resolverProjetoCom(db, nome?)`
 
@@ -29,8 +31,10 @@ existente (convergência, não erro). É chamado por `criarTarefaCom`/`atualizar
 
 ## Modelo de dados
 
-Tabela `projetos` (migração `20260612150000`): `id`, `owner_id`, `nome` (único por dono,
-case-insensitive), `descricao`, `visibility`/`group_id` (padrão da casa), `created_at`.
+Tabela `projetos` (migrações `20260612150000` + `20260612170000`): `id`, `owner_id`,
+`nome` (único por dono, case-insensitive), `descricao`, **`folder_id`** (a pasta real do
+projeto — criar projeto cria/aproveita a pasta root homónima), `visibility`/`group_id`
+(padrão da casa), `created_at`.
 RLS por-comando igual às tarefas. A migração faz o backfill: cada tag livre usada virou
 projeto do dono; órfãs foram para o Pessoal; a coluna `tarefas.projeto` (texto) morreu
 a favor de `tarefas.projeto_id` (FK, nome vem por join).
