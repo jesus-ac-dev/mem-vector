@@ -191,7 +191,10 @@ backlinks, grafo); a CHAVE continua `AAAA-MM-DD` (`src/lib/datas.ts`). Ribbon
 de baixo por importância de uso: chat → kanban (futuro) → tarefas → emails
 (futuro) → grupos. Clicar no card de uma tarefa reabre-a como tokens no input
 do quick-add e Enter atualiza (`atualizarTarefa` — campos sem token limpam-se;
-terminadas não se editam).
+terminadas não se editam). Ronda 4: ordem canónica `!prioridade #projeto
+tarefa @data-fim` com os 3 primeiros obrigatórios na criação manual,
+hint-fantasma no input com o que falta preencher, hover verde no concluir e
+modal de confirmação no concluir e no apagar (`ui/alert-dialog`, radix novo).
 
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,

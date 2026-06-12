@@ -4,17 +4,20 @@ import { PRIORIDADES_TAREFA, type PrioridadeTarefa, type Tarefa } from './tarefa
 // compõem a tarefa — `!alta` prioridade, `#projeto` tag, `@AAAA-MM-DD` data
 // fim, `// texto` descrição. Lógica pura (parse + gatilhos), espelhando o
 // wikilink-autocomplete; o componente só guarda estado e teclado.
+// Ordem canónica (#55, ronda 4): !prioridade #projeto tarefa @data-fim — os
+// 3 primeiros são OBRIGATÓRIOS na criação manual; prioridade ausente fica
+// undefined (o default é decisão de quem chama, não do parse).
 
 export interface TarefaQuickAdd {
     titulo: string;
     projeto?: string;
-    prioridade: PrioridadeTarefa;
+    prioridade?: PrioridadeTarefa;
     dataFim?: string; // AAAA-MM-DD
     descricao?: string;
 }
 
 export function parseNovaTarefa(texto: string): TarefaQuickAdd {
-    let prioridade: PrioridadeTarefa = 'normal';
+    let prioridade: PrioridadeTarefa | undefined;
     let projeto: string | undefined;
     let dataFim: string | undefined;
     let descricao: string | undefined;
@@ -45,16 +48,39 @@ export function parseNovaTarefa(texto: string): TarefaQuickAdd {
     return { titulo, projeto, prioridade, dataFim, descricao };
 }
 
-// Inverso do parse (#55): clicar no card reabre a tarefa como tokens no input.
-// Ordem do Carlos: #projeto primeiro, prioridade só quando não é a default.
+// Inverso do parse (#55): clicar no card reabre a tarefa como tokens no input,
+// na ordem canónica. Prioridade vai sempre (é obrigatória ao guardar).
 export function serializarTarefa(t: Tarefa): string {
     const partes = [
+        `!${t.prioridade}`,
         t.projeto ? `#${t.projeto}` : null,
         t.titulo,
-        t.prioridade !== 'normal' ? `!${t.prioridade}` : null,
         t.dataFim ? `@${t.dataFim}` : null,
     ].filter(Boolean);
     return partes.join(' ') + (t.descricao ? ` // ${t.descricao}` : '');
+}
+
+// Hint-fantasma do input (#55, ronda 4): o que ainda falta preencher, na
+// ordem canónica, para se continuar a ver enquanto se escreve.
+export function hintQuickAdd(texto: string): string {
+    const r = parseNovaTarefa(texto);
+    const falta: string[] = [];
+    if (!r.prioridade) falta.push('!prioridade');
+    if (!r.projeto) falta.push('#projeto');
+    if (!r.titulo) falta.push('tarefa');
+    if (!r.dataFim) falta.push('@data-fim');
+    if (!r.descricao) falta.push('// descrição');
+    return falta.join(' ');
+}
+
+// Os 3 obrigatórios da criação manual (decisão do Carlos): sem eles não guarda.
+export function faltaObrigatorios(texto: string): string[] {
+    const r = parseNovaTarefa(texto);
+    const falta: string[] = [];
+    if (!r.prioridade) falta.push('!prioridade');
+    if (!r.projeto) falta.push('#projeto');
+    if (!r.titulo) falta.push('tarefa');
+    return falta;
 }
 
 export interface GatilhoTarefa {

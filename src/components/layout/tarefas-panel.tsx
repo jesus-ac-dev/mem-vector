@@ -9,6 +9,16 @@ import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -26,6 +36,8 @@ import {
 } from '@/modules/tarefas/tarefas.actions';
 import {
     detetarGatilhoTarefa,
+    faltaObrigatorios,
+    hintQuickAdd,
     parseNovaTarefa,
     serializarTarefa,
     sugestoesParaGatilho,
@@ -78,6 +90,12 @@ export function TarefasPanel({
     const [editandoId, setEditandoId] = useState<string | null>(null);
     const [gatilho, setGatilho] = useState<GatilhoTarefa | null>(null);
     const [sel, setSel] = useState(0);
+    const [erro, setErro] = useState<string | null>(null);
+    // Concluir/apagar pedem confirmação (#55, ronda 4).
+    const [confirmar, setConfirmar] = useState<{
+        tipo: 'concluir' | 'apagar';
+        tarefa: Tarefa;
+    } | null>(null);
     const [filtroEstado, setFiltroEstado] = useState<string>('todos');
     const [filtroProjeto, setFiltroProjeto] = useState<string>('todos');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +125,7 @@ export function TarefasPanel({
         setEditandoId(null);
         setNovoTexto('');
         setGatilho(null);
+        setErro(null);
         onFecharCriar();
     }
 
@@ -161,7 +180,12 @@ export function TarefasPanel({
             return;
         }
         const { titulo, projeto, prioridade, dataFim, descricao } = parseNovaTarefa(texto);
-        if (!titulo) return;
+        // Os 3 obrigatórios (#55, ronda 4): sem !prioridade #projeto tarefa não guarda.
+        const falta = faltaObrigatorios(texto);
+        if (falta.length || !titulo || !prioridade || !projeto) {
+            setErro(`Falta: ${falta.join(' ')}`);
+            return;
+        }
         if (editandoId) {
             // Editar (#55): campos sem token limpam-se de propósito.
             await runClientAction(
@@ -169,7 +193,7 @@ export function TarefasPanel({
                 () =>
                     atualizarTarefa(editandoId, {
                         titulo,
-                        projeto: projeto ?? null,
+                        projeto,
                         prioridade,
                         dataFim: dataFim ?? null,
                         descricao: descricao ?? null,
@@ -226,29 +250,51 @@ export function TarefasPanel({
         );
     }
 
+    function executarConfirmacao() {
+        if (!confirmar) return;
+        const { tipo, tarefa } = confirmar;
+        setConfirmar(null);
+        if (tipo === 'concluir') {
+            mutacao('concluirTarefa', { id: tarefa.id }, () => concluirTarefa(tarefa.id));
+        } else {
+            mutacao('apagarTarefa', { id: tarefa.id }, () => apagarTarefa(tarefa.id));
+        }
+    }
+
     return (
         <div className="flex h-full flex-col">
             {inputAberto && (
                 <div className="relative border-b p-2">
-                    <Input
-                        ref={inputRef}
-                        value={novoTexto}
-                        onChange={(e) => {
-                            setNovoTexto(e.target.value);
-                            recalcularGatilho(e.target.value, e.target.selectionStart ?? 0);
-                        }}
-                        onClick={(e) =>
-                            recalcularGatilho(novoTexto, e.currentTarget.selectionStart ?? 0)
-                        }
-                        onKeyDown={onKeyDownNova}
-                        onBlur={() => setTimeout(() => setGatilho(null), 120)}
-                        placeholder={
-                            editandoId
-                                ? 'edita os tokens e Enter para guardar'
-                                : '#projeto tarefa !prioridade @2026-06-30 // descrição'
-                        }
-                        className="h-7 text-sm"
-                    />
+                    {/* Hint-fantasma (#55, ronda 4): o que falta preencher
+                        continua visível à frente do que já se escreveu. */}
+                    <div className="relative">
+                        <Input
+                            ref={inputRef}
+                            value={novoTexto}
+                            onChange={(e) => {
+                                setNovoTexto(e.target.value);
+                                setErro(null);
+                                recalcularGatilho(e.target.value, e.target.selectionStart ?? 0);
+                            }}
+                            onClick={(e) =>
+                                recalcularGatilho(novoTexto, e.currentTarget.selectionStart ?? 0)
+                            }
+                            onKeyDown={onKeyDownNova}
+                            onBlur={() => setTimeout(() => setGatilho(null), 120)}
+                            className="h-7 text-sm"
+                        />
+                        <div
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre px-3 text-sm"
+                        >
+                            <span className="invisible">{novoTexto}</span>
+                            <span className="text-muted-foreground/50">
+                                {(novoTexto && !novoTexto.endsWith(' ') ? ' ' : '') +
+                                    hintQuickAdd(novoTexto)}
+                            </span>
+                        </div>
+                    </div>
+                    {erro && <p className="mt-1 text-[0.65rem] text-destructive">{erro}</p>}
                     {gatilho && sugestoes.length > 0 && (
                         <ul className="absolute left-2 right-2 top-full z-20 -mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
                             {sugestoes.map((s, i) => (
@@ -364,11 +410,9 @@ export function TarefasPanel({
                                                 }
                                                 disabled={bloqueada}
                                                 onClick={() =>
-                                                    mutacao('concluirTarefa', { id: t.id }, () =>
-                                                        concluirTarefa(t.id),
-                                                    )
+                                                    setConfirmar({ tipo: 'concluir', tarefa: t })
                                                 }
-                                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                                className="h-5 w-5 text-muted-foreground hover:text-green-400"
                                             >
                                                 <Check className="h-3.5 w-3.5" />
                                             </Button>
@@ -377,9 +421,7 @@ export function TarefasPanel({
                                                 size="icon"
                                                 title="Apagar"
                                                 onClick={() =>
-                                                    mutacao('apagarTarefa', { id: t.id }, () =>
-                                                        apagarTarefa(t.id),
-                                                    )
+                                                    setConfirmar({ tipo: 'apagar', tarefa: t })
                                                 }
                                                 className="h-5 w-5 text-muted-foreground hover:text-destructive"
                                             >
@@ -476,6 +518,28 @@ export function TarefasPanel({
                         : `Ver concluídas (${concluidas.length})`}
                 </Button>
             </div>
+
+            {/* Confirmação de concluir/apagar (#55, ronda 4). */}
+            <AlertDialog open={!!confirmar} onOpenChange={(open) => !open && setConfirmar(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {confirmar?.tipo === 'apagar' ? 'Apagar tarefa?' : 'Concluir tarefa?'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {confirmar?.tipo === 'apagar'
+                                ? `«${confirmar.tarefa.titulo}» apaga-se de vez — as tarefas não têm arquivo.`
+                                : `«${confirmar?.tarefa.titulo}» passa a terminada e fica registada no daily.`}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={executarConfirmacao}>
+                            {confirmar?.tipo === 'apagar' ? 'Apagar' : 'Concluir'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

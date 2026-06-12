@@ -43,14 +43,17 @@ membro do grupo. Terminada não se reabre por `mudarEstado`.
 
 ## Quick-add (#51, #53, #55)
 
-`#projeto tarefa !prioridade @2026-06-30 // descrição` — `!` e `#` têm autocomplete
-(prioridades fixas; projetos já usados). ID e data de criação são automáticos; `@` é a
-**data fim**. O card segue a mesma ordem (`#projeto` como header); ordenação do painel:
-data fim → prioridade → estado descendente do kanban. O agente também define `dataFim`
-quando a conversa traz prazo (fim de semana = domingo). **Clicar no card edita**: o
-input reabre com os tokens (`serializarTarefa`, inverso do parse) e Enter chama
-`atualizarTarefa` — campos sem token limpam-se; terminadas não se editam. Datas
-mostram-se à portuguesa (`dd-MMM` nas tarefas; helpers em `src/lib/datas.ts`).
+Ordem canónica: `!prioridade #projeto tarefa @2026-06-30 // descrição` — os **3
+primeiros são obrigatórios** na criação manual (`faltaObrigatorios`); `@data-fim` e
+descrição são opcionais. `!` e `#` têm autocomplete (prioridades fixas; projetos já
+usados) e o input mostra uma **hint-fantasma** com o que falta (`hintQuickAdd`). ID e
+data de criação são automáticos. O card segue a mesma ordem (`#projeto` como header);
+ordenação do painel: data fim → prioridade → estado descendente do kanban. O agente
+também define `dataFim` quando a conversa traz prazo (fim de semana = domingo).
+**Clicar no card edita**: o input reabre com os tokens (`serializarTarefa`, inverso do
+parse, mesma ordem) e Enter chama `atualizarTarefa` — campos opcionais sem token
+limpam-se; terminadas não se editam. Concluir e apagar pedem **confirmação** (modal).
+Datas mostram-se à portuguesa (`dd-MMM` nas tarefas; helpers em `src/lib/datas.ts`).
 
 ## Ligações
 
