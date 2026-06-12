@@ -86,6 +86,21 @@ export interface Tarefa {
     concluidaEm: string | null; // ISO
 }
 
+// Kanban (#58): tarefas agrupadas por coluna, cada coluna já na ordem do
+// painel (data fim → prioridade); concluídas caem todas em 'terminado'.
+export function agruparPorEstado(
+    abertas: Tarefa[],
+    concluidas: Tarefa[],
+): Record<EstadoTarefa, Tarefa[]> {
+    const grupos = Object.fromEntries(ESTADOS_TAREFA.map((e) => [e, [] as Tarefa[]])) as Record<
+        EstadoTarefa,
+        Tarefa[]
+    >;
+    for (const t of abertas) grupos[t.estado].push(t);
+    grupos.terminado = concluidas;
+    return grupos;
+}
+
 const ORDEM_PRIORIDADE: Record<PrioridadeTarefa, number> = { alta: 0, normal: 1, baixa: 2 };
 
 // Ordenação do painel (#51, decisão do Carlos): data fim primeiro (quem a tem
