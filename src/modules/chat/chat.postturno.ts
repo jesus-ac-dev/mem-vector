@@ -20,6 +20,7 @@ import type { TarefaAbertaRef } from './chat.turno';
 import type { TarefasDoTurno } from './chat.service';
 import { escreverOuContinuarNotaCom } from '@/modules/knowledge/knowledge.continuar';
 import { listarProjetosCom } from '@/modules/projetos/projetos.service';
+import { lerDefinicoesCom } from '@/modules/definicoes/definicoes.service';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
@@ -96,10 +97,23 @@ export async function executarDestilacaoTurnoCom(
         console.error('listar projetos falhou:', e);
     }
 
-    // Caminho agentic (issue #27, atrás de flag): a sessão CLI lê as candidatas
-    // e escreve via tools MCP — sem fallback para o one-shot, para o A/B medir
-    // o caminho real (um erro aqui falha o job, visível, em vez de mascarar).
-    if (process.env.MEMVECTOR_AGENTIC_DISTILL === '1') {
+    // Método de destilação (#60): a flag do M2 virou opção por workspace —
+    // one-shot é o default (decisão #38: ¼ do custo); agentic é opt-in nas
+    // definições. A env flag continua como override (evals/scripts forçam o
+    // caminho por célula). Não-fatal: sem leitura, default one-shot.
+    let metodoAgentic = process.env.MEMVECTOR_AGENTIC_DISTILL === '1';
+    if (!metodoAgentic) {
+        try {
+            metodoAgentic = (await lerDefinicoesCom(db)).metodoDestilacao === 'agentic';
+        } catch (e) {
+            console.error('ler definições falhou (segue one-shot):', e);
+        }
+    }
+
+    // Caminho agentic (issue #27): a sessão CLI lê as candidatas e escreve via
+    // tools MCP — sem fallback para o one-shot (um erro aqui falha o job,
+    // visível, em vez de mascarar).
+    if (metodoAgentic) {
         return destilarTurnoAgenticCom(db, {
             question,
             answer,
