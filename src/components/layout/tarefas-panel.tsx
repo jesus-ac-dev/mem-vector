@@ -43,7 +43,12 @@ import {
     sugestoesParaGatilho,
     type GatilhoTarefa,
 } from '@/modules/tarefas/tarefas-quickadd';
-import type { EstadoTarefa, PrioridadeTarefa, Tarefa } from '@/modules/tarefas/tarefas.schema';
+import {
+    idCurtoTarefa,
+    type EstadoTarefa,
+    type PrioridadeTarefa,
+    type Tarefa,
+} from '@/modules/tarefas/tarefas.schema';
 
 // Painel de tarefas (#21/#51, design do Carlos): vive na sidebar esquerda —
 // quick-add à la Obsidian (tokens com autocomplete), filtros de estado/#tag,
@@ -97,6 +102,8 @@ export function TarefasPanel({
         tipo: 'concluir' | 'apagar';
         tarefa: Tarefa;
     } | null>(null);
+    // Hover no cadeado destaca a tarefa-mãe (#58).
+    const [maeDestacada, setMaeDestacada] = useState<string | null>(null);
     const [filtroEstado, setFiltroEstado] = useState<string>('todos');
     const [filtroProjeto, setFiltroProjeto] = useState<string>('todos');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -358,21 +365,44 @@ export function TarefasPanel({
                 <ul className="space-y-0.5">
                     {visiveis.map((t) => {
                         const bloqueada = Boolean(t.dependeDe && abertasIds.has(t.dependeDe));
-                        // Card (#53): linha 1 = #projeto (header); linha 2 =
-                        // prioridade + título/descrição; linha 3 = estado (toggle
-                        // antes do nome) e datas (➕ criada, 📅 fim — convenção do
-                        // plugin Tasks).
+                        const mae = bloqueada
+                            ? (abertas.find((a) => a.id === t.dependeDe) ?? null)
+                            : null;
+                        // Card (#53/#58): linha 1 = #projeto + id curto (e cadeado
+                        // se bloqueada — hover destaca a mãe); linha 2 = prioridade
+                        // + título/descrição; linha 3 = estado e datas ➕/📅.
                         return (
                             <li key={t.id} className="group px-2">
-                                <div className="rounded px-1 py-1 hover:bg-muted">
-                                    {t.projeto && (
+                                <div
+                                    className={cn(
+                                        'rounded px-1 py-1 transition-colors hover:bg-muted',
+                                        maeDestacada === t.id &&
+                                            'border border-primary ring-1 ring-primary',
+                                    )}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
                                         <p
-                                            className="cursor-pointer truncate text-[0.65rem] font-medium text-muted-foreground"
+                                            className="min-w-0 cursor-pointer truncate text-[0.65rem] font-medium text-muted-foreground"
                                             onClick={() => iniciarEdicao(t)}
                                         >
-                                            #{t.projeto}
+                                            {t.projeto ? `#${t.projeto}` : ''}
                                         </p>
-                                    )}
+                                        <span className="flex shrink-0 items-center gap-1 text-[0.65rem] text-muted-foreground">
+                                            <span title={`Id da tarefa: ${idCurtoTarefa(t.id)}`}>
+                                                {idCurtoTarefa(t.id)}
+                                            </span>
+                                            {mae && (
+                                                <span
+                                                    title={`Bloqueada por ${idCurtoTarefa(mae.id)} — ${mae.titulo}`}
+                                                    className="cursor-help"
+                                                    onMouseEnter={() => setMaeDestacada(mae.id)}
+                                                    onMouseLeave={() => setMaeDestacada(null)}
+                                                >
+                                                    <Lock className="h-3 w-3" />
+                                                </span>
+                                            )}
+                                        </span>
+                                    </div>
                                     <div className="flex items-start gap-2">
                                         <span
                                             title={`Prioridade ${t.prioridade}`}
@@ -448,14 +478,6 @@ export function TarefasPanel({
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        {bloqueada && (
-                                            <span
-                                                title="Bloqueada por dependência em aberto"
-                                                className="inline-flex shrink-0 items-center gap-0.5"
-                                            >
-                                                <Lock className="h-3 w-3" />
-                                            </span>
-                                        )}
                                         <span className="ml-auto flex shrink-0 items-center gap-1.5">
                                             <span title={`Criada em ${dataPt(t.criadaEm)}`}>
                                                 ➕ {dataCurtaPt(t.criadaEm)}

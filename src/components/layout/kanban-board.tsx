@@ -33,6 +33,7 @@ import {
 import {
     agruparPorEstado,
     ESTADOS_TAREFA,
+    idCurtoTarefa,
     type EstadoTarefa,
     type PrioridadeTarefa,
     type Tarefa,
@@ -60,7 +61,17 @@ function corPrioridade(p: PrioridadeTarefa): string {
     return 'bg-green-700';
 }
 
-function CartaoTarefa({ tarefa, bloqueada }: { tarefa: Tarefa; bloqueada: boolean }) {
+function CartaoTarefa({
+    tarefa,
+    mae,
+    destacada,
+    onHoverBloqueio,
+}: {
+    tarefa: Tarefa;
+    mae: Tarefa | null; // a tarefa que bloqueia esta (dependência em aberto)
+    destacada: boolean; // esta É a mãe de quem está com o rato no cadeado
+    onHoverBloqueio: (maeId: string | null) => void;
+}) {
     const concluida = tarefa.estado === 'terminado';
     return (
         <div
@@ -70,15 +81,33 @@ function CartaoTarefa({ tarefa, bloqueada }: { tarefa: Tarefa; bloqueada: boolea
                 e.dataTransfer.effectAllowed = 'move';
             }}
             className={cn(
-                'rounded-md border bg-background p-2 text-sm shadow-sm',
+                'rounded-md border bg-background p-2 text-sm shadow-sm transition-colors',
                 concluida ? 'opacity-60' : 'cursor-grab active:cursor-grabbing',
+                destacada && 'border-primary ring-1 ring-primary',
             )}
         >
-            {tarefa.projeto && (
-                <p className="truncate text-[0.65rem] font-medium text-muted-foreground">
-                    #{tarefa.projeto}
+            {/* Linha 1: #projeto à esquerda; id curto (+ cadeado se bloqueada)
+                à direita. Hover no cadeado destaca a tarefa-mãe. */}
+            <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-[0.65rem] font-medium text-muted-foreground">
+                    {tarefa.projeto ? `#${tarefa.projeto}` : ''}
                 </p>
-            )}
+                <span className="flex shrink-0 items-center gap-1 text-[0.65rem] text-muted-foreground">
+                    <span title={`Id da tarefa: ${idCurtoTarefa(tarefa.id)}`}>
+                        {idCurtoTarefa(tarefa.id)}
+                    </span>
+                    {mae && (
+                        <span
+                            title={`Bloqueada por ${idCurtoTarefa(mae.id)} — ${mae.titulo}`}
+                            className="cursor-help"
+                            onMouseEnter={() => onHoverBloqueio(mae.id)}
+                            onMouseLeave={() => onHoverBloqueio(null)}
+                        >
+                            <Lock className="h-3 w-3" />
+                        </span>
+                    )}
+                </span>
+            </div>
             <div className="flex items-start gap-2">
                 <span
                     title={`Prioridade ${tarefa.prioridade}`}
@@ -93,12 +122,6 @@ function CartaoTarefa({ tarefa, bloqueada }: { tarefa: Tarefa; bloqueada: boolea
                 >
                     {tarefa.titulo}
                 </p>
-                {bloqueada && (
-                    <Lock
-                        className="mt-1 h-3 w-3 shrink-0 text-muted-foreground"
-                        aria-label="Bloqueada por dependência em aberto"
-                    />
-                )}
             </div>
             <div className="flex items-center gap-1.5 pl-4 text-[0.65rem] text-muted-foreground">
                 <span title={`Criada em ${dataPt(tarefa.criadaEm)}`}>
@@ -127,6 +150,8 @@ export function KanbanBoard() {
     const [filtroProjeto, setFiltroProjeto] = useState<string>('todos');
     const [colunaOver, setColunaOver] = useState<string | null>(null);
     const [archiveOver, setArchiveOver] = useState(false);
+    // Hover no cadeado destaca a tarefa-mãe (a dependência que bloqueia).
+    const [maeDestacada, setMaeDestacada] = useState<string | null>(null);
     const [erro, setErro] = useState<string | null>(null);
     const [confirmar, setConfirmar] = useState<{
         tipo: 'concluir' | 'apagar';
@@ -203,9 +228,8 @@ export function KanbanBoard() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden p-4">
-            {/* Header: filtro por projeto (= página do projeto v1) + Archive. */}
+            {/* Header: filtro por projeto (= página do projeto v1) + Apagar. */}
             <div className="mb-3 flex shrink-0 items-center gap-2">
-                <h1 className="text-lg font-semibold tracking-tight">Kanban</h1>
                 <Select value={filtroProjeto} onValueChange={setFiltroProjeto}>
                     <SelectTrigger className="h-7 w-44 text-xs">
                         <SelectValue />
@@ -273,7 +297,13 @@ export function KanbanBoard() {
                                 <CartaoTarefa
                                     key={t.id}
                                     tarefa={t}
-                                    bloqueada={bloqueadaPorDependencia(t)}
+                                    mae={
+                                        bloqueadaPorDependencia(t)
+                                            ? (abertas.find((a) => a.id === t.dependeDe) ?? null)
+                                            : null
+                                    }
+                                    destacada={maeDestacada === t.id}
+                                    onHoverBloqueio={setMaeDestacada}
                                 />
                             ))}
                         </div>

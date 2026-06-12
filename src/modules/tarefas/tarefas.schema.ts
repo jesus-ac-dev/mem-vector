@@ -86,6 +86,12 @@ export interface Tarefa {
     concluidaEm: string | null; // ISO
 }
 
+// Id curto à vista (#58, ideia do Carlos): o início do uuid identifica a
+// tarefa na UI — e abre caminho ao token ⛔id no quick-add.
+export function idCurtoTarefa(id: string): string {
+    return id.split('-')[0];
+}
+
 // Kanban (#58): tarefas agrupadas por coluna, cada coluna já na ordem do
 // painel (data fim → prioridade); concluídas caem todas em 'terminado'.
 export function agruparPorEstado(

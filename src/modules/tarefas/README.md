@@ -53,7 +53,12 @@ também define `dataFim` quando a conversa traz prazo (fim de semana = domingo).
 **Clicar no card edita**: o input reabre com os tokens (`serializarTarefa`, inverso do
 parse, mesma ordem) e Enter chama `atualizarTarefa` — campos opcionais sem token
 limpam-se; terminadas não se editam. Concluir e apagar pedem **confirmação** (modal).
-Datas mostram-se à portuguesa (`dd-MMM` nas tarefas; helpers em `src/lib/datas.ts`).
+Datas mostram-se à portuguesa (`dd-MMM` nas tarefas; helpers em `src/lib/datas.ts`). O card
+mostra o **id curto** (início do uuid, `idCurtoTarefa`) na linha 1, oposto ao
+`#projeto`; tarefa bloqueada leva o cadeado ao lado — o hover mostra
+`Bloqueada por <id> — <título>` e destaca a border da tarefa-mãe (kanban e
+painel). Próximo passo natural: token `⛔id` no quick-add para dependências
+manuais, como no vault.
 
 ## Ligações
 
