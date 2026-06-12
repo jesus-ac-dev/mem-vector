@@ -54,6 +54,7 @@ flowchart TD
 | **daily** | Notas diárias — a destilação acumula o recap do dia | [README](../src/modules/daily/README.md) |
 | **chat** | Pipeline RAG + a destilação proativa (assíncrona) que faz o agente escrever | [README](../src/modules/chat/README.md) |
 | **tarefas** | Tarefas do utilizador; o exemplo vivo do padrão feature-first | [README](../src/modules/tarefas/README.md) |
+| **projetos** | Projetos reais — toda a tarefa ancora a um; "Pessoal" = projeto-vida | [README](../src/modules/projetos/README.md) |
 | **grupos** | Grupos de pares — a base da visibilidade `protected` | [README](../src/modules/grupos/README.md) |
 | **auth** | Supabase Auth — a fundação do `auth.uid()` / RLS | [README](../src/modules/auth/README.md) |
 
@@ -195,6 +196,17 @@ terminadas não se editam). Ronda 4: ordem canónica `!prioridade #projeto
 tarefa @data-fim` com os 3 primeiros obrigatórios na criação manual,
 hint-fantasma no input com o que falta preencher, hover verde no concluir e
 modal de confirmação no concluir e no apagar (`ui/alert-dialog`, radix novo).
+
+**Projetos (#47):** toda a tarefa pertence a um projeto REAL (`projetos` +
+`tarefas.projeto_id`; a tag livre morreu na migração — tags usadas viraram
+projetos, órfãs foram para o Pessoal). "Pessoal" é o projeto-vida default,
+semeado por utilizador como o Kernel. A regra central é `resolverProjetoCom`:
+qualquer nome (quick-add, agente, edição) resolve sempre para um projeto —
+encontra case-insensitive, cria se não existir, sem nome = Pessoal. UI: secção
+root "Projetos" no explorer (clicar → painel Tarefas filtrado; a página do
+projeto chega com o kanban); o prompt da destilação leva a lista de projetos
+para o agente ancorar ao certo. Nasceu ANTES do módulo GitHub de propósito —
+o módulo vai usar os projetos, não o contrário.
 
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,

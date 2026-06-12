@@ -81,6 +81,13 @@ function blocoTarefasAbertas(tarefas: TarefaAbertaRef[]): string {
     return `TAREFAS EM ABERTO (para não duplicar; concluir por id quando a conversa diz que está feito):\n${lista}\n\n`;
 }
 
+// Projetos reais (#47): o agente ancora a tarefa ao projeto certo em vez de
+// inventar tags — um nome novo cria projeto, null cai no Pessoal.
+function blocoProjetos(projetos: string[]): string {
+    if (!projetos.length) return '';
+    return `PROJETOS EXISTENTES (usa o nome certo; um nome novo cria projeto): ${projetos.join(', ')}\n\n`;
+}
+
 export function buildTurnoPrompt(
     question: string,
     answer: string,
@@ -89,6 +96,7 @@ export function buildTurnoPrompt(
     historico: MensagemConversa[] = [],
     kernel = '',
     tarefasAbertas: TarefaAbertaRef[] = [],
+    projetos: string[] = [],
 ): string {
     return (
         // Kernel do workspace (#34): as regras/identidade do utilizador também
@@ -126,7 +134,8 @@ export function buildTurnoPrompt(
         '3) "tarefas": array (pode ser vazio) de AÇÕES do utilizador — coisas a fazer, lembretes, ' +
         'coisas a acompanhar (ex.: "ligar ao contabilista", "rever proposta"). Na dúvida entre ' +
         'criar e não criar, CRIA — apagar é barato. Cada uma: {"titulo": "verbo + objeto, curto", ' +
-        '"projeto": "tag-curta" | null, "prioridade": "baixa" | "normal" | "alta", ' +
+        '"projeto": nome de um projeto EXISTENTE (lista abaixo) ou nome novo curto | null ' +
+        '(null = projeto "Pessoal"), "prioridade": "baixa" | "normal" | "alta", ' +
         '"dataFim": "AAAA-MM-DD" | null}. Se a conversa traz um PRAZO ("até sexta", "este fim de ' +
         'semana", "antes da reunião de dia X"), define "dataFim" com a data concreta — fim de ' +
         'semana = o domingo; senão null. NÃO dupliques ' +
@@ -139,6 +148,7 @@ export function buildTurnoPrompt(
         blocoFactoDeclarado(intencao) +
         blocoCandidatos(candidatos) +
         blocoTarefasAbertas(tarefasAbertas) +
+        blocoProjetos(projetos) +
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Responde só com o bloco ```json```.'
     );
@@ -216,9 +226,19 @@ export async function destilarResumirTurno(
     historico: MensagemConversa[] = [],
     kernel = '',
     tarefasAbertas: TarefaAbertaRef[] = [],
+    projetos: string[] = [],
 ): Promise<TurnoDestiladoRaw> {
     const { text } = await generate(
-        buildTurnoPrompt(question, answer, candidatos, intencao, historico, kernel, tarefasAbertas),
+        buildTurnoPrompt(
+            question,
+            answer,
+            candidatos,
+            intencao,
+            historico,
+            kernel,
+            tarefasAbertas,
+            projetos,
+        ),
     );
     return parseTurno(text);
 }

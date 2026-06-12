@@ -77,7 +77,8 @@ export interface Tarefa {
     titulo: string;
     estado: EstadoTarefa;
     prioridade: PrioridadeTarefa;
-    projeto: string | null;
+    projetoId: string | null; // #47: FK real; null só como legado tolerado
+    projeto: string | null; // nome (join) — display e serializar
     descricao: string | null;
     dependeDe: string | null;
     dataFim: string | null; // AAAA-MM-DD

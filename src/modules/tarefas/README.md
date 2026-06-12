@@ -31,7 +31,7 @@ Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim
 | `titulo` | `text` | obrigatório |
 | `estado` | `text` | `backlog → analise → desenvolvimento → testes → documentacao → terminado` |
 | `prioridade` | `text` | `baixa` / `normal` / `alta` |
-| `projeto` | `text` | tag livre até existir a página de Projetos (#47) |
+| `projeto_id` | `uuid` | FK → `projetos` (#47); o nome vem por join — sem nome resolve para o Pessoal |
 | `descricao` | `text` | curta, opcional |
 | `depende_de` | `uuid` | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`) |
 | `data_fim` | `date` | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação |

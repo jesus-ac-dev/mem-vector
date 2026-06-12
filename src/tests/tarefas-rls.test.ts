@@ -108,13 +108,13 @@ describe('tarefas kanban (#21, integração RLS)', () => {
         });
         const editada = await atualizarTarefaCom(alice, t.id, {
             titulo: 'Rever proposta final',
-            projeto: null, // token removido limpa de propósito
+            projeto: null, // sem nome re-ancora no Pessoal (#47) — tarefa nunca fica sem projeto
             prioridade: 'normal',
             dataFim: '2026-06-14',
             descricao: 'antes da reunião',
         });
         expect(editada.titulo).toBe('Rever proposta final');
-        expect(editada.projeto).toBeNull();
+        expect(editada.projeto).toBe('Pessoal');
         expect(editada.prioridade).toBe('normal');
         expect(editada.dataFim).toBe('2026-06-14');
         expect(editada.descricao).toBe('antes da reunião');

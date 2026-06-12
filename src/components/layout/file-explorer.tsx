@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
     renomearNotaPorH1Action,
     renomearPastaAction,
 } from '@/modules/workspace/workspace.actions';
+import { criarProjeto } from '@/modules/projetos/projetos.actions';
 import {
     separarKernel,
     type Arvore,
@@ -335,6 +336,34 @@ function Seccao({
     );
 }
 
+// Linha de projeto na secção root (#47): clicar abre o painel Tarefas já
+// filtrado — a página do projeto a sério chega com o kanban.
+function ProjetoLink({
+    projeto,
+    ativo,
+    onAbrir,
+}: {
+    projeto: ProjetoExplorerItem;
+    ativo: boolean;
+    onAbrir: () => void;
+}) {
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            onClick={onAbrir}
+            title={`${projeto.nome} — abre as tarefas do projeto`}
+            style={{ paddingLeft: paddingNivel(1) }}
+            className={cn(
+                'h-auto w-full justify-start truncate rounded-none py-1.5 pr-3 text-sm transition-colors',
+                ativo ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted',
+            )}
+        >
+            #{projeto.nome}
+        </Button>
+    );
+}
+
 function DailyLink({ daily }: { daily: DailyItem }) {
     const router = useRouter();
     const { ficheiroAtivo, abrirFicheiro } = useWorkspace();
@@ -364,9 +393,17 @@ function DailyLink({ daily }: { daily: DailyItem }) {
     );
 }
 
+export interface ProjetoExplorerItem {
+    id: string;
+    nome: string;
+}
+
 interface FileExplorerProps {
     arvore: Arvore;
     dailies: DailyItem[];
+    projetos: ProjetoExplorerItem[];
+    projetoFoco: string | null;
+    onAbrirProjeto: (nome: string) => void;
     pastaSelecionada: string | null;
     onSelecionarPasta: (id: string | null) => void;
     knowledgeOpen: boolean;
@@ -381,6 +418,9 @@ interface FileExplorerProps {
 export function FileExplorer({
     arvore,
     dailies,
+    projetos,
+    projetoFoco,
+    onAbrirProjeto,
     pastaSelecionada,
     onSelecionarPasta,
     knowledgeOpen,
@@ -393,6 +433,19 @@ export function FileExplorer({
 }: FileExplorerProps) {
     const router = useRouter();
     const { atualizarFicheiroAberto, notificarWorkspaceMudou } = useWorkspace();
+    // Criar projeto inline na secção root (#47).
+    const [criandoProjeto, setCriandoProjeto] = useState(false);
+
+    async function confirmarCriarProjeto(nome: string) {
+        setCriandoProjeto(false);
+        if (!nome.trim()) return;
+        await runClientAction(
+            { area: 'left-sidebar', action: 'criarProjeto', meta: { nome } },
+            () => criarProjeto({ nome: nome.trim() }),
+        );
+        notificarWorkspaceMudou();
+        router.refresh();
+    }
 
     const ops: Ops = {
         mover: (slug, folderId, id) => {
@@ -485,6 +538,37 @@ export function FileExplorer({
                         )}
                     </Seccao>
                 )}
+                {/* Projetos é secção root (#47), como o Kernel — liga
+                    conceptualmente à pasta projects/ do vault; paridade com o
+                    GitHub chega com o módulo. */}
+                <Seccao label="Projetos">
+                    {projetos.map((p) => (
+                        <ProjetoLink
+                            key={p.id}
+                            projeto={p}
+                            ativo={projetoFoco === p.nome}
+                            onAbrir={() => onAbrirProjeto(p.nome)}
+                        />
+                    ))}
+                    {criandoProjeto ? (
+                        <InlineInput
+                            valorInicial=""
+                            depth={1}
+                            onConfirm={(nome) => void confirmarCriarProjeto(nome)}
+                            onCancel={() => setCriandoProjeto(false)}
+                        />
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setCriandoProjeto(true)}
+                            style={{ paddingLeft: paddingNivel(1) }}
+                            className="h-auto w-full justify-start gap-1 rounded-none py-1 pr-3 text-xs text-muted-foreground hover:bg-muted"
+                        >
+                            <Plus className="h-3 w-3" /> novo projeto
+                        </Button>
+                    )}
+                </Seccao>
                 <Seccao
                     label="Knowledge"
                     onDropRaiz={(slug, id) => ops.mover(slug, null, id)}

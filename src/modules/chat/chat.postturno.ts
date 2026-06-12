@@ -19,6 +19,7 @@ import {
 import type { TarefaAbertaRef } from './chat.turno';
 import type { TarefasDoTurno } from './chat.service';
 import { escreverOuContinuarNotaCom } from '@/modules/knowledge/knowledge.continuar';
+import { listarProjetosCom } from '@/modules/projetos/projetos.service';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
@@ -86,6 +87,15 @@ export async function executarDestilacaoTurnoCom(
         console.error('listar tarefas abertas falhou:', e);
     }
 
+    // Projetos reais (#47): o agente ancora ao projeto certo em vez de inventar
+    // tags parecidas. Não-fatal — sem lista, o serviço resolve na mesma.
+    let projetos: string[] = [];
+    try {
+        projetos = (await listarProjetosCom(db)).map((p) => p.nome);
+    } catch (e) {
+        console.error('listar projetos falhou:', e);
+    }
+
     // Caminho agentic (issue #27, atrás de flag): a sessão CLI lê as candidatas
     // e escreve via tools MCP — sem fallback para o one-shot, para o A/B medir
     // o caminho real (um erro aqui falha o job, visível, em vez de mascarar).
@@ -113,6 +123,7 @@ export async function executarDestilacaoTurnoCom(
             historico,
             kernel,
             tarefasAbertas,
+            projetos,
         );
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);

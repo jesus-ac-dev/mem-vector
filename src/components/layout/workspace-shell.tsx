@@ -228,12 +228,18 @@ function Ribbon({
 function LeftSidebar({
     arvore,
     dailies,
+    projetos,
+    projetoFoco,
+    onAbrirProjeto,
     activePanel,
     collapsed,
     onToggle,
 }: {
     arvore: Arvore;
     dailies: DailyItem[];
+    projetos: ProjetoItem[];
+    projetoFoco: string | null;
+    onAbrirProjeto: (nome: string) => void;
     activePanel: LeftPanel;
     collapsed: boolean;
     onToggle: () => void;
@@ -483,6 +489,9 @@ function LeftSidebar({
                         <FileExplorer
                             arvore={arvoreAtual}
                             dailies={dailies}
+                            projetos={projetos}
+                            projetoFoco={projetoFoco}
+                            onAbrirProjeto={onAbrirProjeto}
                             pastaSelecionada={pastaSelecionada}
                             onSelecionarPasta={setPastaSelecionada}
                             knowledgeOpen={knowledgeOpen}
@@ -511,6 +520,7 @@ function LeftSidebar({
                     <TarefasPanel
                         criarAberto={criarTarefaAberto}
                         onFecharCriar={() => setCriarTarefaAberto(false)}
+                        projetoFoco={projetoFoco}
                     />
                 ) : (
                     <ConversasPanel />
@@ -965,17 +975,31 @@ function RightSidebar({
 // ──────────────────────────────────────────────
 // WorkspaceShell — main export
 // ──────────────────────────────────────────────
+export interface ProjetoItem {
+    id: string;
+    nome: string;
+}
+
 export interface WorkspaceShellProps {
     arvore: Arvore;
     dailies: DailyItem[];
     diasComDaily: string[];
+    projetos: ProjetoItem[];
     children: React.ReactNode;
 }
 
-export function WorkspaceShell({ arvore, dailies, diasComDaily, children }: WorkspaceShellProps) {
+export function WorkspaceShell({
+    arvore,
+    dailies,
+    diasComDaily,
+    projetos,
+    children,
+}: WorkspaceShellProps) {
     const [activePanel, setActivePanel] = useState<LeftPanel>('explorer');
     const [leftCollapsed, setLeftCollapsed] = useState(false);
     const [rightCollapsed, setRightCollapsed] = useState(false);
+    // #47: clicar num projeto da secção root abre o painel Tarefas filtrado.
+    const [projetoFoco, setProjetoFoco] = useState<string | null>(null);
 
     return (
         <WorkspaceProvider>
@@ -993,6 +1017,12 @@ export function WorkspaceShell({ arvore, dailies, diasComDaily, children }: Work
                 <LeftSidebar
                     arvore={arvore}
                     dailies={dailies}
+                    projetos={projetos}
+                    projetoFoco={projetoFoco}
+                    onAbrirProjeto={(nome) => {
+                        setProjetoFoco(nome);
+                        setActivePanel('tarefas');
+                    }}
                     activePanel={activePanel}
                     collapsed={leftCollapsed}
                     onToggle={() => setLeftCollapsed((v) => !v)}

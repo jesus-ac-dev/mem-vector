@@ -5,21 +5,24 @@ import { ESTADOS_TAREFA, ordenarTarefasAbertas } from './tarefas.schema';
 import { createClient } from '@/lib/supabase/server';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import { horaLisboa } from '@/modules/daily/daily.capture';
+import { resolverProjetoCom } from '@/modules/projetos/projetos.service';
 
 // O "serviço" da feature: dados + regras numa peça. Liga ao Supabase com o
 // cliente autenticado → a RLS garante que cada user só vê/cria as suas tarefas.
 // Variantes `...Com` recebem o cliente (scripts/evals/agente); as outras são
 // conveniência de Server Actions.
 
+// #47: o projeto é um FK real; o nome vem por join (display/serializar).
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto, descricao, depende_de, data_fim, created_at, concluida_em';
+    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em';
 
 interface TarefaRow {
     id: string;
     titulo: string;
     estado: EstadoTarefa;
     prioridade: Tarefa['prioridade'];
-    projeto: string | null;
+    projeto_id: string | null;
+    projetos: { nome: string } | null;
     descricao: string | null;
     depende_de: string | null;
     data_fim: string | null;
@@ -33,7 +36,8 @@ function toTarefa(r: TarefaRow): Tarefa {
         titulo: r.titulo,
         estado: r.estado,
         prioridade: r.prioridade,
-        projeto: r.projeto,
+        projetoId: r.projeto_id,
+        projeto: r.projetos?.nome ?? null,
         descricao: r.descricao,
         dependeDe: r.depende_de,
         dataFim: r.data_fim,
@@ -50,7 +54,7 @@ export async function listarTarefasAbertasCom(db: SupabaseClient): Promise<Taref
         .order('created_at', { ascending: false });
     if (error) throw new Error(`listar tarefas abertas falhou: ${error.message}`);
     // Ordem do painel (#51): data fim → prioridade → estado desc do kanban.
-    return ordenarTarefasAbertas(((data ?? []) as TarefaRow[]).map(toTarefa));
+    return ordenarTarefasAbertas(((data ?? []) as unknown as TarefaRow[]).map(toTarefa));
 }
 
 export async function listarTarefasConcluidasCom(
@@ -64,7 +68,7 @@ export async function listarTarefasConcluidasCom(
         .order('concluida_em', { ascending: false })
         .limit(limite);
     if (error) throw new Error(`listar tarefas concluídas falhou: ${error.message}`);
-    return ((data ?? []) as TarefaRow[]).map(toTarefa);
+    return ((data ?? []) as unknown as TarefaRow[]).map(toTarefa);
 }
 
 export async function criarTarefaCom(db: SupabaseClient, input: NovaTarefa): Promise<Tarefa> {
@@ -85,11 +89,15 @@ export async function criarTarefaCom(db: SupabaseClient, input: NovaTarefa): Pro
         if (!dep) throw new Error('dependência inválida: tarefa não encontrada');
     }
 
+    // #47: o nome resolve sempre para um projeto real — encontra, cria, ou
+    // cai no Pessoal quando não vem nome (toda a tarefa pertence a um projeto).
+    const projeto = await resolverProjetoCom(db, input.projeto);
+
     const { data, error } = await db
         .from('tarefas')
         .insert({
             titulo: input.titulo,
-            projeto: input.projeto ?? null,
+            projeto_id: projeto.id,
             prioridade: input.prioridade ?? 'normal',
             descricao: input.descricao ?? null,
             depende_de: input.dependeDe ?? null,
@@ -101,7 +109,7 @@ export async function criarTarefaCom(db: SupabaseClient, input: NovaTarefa): Pro
         .select(COLUNAS)
         .single();
     if (error || !data) throw new Error(`criar tarefa falhou: ${error?.message ?? 'sem dados'}`);
-    return toTarefa(data as TarefaRow);
+    return toTarefa(data as unknown as TarefaRow);
 }
 
 // Edição pelo quick-add (#55): reescreve os campos dos tokens; terminadas não
@@ -118,11 +126,13 @@ export async function atualizarTarefaCom(
         descricao: string | null;
     },
 ): Promise<Tarefa> {
+    // #47: sem nome re-ancora no Pessoal — uma tarefa nunca fica sem projeto.
+    const projeto = await resolverProjetoCom(db, campos.projeto);
     const { data, error } = await db
         .from('tarefas')
         .update({
             titulo: campos.titulo,
-            projeto: campos.projeto,
+            projeto_id: projeto.id,
             prioridade: campos.prioridade,
             data_fim: campos.dataFim,
             descricao: campos.descricao,
@@ -135,7 +145,7 @@ export async function atualizarTarefaCom(
         throw new Error(
             `atualizar tarefa falhou (terminada não se edita): ${error?.message ?? 'sem dados'}`,
         );
-    return toTarefa(data as TarefaRow);
+    return toTarefa(data as unknown as TarefaRow);
 }
 
 // Mudar de coluna no kanban. A passagem a 'terminado' vai SEMPRE pelo
@@ -161,7 +171,7 @@ export async function mudarEstadoTarefaCom(
         throw new Error(
             `mudar estado falhou (terminada não se reabre): ${error?.message ?? 'sem dados'}`,
         );
-    return toTarefa(data as TarefaRow);
+    return toTarefa(data as unknown as TarefaRow);
 }
 
 // Conclusão (#21): RPC valida a dependência bloqueante; a conclusão — e só
@@ -187,7 +197,7 @@ export async function concluirTarefaCom(db: SupabaseClient, id: string): Promise
         .eq('id', row.id)
         .single();
     if (e2 || !full) throw new Error(`ler tarefa concluída falhou: ${e2?.message ?? 'sem dados'}`);
-    return toTarefa(full as TarefaRow);
+    return toTarefa(full as unknown as TarefaRow);
 }
 
 // Apagar mesmo (decisão do Carlos: arrastar tarefa para o Archive APAGA —

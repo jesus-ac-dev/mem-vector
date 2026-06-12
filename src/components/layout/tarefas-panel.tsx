@@ -77,13 +77,17 @@ function corPrioridade(p: PrioridadeTarefa): string {
 export function TarefasPanel({
     criarAberto,
     onFecharCriar,
+    projetoFoco,
 }: {
     criarAberto: boolean;
     onFecharCriar: () => void;
+    // #47: clicar num projeto da secção root abre o painel já filtrado.
+    projetoFoco?: string | null;
 }) {
     const { workspaceVersion, notificarWorkspaceMudou } = useWorkspace();
     const [abertas, setAbertas] = useState<Tarefa[]>([]);
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
+    const [projetos, setProjetos] = useState<string[]>([]);
     const [verConcluidas, setVerConcluidas] = useState(false);
     const [novoTexto, setNovoTexto] = useState('');
     // Clicar no card edita (#55): o input reabre com os tokens da tarefa.
@@ -109,11 +113,20 @@ export function TarefasPanel({
             if (cancelado || !r) return;
             setAbertas(r.abertas);
             setConcluidas(r.concluidas);
+            setProjetos(r.projetos.map((p) => p.nome));
         });
         return () => {
             cancelado = true;
         };
     }, [workspaceVersion]);
+
+    // Sincronizar o filtro com o foco vindo do explorer (#47) — padrão React
+    // de derivar estado de prop durante o render (sem effect).
+    const [ultimoFoco, setUltimoFoco] = useState(projetoFoco);
+    if (projetoFoco !== ultimoFoco) {
+        setUltimoFoco(projetoFoco);
+        if (projetoFoco) setFiltroProjeto(projetoFoco);
+    }
 
     const inputAberto = criarAberto || editandoId !== null;
 
@@ -137,11 +150,6 @@ export function TarefasPanel({
     }
 
     const abertasIds = new Set(abertas.map((t) => t.id));
-    const projetos = [
-        ...new Set(
-            [...abertas, ...concluidas].map((t) => t.projeto).filter((p): p is string => !!p),
-        ),
-    ].sort((a, b) => a.localeCompare(b, 'pt'));
 
     const visiveis = abertas.filter(
         (t) =>

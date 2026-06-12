@@ -174,6 +174,7 @@ function tarefa(parcial: Partial<Tarefa> & { id: string }): Tarefa {
         titulo: parcial.id,
         estado: 'backlog',
         prioridade: 'normal',
+        projetoId: null,
         projeto: null,
         descricao: null,
         dependeDe: null,
