@@ -41,12 +41,13 @@ Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim
 **RLS:** ler — dono ou grupo (`protected`); criar/apagar — só o dono; editar — dono ou
 membro do grupo. Terminada não se reabre por `mudarEstado`.
 
-## Quick-add (#51)
+## Quick-add (#51, #53)
 
-`tarefa !prioridade #projeto @2026-06-30 // descrição` — `!` e `#` têm autocomplete
-(prioridades fixas; projetos já usados). ID e data de criação são automáticos. A view
-da row segue a mesma ordem; ordenação do painel: data fim → prioridade → estado
-descendente do kanban.
+`#projeto tarefa !prioridade @2026-06-30 // descrição` — `!` e `#` têm autocomplete
+(prioridades fixas; projetos já usados). ID e data de criação são automáticos; `@` é a
+**data fim**. O card segue a mesma ordem (`#projeto` como header); ordenação do painel:
+data fim → prioridade → estado descendente do kanban. O agente também define `dataFim`
+quando a conversa traz prazo (fim de semana = domingo).
 
 ## Ligações
 

@@ -176,6 +176,15 @@ estado descendente do kanban (`ordenarTarefasAbertas`, aplicada no serviço).
 Filtros de estado e #tag no topo do painel. Na row, o toggle do estado vem
 antes do nome e a data de criação ocupa o lugar do chevron.
 
+**Feedback ronda 2 (#53):** o botão Tarefas vive na secção de baixo do ribbon
+(em cima só Explorador e Conversas). Card: linha 1 `#projeto` (header), linha 2
+prioridade + título/descrição, linha 3 estado e datas (`➕` criação, `📅` fim —
+convenção do plugin Tasks). Cores: baixa azul escuro, normal verde escuro,
+alta vermelho. O agente também define `dataFim` quando a conversa traz prazo
+("este fim de semana" = domingo): o envelope one-shot e a tool `criar_tarefa`
+ganham o campo, e os prompts dos dois caminhos levam a data de hoje (sem ela o
+modelo não resolve prazos relativos).
+
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,
 prioridades e regras do utilizador, injetadas em todos os arranques do agente

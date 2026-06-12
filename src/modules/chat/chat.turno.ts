@@ -5,7 +5,7 @@ import {
     type NotaCandidata,
 } from '@/modules/knowledge/knowledge.schema';
 import { TarefaDestiladaSchema, type TarefaDestilada } from '@/modules/tarefas/tarefas.schema';
-import { parseDailyCapture } from '@/modules/daily/daily.capture';
+import { hojeComDiaSemana, parseDailyCapture } from '@/modules/daily/daily.capture';
 import type { Intencao } from './chat.intencao';
 import type { MensagemConversa } from './chat.prompt';
 
@@ -126,11 +126,15 @@ export function buildTurnoPrompt(
         '3) "tarefas": array (pode ser vazio) de AÇÕES do utilizador — coisas a fazer, lembretes, ' +
         'coisas a acompanhar (ex.: "ligar ao contabilista", "rever proposta"). Na dúvida entre ' +
         'criar e não criar, CRIA — apagar é barato. Cada uma: {"titulo": "verbo + objeto, curto", ' +
-        '"projeto": "tag-curta" | null, "prioridade": "baixa" | "normal" | "alta"}. NÃO dupliques ' +
+        '"projeto": "tag-curta" | null, "prioridade": "baixa" | "normal" | "alta", ' +
+        '"dataFim": "AAAA-MM-DD" | null}. Se a conversa traz um PRAZO ("até sexta", "este fim de ' +
+        'semana", "antes da reunião de dia X"), define "dataFim" com a data concreta — fim de ' +
+        'semana = o domingo; senão null. NÃO dupliques ' +
         'tarefa já em aberto (lista abaixo). FACTOS e conhecimento vão para "nota", NUNCA para ' +
         '"tarefas" — tarefa é o que o utilizador tem de FAZER.\n' +
         '4) "concluir": array (pode ser vazio) com os IDS das tarefas em aberto que a conversa diz ' +
         'estarem FEITAS (ex.: "já liguei ao contabilista" → o id dessa tarefa). Só ids da lista.\n\n' +
+        `Hoje é ${hojeComDiaSemana()} — usa isto para resolver prazos relativos.\n\n` +
         blocoConversaTurno(historico) +
         blocoFactoDeclarado(intencao) +
         blocoCandidatos(candidatos) +
