@@ -1,6 +1,7 @@
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import type { Intencao } from '@/modules/chat/chat.intencao';
 import type { MensagemConversa } from '@/modules/chat/chat.prompt';
+import { hojeComDiaSemana } from '@/modules/daily/daily.capture';
 
 // Agent Contract v0 (M1): o comportamento do agente-autor como system prompt
 // da sessão agentic. As regras que no caminho one-shot vivem espremidas em
@@ -27,6 +28,8 @@ export const AGENT_CONTRACT = [
     '4. TAREFAS: se a troca traz AÇÕES do utilizador (fazer/lembrar/acompanhar), cria-as com ' +
         'criar_tarefa — na dúvida, cria (apagar é barato). Antes de criar, listar_tarefas_abertas ' +
         'para não duplicar; se a conversa diz que algo está FEITO, concluir_tarefa com o id. ' +
+        'Se a conversa traz um PRAZO ("até sexta", "este fim de semana"), passa dataFim com a ' +
+        'data concreta (fim de semana = o domingo). ' +
         'Factos e conhecimento vão para notas, NUNCA para tarefas.',
     '5. REGISTA O TURNO: no fim, acrescentar_daily com 1 a 5 bullets curtos do que aconteceu — ' +
         'factos, decisões, alterações, bloqueios, próximos passos. Só o que aconteceu de facto, ' +
@@ -91,7 +94,8 @@ export function buildPromptAgentic(
     historico: MensagemConversa[] = [],
 ): string {
     return (
-        'Processa o pós-turno desta troca segundo o teu contrato.\n\n' +
+        'Processa o pós-turno desta troca segundo o teu contrato. ' +
+        `Hoje é ${hojeComDiaSemana()}.\n\n` +
         blocoConversa(historico) +
         blocoDeclarativa(intencao) +
         blocoCandidatas(candidatos) +

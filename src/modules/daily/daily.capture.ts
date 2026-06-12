@@ -21,6 +21,17 @@ export function horaLisboa(date: Date = new Date()): string {
     }).format(date);
 }
 
+// "2026-06-12 (quinta-feira)" — vai nos prompts de destilação (#53): sem a
+// data de hoje o modelo não resolve prazos relativos ("este fim de semana").
+export function hojeComDiaSemana(date: Date = new Date()): string {
+    const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon' }).format(date);
+    const semana = new Intl.DateTimeFormat('pt-PT', {
+        timeZone: 'Europe/Lisbon',
+        weekday: 'long',
+    }).format(date);
+    return `${dia} (${semana})`;
+}
+
 function clamp(text: string, max = 4000): string {
     return text.length > max ? `${text.slice(0, max)}...` : text;
 }

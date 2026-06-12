@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { detetarGatilhoTarefa, parseNovaTarefa, sugestoesParaGatilho } from './tarefas-quickadd';
-import { ordenarTarefasAbertas, type Tarefa } from './tarefas.schema';
+import { ordenarTarefasAbertas, TarefaDestiladaSchema, type Tarefa } from './tarefas.schema';
 
 describe('parseNovaTarefa', () => {
     it('extrai todos os tokens na ordem do quick-add', () => {
@@ -92,6 +92,26 @@ describe('sugestoesParaGatilho', () => {
         expect(sugestoesParaGatilho({ tipo: 'projeto', termo: 'vi', inicio: 0 }, projetos)).toEqual(
             ['viagens', 'vida'].map((p) => projetos.find((x) => x.toLowerCase() === p) ?? p),
         );
+    });
+});
+
+describe('TarefaDestiladaSchema (envelope do agente)', () => {
+    it('aceita dataFim válida', () => {
+        const r = TarefaDestiladaSchema.parse({
+            titulo: 'Testar emails do crmcredito',
+            projeto: 'crmcredito',
+            dataFim: '2026-06-14',
+        });
+        expect(r.dataFim).toBe('2026-06-14');
+    });
+
+    it('dataFim malformada não custa a tarefa — cai para undefined', () => {
+        const r = TarefaDestiladaSchema.parse({
+            titulo: 'Testar emails do crmcredito',
+            dataFim: 'domingo',
+        });
+        expect(r.titulo).toBe('Testar emails do crmcredito');
+        expect(r.dataFim).toBeUndefined();
     });
 });
 

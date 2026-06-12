@@ -154,6 +154,11 @@ const TOOLS = [
                 titulo: { type: 'string', description: 'Verbo + objeto, curto' },
                 projeto: { type: 'string', description: 'Tag curta do projeto (opcional)' },
                 prioridade: { type: 'string', enum: ['baixa', 'normal', 'alta'] },
+                dataFim: {
+                    type: 'string',
+                    description:
+                        'Data fim AAAA-MM-DD quando a conversa traz prazo (fim de semana = domingo)',
+                },
             },
             required: ['titulo'],
         },
@@ -291,6 +296,10 @@ async function executarTool(
                     args.prioridade === 'baixa' || args.prioridade === 'alta'
                         ? args.prioridade
                         : 'normal',
+                dataFim:
+                    typeof args.dataFim === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.dataFim)
+                        ? args.dataFim
+                        : undefined,
                 visibility: 'privado',
             });
             if (RESULT_FILE) {

@@ -51,10 +51,12 @@ const ESTADOS_ABERTOS: Exclude<EstadoTarefa, 'terminado'>[] = [
     'documentacao',
 ];
 
+// Cores pedidas pelo Carlos (#53): baixa azul escuro, normal verde escuro —
+// o bg-primary/60 parecia vermelho no tema escuro e confundia normal com alta.
 function corPrioridade(p: PrioridadeTarefa): string {
     if (p === 'alta') return 'bg-red-500';
-    if (p === 'baixa') return 'bg-muted-foreground/40';
-    return 'bg-primary/60';
+    if (p === 'baixa') return 'bg-blue-800';
+    return 'bg-green-700';
 }
 
 export function TarefasPanel({
@@ -206,7 +208,7 @@ export function TarefasPanel({
                         }
                         onKeyDown={onKeyDownNova}
                         onBlur={() => setTimeout(() => setGatilho(null), 120)}
-                        placeholder="tarefa !prioridade #projeto @2026-06-30 // descrição"
+                        placeholder="#projeto tarefa !prioridade @2026-06-30 // descrição"
                         className="h-7 text-sm"
                     />
                     {gatilho && sugestoes.length > 0 && (
@@ -275,108 +277,114 @@ export function TarefasPanel({
                 <ul className="space-y-0.5">
                     {visiveis.map((t) => {
                         const bloqueada = Boolean(t.dependeDe && abertasIds.has(t.dependeDe));
+                        // Card (#53): linha 1 = #projeto (header); linha 2 =
+                        // prioridade + título/descrição; linha 3 = estado (toggle
+                        // antes do nome) e datas (➕ criada, 📅 fim — convenção do
+                        // plugin Tasks).
                         return (
                             <li key={t.id} className="group px-2">
-                                <div className="flex items-start gap-2 rounded px-1 py-1 hover:bg-muted">
-                                    <span
-                                        title={`Prioridade ${t.prioridade}`}
-                                        className={cn(
-                                            'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                                            corPrioridade(t.prioridade),
-                                        )}
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm" title={t.titulo}>
-                                            {t.titulo}
+                                <div className="rounded px-1 py-1 hover:bg-muted">
+                                    {t.projeto && (
+                                        <p className="truncate text-[0.65rem] font-medium text-muted-foreground">
+                                            #{t.projeto}
                                         </p>
-                                        {/* Ordem da view = ordem do quick-add (#51):
-                                            estado (toggle antes do nome) → #tag →
-                                            descrição; a data de criação fica onde
-                                            estava o chevron. */}
-                                        <div className="flex items-center gap-1.5 text-[0.65rem] text-muted-foreground">
-                                            <Select
-                                                value={t.estado}
-                                                onValueChange={(estado) =>
-                                                    mutacao(
-                                                        'mudarEstadoTarefa',
-                                                        { id: t.id, estado },
-                                                        () => mudarEstadoTarefa(t.id, estado),
-                                                    )
-                                                }
-                                            >
-                                                <SelectTrigger className="h-5 w-auto shrink-0 flex-row-reverse justify-end gap-0.5 border-none px-0 text-[0.65rem] shadow-none focus:ring-0">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {ESTADOS_ABERTOS.map((e) => (
-                                                        <SelectItem key={e} value={e}>
-                                                            {ESTADO_LABEL[e]}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {t.projeto && (
-                                                <span className="shrink-0">#{t.projeto}</span>
+                                    )}
+                                    <div className="flex items-start gap-2">
+                                        <span
+                                            title={`Prioridade ${t.prioridade}`}
+                                            className={cn(
+                                                'mt-1.5 h-2 w-2 shrink-0 rounded-full',
+                                                corPrioridade(t.prioridade),
                                             )}
+                                        />
+                                        <p
+                                            className="min-w-0 flex-1 truncate text-sm"
+                                            title={t.titulo}
+                                        >
+                                            {t.titulo}
                                             {t.descricao && (
-                                                <span className="truncate" title={t.descricao}>
+                                                <span
+                                                    className="ml-1.5 text-xs text-muted-foreground"
+                                                    title={t.descricao}
+                                                >
                                                     {t.descricao}
                                                 </span>
                                             )}
-                                            {bloqueada && (
-                                                <span
-                                                    title="Bloqueada por dependência em aberto"
-                                                    className="inline-flex shrink-0 items-center gap-0.5"
-                                                >
-                                                    <Lock className="h-3 w-3" />
-                                                </span>
-                                            )}
-                                            <span className="ml-auto flex shrink-0 items-center gap-1">
-                                                {t.dataFim && (
-                                                    <span title={`Data fim: ${t.dataFim}`}>
-                                                        📅 {t.dataFim.slice(5)}
-                                                    </span>
-                                                )}
-                                                <span
-                                                    title={`Criada em ${t.criadaEm.slice(0, 10)}`}
-                                                >
-                                                    {t.criadaEm.slice(0, 10)}
-                                                </span>
-                                            </span>
+                                        </p>
+                                        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title={
+                                                    bloqueada
+                                                        ? 'Bloqueada pela dependência'
+                                                        : 'Concluir (regista no daily)'
+                                                }
+                                                disabled={bloqueada}
+                                                onClick={() =>
+                                                    mutacao('concluirTarefa', { id: t.id }, () =>
+                                                        concluirTarefa(t.id),
+                                                    )
+                                                }
+                                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                            >
+                                                <Check className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Apagar (apaga mesmo)"
+                                                onClick={() =>
+                                                    mutacao('apagarTarefa', { id: t.id }, () =>
+                                                        apagarTarefa(t.id),
+                                                    )
+                                                }
+                                                className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            title={
-                                                bloqueada
-                                                    ? 'Bloqueada pela dependência'
-                                                    : 'Concluir (regista no daily)'
-                                            }
-                                            disabled={bloqueada}
-                                            onClick={() =>
-                                                mutacao('concluirTarefa', { id: t.id }, () =>
-                                                    concluirTarefa(t.id),
+                                    <div className="flex items-center gap-1.5 pl-4 text-[0.65rem] text-muted-foreground">
+                                        <Select
+                                            value={t.estado}
+                                            onValueChange={(estado) =>
+                                                mutacao(
+                                                    'mudarEstadoTarefa',
+                                                    { id: t.id, estado },
+                                                    () => mudarEstadoTarefa(t.id, estado),
                                                 )
                                             }
-                                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
                                         >
-                                            <Check className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Apagar (apaga mesmo)"
-                                            onClick={() =>
-                                                mutacao('apagarTarefa', { id: t.id }, () =>
-                                                    apagarTarefa(t.id),
-                                                )
-                                            }
-                                            className="h-5 w-5 text-muted-foreground hover:text-destructive"
-                                        >
-                                            <X className="h-3.5 w-3.5" />
-                                        </Button>
+                                            <SelectTrigger className="h-5 w-auto shrink-0 flex-row-reverse justify-end gap-0.5 border-none px-0 text-[0.65rem] shadow-none focus:ring-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {ESTADOS_ABERTOS.map((e) => (
+                                                    <SelectItem key={e} value={e}>
+                                                        {ESTADO_LABEL[e]}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {bloqueada && (
+                                            <span
+                                                title="Bloqueada por dependência em aberto"
+                                                className="inline-flex shrink-0 items-center gap-0.5"
+                                            >
+                                                <Lock className="h-3 w-3" />
+                                            </span>
+                                        )}
+                                        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                                            <span title={`Criada em ${t.criadaEm.slice(0, 10)}`}>
+                                                ➕ {t.criadaEm.slice(5, 10)}
+                                            </span>
+                                            {t.dataFim && (
+                                                <span title={`Data fim: ${t.dataFim}`}>
+                                                    📅 {t.dataFim.slice(5)}
+                                                </span>
+                                            )}
+                                        </span>
                                     </div>
                                 </div>
                             </li>

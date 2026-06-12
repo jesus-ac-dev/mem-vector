@@ -46,6 +46,14 @@ export const TarefaDestiladaSchema = z.object({
         .nullish()
         .transform((v) => v ?? undefined),
     prioridade: z.enum(PRIORIDADES_TAREFA).default('normal'),
+    // Data fim quando a conversa traz prazo (#53). Malformada não custa a
+    // tarefa — cai para undefined em vez de chumbar o parse.
+    dataFim: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .nullish()
+        .transform((v) => v ?? undefined)
+        .catch(undefined),
 });
 export type TarefaDestilada = z.infer<typeof TarefaDestiladaSchema>;
 

@@ -159,6 +159,7 @@ export async function executarDestilacaoTurnoCom(
                 titulo: t.titulo,
                 projeto: t.projeto,
                 prioridade: t.prioridade,
+                dataFim: t.dataFim,
                 visibility: 'privado',
             });
             tarefas.criadas.push({ id: criada.id, titulo: criada.titulo });
