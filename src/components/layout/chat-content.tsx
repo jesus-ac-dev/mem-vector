@@ -15,7 +15,7 @@ import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
-import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
+import { EscolhaModeloModal } from '@/components/layout/escolha-modelo-modal';
 import { lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
 import { PROVIDER_LABEL, type Provider } from '@/modules/definicoes/definicoes.schema';
 
@@ -108,6 +108,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [providerChat, setProviderChat] = useState<{ provider: Provider; modelo?: string }>({
         provider: 'claude',
     });
+    const [escolhaAberta, setEscolhaAberta] = useState(false);
 
     useEffect(() => {
         let cancelado = false;
@@ -332,12 +333,17 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => pedirDefinicoes('agentes')}
-                    title="Mudar o provider/modelo do chat"
+                    onClick={() => setEscolhaAberta(true)}
+                    title="Mudar quem responde ao chat"
                     className="h-5 px-1 text-[0.7rem] font-normal text-muted-foreground hover:text-foreground"
                 >
                     {PROVIDER_LABEL[providerChat.provider]} · {providerChat.modelo ?? 'default'}
                 </Button>
+                <EscolhaModeloModal
+                    open={escolhaAberta}
+                    onOpenChange={setEscolhaAberta}
+                    onEscolha={(provider, modelo) => setProviderChat({ provider, modelo })}
+                />
             </div>
             <div className="flex shrink-0 gap-2">
                 <Textarea

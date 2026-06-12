@@ -7,7 +7,11 @@
 Guarda as opções do workspace (1 linha por utilizador; **sem linha = defaults** — o
 utilizador novo não precisa de seed). A UI é a mega modal aberta pela dropdown do
 badge: menu lateral à esquerda (Principais: Agentes, Módulos; grupo "Módulos ativos"
-com a página de cada módulo ligado), forms à direita, gravação imediata.
+com a página de cada módulo ligado), forms à direita e **botão Guardar explícito** —
+ao guardar, providers ativos alterados que o utilizador não testou são **testados à
+força** (teste vermelho = não grava). A ESCOLHA de quem responde ao chat vive na
+**mini-modal do link sobre o Enviar** (`escolha-modelo-modal.tsx`) — essa sim grava
+onChange, só entre providers já parametrizados.
 
 ## Secções e opções
 

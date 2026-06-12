@@ -45,15 +45,13 @@ import {
 } from '@/modules/definicoes/definicoes.schema';
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
-// forms à direita. Secções principais: Comportamento (como o agente-autor
-// age — acumula ideias), Agentes (os providers/orquestradores — o
-// FactoryProvider distribui e o chat responde com o escolhido) e Módulos;
-// módulo ativo ganha grupo próprio no menu com a página dele por baixo.
+// forms à direita. Aqui PARAMETRIZA-SE (Comportamento, Agentes, Módulos) com
+// botão Guardar explícito — ao guardar, providers ativos alterados que o
+// utilizador não testou são testados à força. A ESCOLHA do provider/modelo do
+// chat vive na mini-modal do link sobre o Enviar (essa sim, grava onChange).
 
 type Pagina = 'comportamento' | 'agentes' | 'modulos' | Modulo;
 
-// O chat (link sobre o Enviar) abre a modal aqui — mesmo padrão de evento do
-// banner stale (a modal vive no header, fora do WorkspaceProvider).
 export const ABRIR_DEFINICOES_EVENT = 'memvector:abrir-definicoes';
 
 export function pedirDefinicoes(pagina: Pagina = 'comportamento') {
@@ -90,12 +88,17 @@ export function DefinicoesModal({
 }) {
     const [pagina, setPagina] = useState<Pagina>('comportamento');
     const [defs, setDefs] = useState<DefinicoesVista>(DEFINICOES_VISTA_DEFAULT);
+    // Keys escritas nesta sessão da modal ('' = limpar; só seguem no Guardar).
     const [keysNovas, setKeysNovas] = useState<Partial<Record<Provider, string>>>({});
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
     >({});
+    // Providers mexidos desde o load; o teste manual com ✓ confirma-os.
+    const [alterados, setAlterados] = useState<Set<Provider>>(new Set());
+    const [confirmados, setConfirmados] = useState<Set<Provider>>(new Set());
+    const [sujo, setSujo] = useState(false);
     const [carregado, setCarregado] = useState(false);
-    const [gravado, setGravado] = useState(false);
+    const [estado, setEstado] = useState<'' | 'a-guardar' | 'guardado' | 'falhou'>('');
 
     // O chat pede a modal por evento (padrão do banner stale).
     useEffect(() => {
@@ -114,10 +117,13 @@ export function DefinicoesModal({
     if (open !== ultimoOpen) {
         setUltimoOpen(open);
         if (open) {
-            setGravado(false);
             setCarregado(false);
             setKeysNovas({});
             setTestes({});
+            setAlterados(new Set());
+            setConfirmados(new Set());
+            setSujo(false);
+            setEstado('');
         }
     }
 
@@ -136,63 +142,33 @@ export function DefinicoesModal({
         };
     }, [open]);
 
-    // Gravação imediata: a vista local atualiza já; o servidor responde com a
-    // vista canónica (keys mascaradas) que substitui o estado.
-    function gravar(novas: DefinicoesVista, keysParaEnviar: Partial<Record<Provider, string>>) {
+    // Edições só mexem no estado local; persistir é trabalho do Guardar.
+    function editar(novas: DefinicoesVista) {
         setDefs(novas);
-        setGravado(false);
-        const payload: Definicoes = {
-            metodoDestilacao: novas.metodoDestilacao,
-            modulosAtivos: novas.modulosAtivos,
-            chatProvider: novas.chatProvider,
-            agentes: Object.fromEntries(
-                (Object.entries(novas.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
-                    p,
-                    {
-                        ativo: a.ativo,
-                        modo: a.modo,
-                        modelo: a.modelo,
-                        esforco: a.esforco,
-                        // undefined = manter a key cifrada existente.
-                        apiKey: keysParaEnviar[p],
-                    },
-                ]),
-            ),
-        };
-        void runClientAction({ area: 'definicoes', action: 'gravarDefinicoes' }, () =>
-            gravarDefinicoes(payload),
-        ).then((r) => {
-            if (!r) return;
-            setDefs(r);
-            setGravado(true);
-        });
+        setSujo(true);
+        setEstado('');
     }
 
     function mudarAgente(p: Provider, campos: Partial<AgenteVista>) {
         const atual = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
-        gravar({ ...defs, agentes: { ...defs.agentes, [p]: { ...atual, ...campos } } }, keysNovas);
+        editar({ ...defs, agentes: { ...defs.agentes, [p]: { ...atual, ...campos } } });
+        setAlterados((s) => new Set(s).add(p));
+        setConfirmados((s) => {
+            const n = new Set(s);
+            n.delete(p);
+            return n;
+        });
     }
 
-    function guardarKey(p: Provider) {
-        const key = keysNovas[p]?.trim();
-        if (!key) return;
-        gravar(defs, { ...keysNovas, [p]: key });
-        setKeysNovas((k) => ({ ...k, [p]: undefined }));
-    }
-
-    function limparKey(p: Provider) {
-        gravar(defs, { ...keysNovas, [p]: '' });
-    }
-
-    function testar(p: Provider) {
-        setTestes((t) => ({ ...t, [p]: 'a-testar' }));
-        void runClientAction({ area: 'definicoes', action: 'testarProvider', meta: { p } }, () =>
-            testarProvider(p),
-        ).then((r) => {
-            setTestes((t) => ({
-                ...t,
-                [p]: r ?? { ok: false, detalhe: 'o teste não respondeu' },
-            }));
+    function escreverKey(p: Provider, valor: string) {
+        setKeysNovas((k) => ({ ...k, [p]: valor }));
+        setSujo(true);
+        setEstado('');
+        setAlterados((s) => new Set(s).add(p));
+        setConfirmados((s) => {
+            const n = new Set(s);
+            n.delete(p);
+            return n;
         });
     }
 
@@ -200,11 +176,80 @@ export function DefinicoesModal({
         const set = new Set(defs.modulosAtivos);
         if (ativo) set.add(m);
         else set.delete(m);
-        gravar({ ...defs, modulosAtivos: [...set] }, keysNovas);
+        editar({ ...defs, modulosAtivos: [...set] });
         if (!ativo && pagina === m) setPagina('modulos');
     }
 
-    const ativos = PROVIDERS.filter((p) => defs.agentes[p]?.ativo);
+    async function correrTeste(p: Provider): Promise<boolean> {
+        setTestes((t) => ({ ...t, [p]: 'a-testar' }));
+        const r = await runClientAction(
+            { area: 'definicoes', action: 'testarProvider', meta: { p } },
+            () => testarProvider(p),
+        );
+        const resultado = r ?? { ok: false, detalhe: 'o teste não respondeu' };
+        setTestes((t) => ({ ...t, [p]: resultado }));
+        return resultado.ok;
+    }
+
+    function testarManual(p: Provider) {
+        void correrTeste(p).then((ok) => {
+            if (ok) setConfirmados((s) => new Set(s).add(p));
+        });
+    }
+
+    // Guardar (pedido do Carlos): persiste tudo, mas antes FORÇA o teste de
+    // ligação aos providers ativos alterados que o utilizador não confirmou
+    // ele próprio. Teste vermelho = não grava (corrige ou desativa).
+    async function guardarTudo() {
+        setEstado('a-guardar');
+        const porTestar = PROVIDERS.filter(
+            (p) => defs.agentes[p]?.ativo && alterados.has(p) && !confirmados.has(p),
+        );
+        // NOTA: os testes correm contra a config GRAVADA; keys novas ainda não
+        // persistidas só se validam depois de guardar — limitação anotada.
+        for (const p of porTestar) {
+            const ok = await correrTeste(p);
+            if (!ok && !keysNovas[p]) {
+                setEstado('falhou');
+                setPagina('agentes');
+                return;
+            }
+        }
+        const payload: Definicoes = {
+            metodoDestilacao: defs.metodoDestilacao,
+            modulosAtivos: defs.modulosAtivos,
+            chatProvider: defs.chatProvider,
+            agentes: Object.fromEntries(
+                (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
+                    p,
+                    {
+                        ativo: a.ativo,
+                        modo: a.modo,
+                        modelo: a.modelo,
+                        esforco: a.esforco,
+                        // undefined = manter a key cifrada existente; '' = limpar.
+                        apiKey: keysNovas[p],
+                    },
+                ]),
+            ),
+        };
+        const r = await runClientAction({ area: 'definicoes', action: 'gravarDefinicoes' }, () =>
+            gravarDefinicoes(payload),
+        );
+        if (!r) {
+            setEstado('falhou');
+            return;
+        }
+        setDefs(r);
+        setKeysNovas({});
+        setAlterados(new Set());
+        setSujo(false);
+        setEstado('guardado');
+        // Key nova: agora gravada — testa já para o utilizador VER a ligação.
+        for (const p of PROVIDERS) {
+            if (keysNovas[p] && r.agentes[p]?.ativo) void correrTeste(p);
+        }
+    }
 
     const itemMenu = (id: Pagina, label: string, grupo = false) => (
         <Button
@@ -226,12 +271,11 @@ export function DefinicoesModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="grid h-[85vh] max-w-5xl grid-rows-[auto,1fr] gap-0 p-0">
+            <DialogContent className="grid h-[85vh] max-w-5xl grid-rows-[auto,1fr,auto] gap-0 p-0">
                 <DialogHeader className="border-b px-6 py-4">
                     <DialogTitle>Definições</DialogTitle>
                     <DialogDescription>
                         Comportamento, agentes e módulos deste workspace.
-                        {gravado && <span className="ml-2 text-primary">Guardado.</span>}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -275,10 +319,7 @@ export function DefinicoesModal({
                                 <Select
                                     value={defs.metodoDestilacao}
                                     onValueChange={(v) =>
-                                        gravar(
-                                            { ...defs, metodoDestilacao: v as MetodoDestilacao },
-                                            keysNovas,
-                                        )
+                                        editar({ ...defs, metodoDestilacao: v as MetodoDestilacao })
                                     }
                                 >
                                     <SelectTrigger className="w-64">
@@ -299,43 +340,20 @@ export function DefinicoesModal({
                                 </p>
                             </div>
                         ) : pagina === 'agentes' ? (
+                            // Parametrização dos providers ("novos" agentes). A
+                            // ESCOLHA de quem responde ao chat vive na mini-modal
+                            // do link sobre o Enviar.
                             <div className="max-w-xl space-y-4">
                                 <div>
                                     <h3 className="text-sm font-medium">
                                         Agentes (orquestradores)
                                     </h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Os providers que o workspace pode usar. CLI usa a tua
-                                        subscrição/instalação local; API precisa de key (cifrada,
-                                        nunca volta ao browser).
+                                        Parametriza os providers que o workspace pode usar. CLI usa
+                                        a tua subscrição/instalação local; API precisa de key
+                                        (cifrada, nunca volta ao browser). A escolha de quem
+                                        responde ao chat faz-se no link sobre o botão Enviar.
                                     </p>
-                                </div>
-
-                                {/* A mudança que a interface provoca: quem responde ao chat. */}
-                                <div className="flex items-center gap-2 rounded-md border p-3">
-                                    <p className="text-sm">Responde ao chat:</p>
-                                    <Select
-                                        value={defs.chatProvider}
-                                        onValueChange={(v) =>
-                                            gravar(
-                                                { ...defs, chatProvider: v as Provider },
-                                                keysNovas,
-                                            )
-                                        }
-                                    >
-                                        <SelectTrigger className="h-8 w-40 text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(ativos.length ? ativos : ['claude' as Provider]).map(
-                                                (p) => (
-                                                    <SelectItem key={p} value={p}>
-                                                        {PROVIDER_LABEL[p]}
-                                                    </SelectItem>
-                                                ),
-                                            )}
-                                        </SelectContent>
-                                    </Select>
                                 </div>
 
                                 <ul className="space-y-3">
@@ -461,7 +479,7 @@ export function DefinicoesModal({
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
-                                                                onClick={() => testar(p)}
+                                                                onClick={() => testarManual(p)}
                                                                 disabled={teste === 'a-testar'}
                                                                 className="h-8 text-xs"
                                                             >
@@ -476,32 +494,27 @@ export function DefinicoesModal({
                                                                     type="password"
                                                                     value={keysNovas[p] ?? ''}
                                                                     onChange={(e) =>
-                                                                        setKeysNovas((k) => ({
-                                                                            ...k,
-                                                                            [p]: e.target.value,
-                                                                        }))
+                                                                        escreverKey(
+                                                                            p,
+                                                                            e.target.value,
+                                                                        )
                                                                     }
                                                                     placeholder={
-                                                                        cfg.temApiKey
-                                                                            ? `key configurada (····${cfg.apiKeySufixo})`
-                                                                            : 'API key'
+                                                                        keysNovas[p] === ''
+                                                                            ? 'key será removida ao guardar'
+                                                                            : cfg.temApiKey
+                                                                              ? `key configurada (····${cfg.apiKeySufixo})`
+                                                                              : 'API key'
                                                                     }
                                                                     className="h-8 flex-1 text-xs"
                                                                 />
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => guardarKey(p)}
-                                                                    disabled={!keysNovas[p]?.trim()}
-                                                                    className="h-8 text-xs"
-                                                                >
-                                                                    Guardar key
-                                                                </Button>
                                                                 {cfg.temApiKey && (
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="sm"
-                                                                        onClick={() => limparKey(p)}
+                                                                        onClick={() =>
+                                                                            escreverKey(p, '')
+                                                                        }
                                                                         className="h-8 text-xs text-muted-foreground hover:text-destructive"
                                                                     >
                                                                         Limpar
@@ -589,6 +602,24 @@ export function DefinicoesModal({
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Footer: o Guardar explícito (pedido do Carlos). */}
+                <div className="flex items-center justify-end gap-3 border-t px-6 py-3">
+                    {estado === 'guardado' && (
+                        <span className="text-xs text-primary">Guardado.</span>
+                    )}
+                    {estado === 'falhou' && (
+                        <span className="text-xs text-destructive">
+                            Um teste de ligação falhou — corrige ou desativa o provider.
+                        </span>
+                    )}
+                    <Button
+                        onClick={() => void guardarTudo()}
+                        disabled={!sujo || estado === 'a-guardar'}
+                    >
+                        {estado === 'a-guardar' ? 'A guardar…' : 'Guardar'}
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>
