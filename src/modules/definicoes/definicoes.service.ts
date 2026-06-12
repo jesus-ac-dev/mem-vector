@@ -1,55 +1,173 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
-    AGENTES_DEFAULT,
-    DEFINICOES_DEFAULT,
+    DEFINICOES_VISTA_DEFAULT,
     DefinicoesSchema,
     MODULOS,
+    PROVIDERS,
+    type AgenteServidor,
+    type AgenteVista,
     type Definicoes,
+    type DefinicoesServidor,
+    type DefinicoesVista,
+    type Provider,
 } from './definicoes.schema';
+import { cifrar, decifrar, sufixoKey } from '@/lib/cripto';
 
 // Serviço das definições (#60): 1 linha por utilizador; sem linha = defaults
-// (o utilizador novo não precisa de seed — o default É a ausência).
+// (o utilizador novo não precisa de seed — o default É a ausência). As API
+// keys cifram-se at rest e NUNCA voltam ao browser (vista = máscara).
 
-export async function lerDefinicoesCom(db: SupabaseClient): Promise<Definicoes> {
-    const { data, error } = await db
-        .from('definicoes')
-        .select('metodo_destilacao, modulos_ativos, agentes')
-        .maybeSingle();
-    if (error) throw new Error(`ler definições falhou: ${error.message}`);
-    if (!data) return DEFINICOES_DEFAULT;
-    // Valores desconhecidos (ex.: módulo removido do código) caem fora no parse
-    // tolerante — preferível a rebentar a modal por causa de uma string velha.
-    const parsed = DefinicoesSchema.safeParse({
-        metodoDestilacao: data.metodo_destilacao,
-        modulosAtivos: (data.modulos_ativos ?? []).filter((m: string) =>
-            (MODULOS as readonly string[]).includes(m),
-        ),
-        agentes: data.agentes ?? {},
-    });
-    if (!parsed.success) return DEFINICOES_DEFAULT;
-    // Claude/cli é o orquestrador vivo: linha gravada antes da coluna agentes
-    // (ou limpa) volta ao default em vez de ficar sem nenhum provider.
-    const agentes = Object.keys(parsed.data.agentes).length ? parsed.data.agentes : AGENTES_DEFAULT;
-    return { ...parsed.data, agentes };
+interface AgenteRow {
+    ativo?: boolean;
+    modo?: 'cli' | 'api';
+    modelo?: string;
+    esforco?: string;
+    apiKeyCifrada?: string;
 }
 
+interface DefinicoesRow {
+    metodo_destilacao: string;
+    modulos_ativos: string[] | null;
+    chat_provider?: string | null;
+    agentes: Record<string, AgenteRow> | null;
+}
+
+async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
+    const { data, error } = await db
+        .from('definicoes')
+        .select('metodo_destilacao, modulos_ativos, chat_provider, agentes')
+        .maybeSingle();
+    if (error) throw new Error(`ler definições falhou: ${error.message}`);
+    return data as DefinicoesRow | null;
+}
+
+function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes'> {
+    const parsed = DefinicoesSchema.omit({ agentes: true }).safeParse({
+        metodoDestilacao: row.metodo_destilacao,
+        modulosAtivos: (row.modulos_ativos ?? []).filter((m: string) =>
+            (MODULOS as readonly string[]).includes(m),
+        ),
+        chatProvider: (PROVIDERS as readonly string[]).includes(row.chat_provider ?? '')
+            ? row.chat_provider
+            : 'claude',
+    });
+    if (!parsed.success) {
+        return {
+            metodoDestilacao: 'one-shot',
+            modulosAtivos: [],
+            chatProvider: 'claude',
+        };
+    }
+    return parsed.data;
+}
+
+function agentesDaRow(row: DefinicoesRow): Partial<Record<Provider, AgenteRow>> {
+    const agentes: Partial<Record<Provider, AgenteRow>> = {};
+    for (const p of PROVIDERS) {
+        const cfg = row.agentes?.[p];
+        if (cfg && typeof cfg === 'object') agentes[p] = cfg;
+    }
+    // Claude/cli é o orquestrador vivo: sem nenhum provider gravado, volta ao
+    // default em vez de ficar a zero.
+    if (Object.keys(agentes).length === 0) agentes.claude = { ativo: true, modo: 'cli' };
+    return agentes;
+}
+
+/** Vista do CLIENTE: keys mascaradas (temApiKey + sufixo), nunca o valor. */
+export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<DefinicoesVista> {
+    const row = await lerRowCom(db);
+    if (!row) return DEFINICOES_VISTA_DEFAULT;
+    const base = normalizar(row);
+    const agentes: Partial<Record<Provider, AgenteVista>> = {};
+    for (const [p, cfg] of Object.entries(agentesDaRow(row)) as [Provider, AgenteRow][]) {
+        const key = cfg.apiKeyCifrada ? decifrar(cfg.apiKeyCifrada) : undefined;
+        agentes[p] = {
+            ativo: cfg.ativo ?? false,
+            modo: cfg.modo ?? 'cli',
+            modelo: cfg.modelo || undefined,
+            esforco: cfg.esforco as AgenteVista['esforco'],
+            temApiKey: Boolean(key),
+            apiKeySufixo: key ? sufixoKey(key) : undefined,
+        };
+    }
+    return { ...base, agentes };
+}
+
+/** Forma do SERVIDOR (factory/postturno): key decifrada — NÃO devolver a actions. */
+export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<DefinicoesServidor> {
+    const row = await lerRowCom(db);
+    if (!row) {
+        return {
+            metodoDestilacao: 'one-shot',
+            modulosAtivos: [],
+            chatProvider: 'claude',
+            agentes: { claude: { ativo: true, modo: 'cli' } },
+        };
+    }
+    const base = normalizar(row);
+    const agentes: Partial<Record<Provider, AgenteServidor>> = {};
+    for (const [p, cfg] of Object.entries(agentesDaRow(row)) as [Provider, AgenteRow][]) {
+        agentes[p] = {
+            ativo: cfg.ativo ?? false,
+            modo: cfg.modo ?? 'cli',
+            modelo: cfg.modelo || undefined,
+            esforco: cfg.esforco as AgenteServidor['esforco'],
+            apiKey: cfg.apiKeyCifrada ? decifrar(cfg.apiKeyCifrada) : undefined,
+        };
+    }
+    return { ...base, agentes };
+}
+
+/** Grava o input do cliente. apiKey: undefined = manter; '' = limpar; string = cifrar. */
 export async function gravarDefinicoesCom(
     db: SupabaseClient,
     definicoes: Definicoes,
-): Promise<Definicoes> {
+): Promise<DefinicoesVista> {
     const {
         data: { user },
     } = await db.auth.getUser();
     if (!user) throw new Error('sem sessão');
 
+    const row = await lerRowCom(db);
+    const existentes = row ? agentesDaRow(row) : {};
+
+    const agentes: Record<string, AgenteRow> = {};
+    for (const p of PROVIDERS) {
+        const novo = definicoes.agentes[p];
+        if (!novo) continue;
+        const anterior = existentes[p];
+        let apiKeyCifrada: string | undefined;
+        if (novo.apiKey === undefined) {
+            // Migra plaintext legado para cifra ao regravar.
+            apiKeyCifrada = anterior?.apiKeyCifrada
+                ? cifrar(decifrar(anterior.apiKeyCifrada))
+                : undefined;
+        } else if (novo.apiKey !== '') {
+            apiKeyCifrada = cifrar(novo.apiKey);
+        }
+        agentes[p] = {
+            ativo: novo.ativo,
+            modo: novo.modo,
+            modelo: novo.modelo,
+            esforco: novo.esforco,
+            ...(apiKeyCifrada ? { apiKeyCifrada } : {}),
+        };
+    }
+
     const { error } = await db.from('definicoes').upsert({
         owner_id: user.id,
         metodo_destilacao: definicoes.metodoDestilacao,
         modulos_ativos: definicoes.modulosAtivos,
-        agentes: definicoes.agentes,
+        chat_provider: definicoes.chatProvider,
+        agentes,
         updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(`gravar definições falhou: ${error.message}`);
-    return definicoes;
+    return lerDefinicoesVistaCom(db);
+}
+
+// Compat: o pós-turno só precisa do método.
+export async function lerDefinicoesCom(db: SupabaseClient): Promise<DefinicoesServidor> {
+    return lerDefinicoesServidorCom(db);
 }

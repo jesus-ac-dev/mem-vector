@@ -21,15 +21,23 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { gravarDefinicoes, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
 import {
-    DEFINICOES_DEFAULT,
+    gravarDefinicoes,
+    lerDefinicoes,
+    testarProvider,
+} from '@/modules/definicoes/definicoes.actions';
+import {
+    DEFINICOES_VISTA_DEFAULT,
+    ESFORCOS,
+    MODELOS_SUGERIDOS,
     MODULO_LABEL,
     MODULOS,
     PROVIDER_LABEL,
     PROVIDERS,
-    type AgenteConfig,
+    type AgenteVista,
     type Definicoes,
+    type DefinicoesVista,
+    type Esforco,
     type MetodoDestilacao,
     type ModoAgente,
     type Modulo,
@@ -38,10 +46,19 @@ import {
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
 // forms à direita. Secções principais: Comportamento (como o agente-autor
-// age — acumula ideias), Agentes (os providers/orquestradores) e Módulos;
+// age — acumula ideias), Agentes (os providers/orquestradores — o
+// FactoryProvider distribui e o chat responde com o escolhido) e Módulos;
 // módulo ativo ganha grupo próprio no menu com a página dele por baixo.
 
 type Pagina = 'comportamento' | 'agentes' | 'modulos' | Modulo;
+
+// O chat (link sobre o Enviar) abre a modal aqui — mesmo padrão de evento do
+// banner stale (a modal vive no header, fora do WorkspaceProvider).
+export const ABRIR_DEFINICOES_EVENT = 'memvector:abrir-definicoes';
+
+export function pedirDefinicoes(pagina: Pagina = 'comportamento') {
+    window.dispatchEvent(new CustomEvent(ABRIR_DEFINICOES_EVENT, { detail: pagina }));
+}
 
 // Só o GitHub está disponível; os restantes vêm do roadmap (brief §5:
 // Campanhas; visão do calendário: Google Workspace/agenda; Emails da escada).
@@ -59,7 +76,10 @@ const MODULO_DESCRICAO: Record<Modulo, string> = {
     campanhas: 'Campanhas online (marketing) — há de vir.',
 };
 
-const AGENTE_SEM_CONFIG: AgenteConfig = { ativo: false, modo: 'cli', apiKey: undefined };
+const AGENTE_SEM_CONFIG: AgenteVista = { ativo: false, modo: 'cli', temApiKey: false };
+
+// Esforço de raciocínio: por agora só o codex o aceita (model_reasoning_effort).
+const PROVIDERS_COM_ESFORCO: Provider[] = ['codex'];
 
 export function DefinicoesModal({
     open,
@@ -69,9 +89,24 @@ export function DefinicoesModal({
     onOpenChange: (open: boolean) => void;
 }) {
     const [pagina, setPagina] = useState<Pagina>('comportamento');
-    const [definicoes, setDefinicoes] = useState<Definicoes>(DEFINICOES_DEFAULT);
+    const [defs, setDefs] = useState<DefinicoesVista>(DEFINICOES_VISTA_DEFAULT);
+    const [keysNovas, setKeysNovas] = useState<Partial<Record<Provider, string>>>({});
+    const [testes, setTestes] = useState<
+        Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
+    >({});
     const [carregado, setCarregado] = useState(false);
     const [gravado, setGravado] = useState(false);
+
+    // O chat pede a modal por evento (padrão do banner stale).
+    useEffect(() => {
+        function abrir(e: Event) {
+            const destino = (e as CustomEvent<Pagina>).detail;
+            setPagina(destino ?? 'comportamento');
+            onOpenChange(true);
+        }
+        window.addEventListener(ABRIR_DEFINICOES_EVENT, abrir);
+        return () => window.removeEventListener(ABRIR_DEFINICOES_EVENT, abrir);
+    }, [onOpenChange]);
 
     // Reset ao abrir — derive-no-render (o lint da casa não deixa setState
     // síncrono no corpo de um effect).
@@ -81,6 +116,8 @@ export function DefinicoesModal({
         if (open) {
             setGravado(false);
             setCarregado(false);
+            setKeysNovas({});
+            setTestes({});
         }
     }
 
@@ -90,7 +127,7 @@ export function DefinicoesModal({
         void runClientAction({ area: 'definicoes', action: 'lerDefinicoes' }, lerDefinicoes).then(
             (d) => {
                 if (cancelado || !d) return;
-                setDefinicoes(d);
+                setDefs(d);
                 setCarregado(true);
             },
         );
@@ -99,33 +136,75 @@ export function DefinicoesModal({
         };
     }, [open]);
 
-    // Gravação imediata (sem botão por opção): cada mudança persiste já e o
-    // rodapé confirma — numa modal de toggles, "Guardar" só adiava o óbvio.
-    function gravar(novas: Definicoes) {
-        setDefinicoes(novas);
+    // Gravação imediata: a vista local atualiza já; o servidor responde com a
+    // vista canónica (keys mascaradas) que substitui o estado.
+    function gravar(novas: DefinicoesVista, keysParaEnviar: Partial<Record<Provider, string>>) {
+        setDefs(novas);
         setGravado(false);
+        const payload: Definicoes = {
+            metodoDestilacao: novas.metodoDestilacao,
+            modulosAtivos: novas.modulosAtivos,
+            chatProvider: novas.chatProvider,
+            agentes: Object.fromEntries(
+                (Object.entries(novas.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
+                    p,
+                    {
+                        ativo: a.ativo,
+                        modo: a.modo,
+                        modelo: a.modelo,
+                        esforco: a.esforco,
+                        // undefined = manter a key cifrada existente.
+                        apiKey: keysParaEnviar[p],
+                    },
+                ]),
+            ),
+        };
         void runClientAction({ area: 'definicoes', action: 'gravarDefinicoes' }, () =>
-            gravarDefinicoes(novas),
+            gravarDefinicoes(payload),
         ).then((r) => {
-            if (r) setGravado(true);
+            if (!r) return;
+            setDefs(r);
+            setGravado(true);
         });
     }
 
-    function mudarAgente(p: Provider, campos: Partial<AgenteConfig>) {
-        const atual = definicoes.agentes[p] ?? AGENTE_SEM_CONFIG;
-        gravar({
-            ...definicoes,
-            agentes: { ...definicoes.agentes, [p]: { ...atual, ...campos } },
+    function mudarAgente(p: Provider, campos: Partial<AgenteVista>) {
+        const atual = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
+        gravar({ ...defs, agentes: { ...defs.agentes, [p]: { ...atual, ...campos } } }, keysNovas);
+    }
+
+    function guardarKey(p: Provider) {
+        const key = keysNovas[p]?.trim();
+        if (!key) return;
+        gravar(defs, { ...keysNovas, [p]: key });
+        setKeysNovas((k) => ({ ...k, [p]: undefined }));
+    }
+
+    function limparKey(p: Provider) {
+        gravar(defs, { ...keysNovas, [p]: '' });
+    }
+
+    function testar(p: Provider) {
+        setTestes((t) => ({ ...t, [p]: 'a-testar' }));
+        void runClientAction({ area: 'definicoes', action: 'testarProvider', meta: { p } }, () =>
+            testarProvider(p),
+        ).then((r) => {
+            setTestes((t) => ({
+                ...t,
+                [p]: r ?? { ok: false, detalhe: 'o teste não respondeu' },
+            }));
         });
     }
 
     function toggleModulo(m: Modulo, ativo: boolean) {
-        const set = new Set(definicoes.modulosAtivos);
+        const set = new Set(defs.modulosAtivos);
         if (ativo) set.add(m);
         else set.delete(m);
-        gravar({ ...definicoes, modulosAtivos: [...set] });
+        gravar({ ...defs, modulosAtivos: [...set] }, keysNovas);
         if (!ativo && pagina === m) setPagina('modulos');
     }
+
+    const ativos = PROVIDERS.filter((p) => defs.agentes[p]?.ativo);
 
     const itemMenu = (id: Pagina, label: string, grupo = false) => (
         <Button
@@ -165,14 +244,12 @@ export function DefinicoesModal({
                         {itemMenu('comportamento', 'Comportamento')}
                         {itemMenu('agentes', 'Agentes')}
                         {itemMenu('modulos', 'Módulos')}
-                        {definicoes.modulosAtivos.length > 0 && (
+                        {defs.modulosAtivos.length > 0 && (
                             <>
                                 <p className="px-2 pb-1 pt-3 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
                                     Módulos ativos
                                 </p>
-                                {definicoes.modulosAtivos.map((m) =>
-                                    itemMenu(m, MODULO_LABEL[m], true),
-                                )}
+                                {defs.modulosAtivos.map((m) => itemMenu(m, MODULO_LABEL[m], true))}
                             </>
                         )}
                     </nav>
@@ -196,12 +273,12 @@ export function DefinicoesModal({
                                     </p>
                                 </div>
                                 <Select
-                                    value={definicoes.metodoDestilacao}
+                                    value={defs.metodoDestilacao}
                                     onValueChange={(v) =>
-                                        gravar({
-                                            ...definicoes,
-                                            metodoDestilacao: v as MetodoDestilacao,
-                                        })
+                                        gravar(
+                                            { ...defs, metodoDestilacao: v as MetodoDestilacao },
+                                            keysNovas,
+                                        )
                                     }
                                 >
                                     <SelectTrigger className="w-64">
@@ -222,23 +299,50 @@ export function DefinicoesModal({
                                 </p>
                             </div>
                         ) : pagina === 'agentes' ? (
-                            // Agentes (#60 r2, design do Carlos): os providers que
-                            // podem servir de orquestrador — cli (subscrição/local)
-                            // ou api (key obrigatória). O relay consome isto.
-                            <div className="max-w-lg space-y-4">
+                            <div className="max-w-xl space-y-4">
                                 <div>
                                     <h3 className="text-sm font-medium">
                                         Agentes (orquestradores)
                                     </h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Declara os providers que o workspace pode usar como
-                                        orquestrador. CLI usa a tua subscrição/instalação local; API
-                                        precisa de key.
+                                        Os providers que o workspace pode usar. CLI usa a tua
+                                        subscrição/instalação local; API precisa de key (cifrada,
+                                        nunca volta ao browser).
                                     </p>
                                 </div>
+
+                                {/* A mudança que a interface provoca: quem responde ao chat. */}
+                                <div className="flex items-center gap-2 rounded-md border p-3">
+                                    <p className="text-sm">Responde ao chat:</p>
+                                    <Select
+                                        value={defs.chatProvider}
+                                        onValueChange={(v) =>
+                                            gravar(
+                                                { ...defs, chatProvider: v as Provider },
+                                                keysNovas,
+                                            )
+                                        }
+                                    >
+                                        <SelectTrigger className="h-8 w-40 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(ativos.length ? ativos : ['claude' as Provider]).map(
+                                                (p) => (
+                                                    <SelectItem key={p} value={p}>
+                                                        {PROVIDER_LABEL[p]}
+                                                    </SelectItem>
+                                                ),
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 <ul className="space-y-3">
                                     {PROVIDERS.map((p) => {
-                                        const cfg = definicoes.agentes[p] ?? AGENTE_SEM_CONFIG;
+                                        const cfg = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
+                                        const teste = testes[p];
+                                        const sugeridos = MODELOS_SUGERIDOS[p];
                                         return (
                                             <li key={p} className="space-y-2 rounded-md border p-3">
                                                 <div className="flex items-center justify-between gap-4">
@@ -259,41 +363,164 @@ export function DefinicoesModal({
                                                     />
                                                 </div>
                                                 {cfg.ativo && (
-                                                    <div className="flex items-center gap-2">
-                                                        <Select
-                                                            value={cfg.modo}
-                                                            onValueChange={(modo) =>
-                                                                mudarAgente(p, {
-                                                                    modo: modo as ModoAgente,
-                                                                })
-                                                            }
-                                                        >
-                                                            <SelectTrigger className="h-8 w-24 text-xs">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="cli">
-                                                                    CLI
-                                                                </SelectItem>
-                                                                <SelectItem value="api">
-                                                                    API
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                        {cfg.modo === 'api' && (
-                                                            <Input
-                                                                type="password"
-                                                                value={cfg.apiKey ?? ''}
-                                                                onChange={(e) =>
+                                                    <div className="space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <Select
+                                                                value={cfg.modo}
+                                                                onValueChange={(modo) =>
                                                                     mudarAgente(p, {
-                                                                        apiKey:
-                                                                            e.target.value ||
-                                                                            undefined,
+                                                                        modo: modo as ModoAgente,
                                                                     })
                                                                 }
-                                                                placeholder="API key"
-                                                                className="h-8 flex-1 text-xs"
-                                                            />
+                                                            >
+                                                                <SelectTrigger className="h-8 w-24 text-xs">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="cli">
+                                                                        CLI
+                                                                    </SelectItem>
+                                                                    <SelectItem value="api">
+                                                                        API
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {sugeridos.length > 0 ? (
+                                                                <Select
+                                                                    value={cfg.modelo ?? 'default'}
+                                                                    onValueChange={(m) =>
+                                                                        mudarAgente(p, {
+                                                                            modelo:
+                                                                                m === 'default'
+                                                                                    ? undefined
+                                                                                    : m,
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <SelectTrigger className="h-8 w-44 text-xs">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="default">
+                                                                            modelo default
+                                                                        </SelectItem>
+                                                                        {sugeridos.map((m) => (
+                                                                            <SelectItem
+                                                                                key={m}
+                                                                                value={m}
+                                                                            >
+                                                                                {m}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            ) : (
+                                                                <Input
+                                                                    value={cfg.modelo ?? ''}
+                                                                    onChange={(e) =>
+                                                                        mudarAgente(p, {
+                                                                            modelo:
+                                                                                e.target.value ||
+                                                                                undefined,
+                                                                        })
+                                                                    }
+                                                                    placeholder="modelo (default)"
+                                                                    className="h-8 w-44 text-xs"
+                                                                />
+                                                            )}
+                                                            {PROVIDERS_COM_ESFORCO.includes(p) && (
+                                                                <Select
+                                                                    value={cfg.esforco ?? 'default'}
+                                                                    onValueChange={(v) =>
+                                                                        mudarAgente(p, {
+                                                                            esforco:
+                                                                                v === 'default'
+                                                                                    ? undefined
+                                                                                    : (v as Esforco),
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <SelectTrigger className="h-8 w-32 text-xs">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="default">
+                                                                            esforço default
+                                                                        </SelectItem>
+                                                                        {ESFORCOS.map((e) => (
+                                                                            <SelectItem
+                                                                                key={e}
+                                                                                value={e}
+                                                                            >
+                                                                                {e}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => testar(p)}
+                                                                disabled={teste === 'a-testar'}
+                                                                className="h-8 text-xs"
+                                                            >
+                                                                {teste === 'a-testar'
+                                                                    ? 'A testar…'
+                                                                    : 'Testar ligação'}
+                                                            </Button>
+                                                        </div>
+                                                        {cfg.modo === 'api' && (
+                                                            <div className="flex items-center gap-2">
+                                                                <Input
+                                                                    type="password"
+                                                                    value={keysNovas[p] ?? ''}
+                                                                    onChange={(e) =>
+                                                                        setKeysNovas((k) => ({
+                                                                            ...k,
+                                                                            [p]: e.target.value,
+                                                                        }))
+                                                                    }
+                                                                    placeholder={
+                                                                        cfg.temApiKey
+                                                                            ? `key configurada (····${cfg.apiKeySufixo})`
+                                                                            : 'API key'
+                                                                    }
+                                                                    className="h-8 flex-1 text-xs"
+                                                                />
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => guardarKey(p)}
+                                                                    disabled={!keysNovas[p]?.trim()}
+                                                                    className="h-8 text-xs"
+                                                                >
+                                                                    Guardar key
+                                                                </Button>
+                                                                {cfg.temApiKey && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => limparKey(p)}
+                                                                        className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                                                                    >
+                                                                        Limpar
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {teste && teste !== 'a-testar' && (
+                                                            <p
+                                                                className={cn(
+                                                                    'text-xs',
+                                                                    teste.ok
+                                                                        ? 'text-primary'
+                                                                        : 'text-destructive',
+                                                                )}
+                                                            >
+                                                                {teste.ok ? '✓' : '✗'}{' '}
+                                                                {teste.detalhe}
+                                                            </p>
                                                         )}
                                                     </div>
                                                 )}
@@ -302,8 +529,8 @@ export function DefinicoesModal({
                                     })}
                                 </ul>
                                 <p className="text-xs text-muted-foreground">
-                                    As keys ficam na base de dados local — encriptação chega antes
-                                    de contas partilhadas.
+                                    As keys cifram-se na base de dados (AES-256-GCM) e nunca voltam
+                                    ao browser.
                                 </p>
                             </div>
                         ) : pagina === 'modulos' ? (
@@ -335,7 +562,7 @@ export function DefinicoesModal({
                                                 </p>
                                             </div>
                                             <Switch
-                                                checked={definicoes.modulosAtivos.includes(m)}
+                                                checked={defs.modulosAtivos.includes(m)}
                                                 disabled={!MODULOS_DISPONIVEIS[m]}
                                                 onCheckedChange={(ativo) => toggleModulo(m, ativo)}
                                                 aria-label={`Ativar ${MODULO_LABEL[m]}`}

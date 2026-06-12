@@ -17,9 +17,16 @@ com a página de cada módulo ligado), forms à direita, gravação imediata.
   a env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals).
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
-  vivo, cli), codex, gemini, ollama — `{ativo, modo: cli|api, apiKey}`. Quem
-  consome é o relay/orquestração. Keys em plaintext na BD local: encriptar
-  antes de multi-tenant.
+  vivo, cli), codex, gemini, ollama — `{ativo, modo: cli|api, modelo, esforco,
+  apiKey}`. O **FactoryProvider** (`src/lib/providers/factory.ts`, referência:
+  `~/src/agent-skills-compare`) distribui; **o chat responde com o provider de
+  `chat_provider`** (claude/cli como rede de segurança se o escolhido estiver
+  inativo) e o link sobre o botão Enviar mostra/abre a escolha. **Keys cifradas
+  at rest** (AES-256-GCM, `src/lib/cripto.ts`, segredo `MEMVECTOR_KEYS_SECRET`)
+  e NUNCA voltam ao browser — a vista só leva `temApiKey` + sufixo. Botão
+  "Testar ligação" por provider (cli = binário/versão; api = chamada barata).
+  Quota/limite dita alto (padrão skills-compare). O agente-autor
+  (destilação/contrato) continua claude — tools e envelope afinados para ele.
 - **Módulos** (`modulos_ativos`) — toggles: `github` (disponível), `emails`,
   `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão
   do calendário).

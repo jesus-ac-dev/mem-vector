@@ -14,6 +14,10 @@ import { isUnexpectedServerActionResponse, logClientError } from '@/lib/client-e
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
+import { runClientAction } from '@/lib/client-error-log';
+import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
+import { lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
+import { PROVIDER_LABEL, type Provider } from '@/modules/definicoes/definicoes.schema';
 
 interface Message {
     id: number;
@@ -99,6 +103,25 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const bottomRef = useRef<HTMLDivElement>(null);
     const { conversaAberta, abrirConversa, fecharChat, notificarWorkspaceMudou } = useWorkspace();
     const conversaCarregadaRef = useRef<string | null>(null);
+    // Provider/modelo do chat (#60 r3): mostrado sobre o Enviar; o link abre
+    // as Definições na página Agentes.
+    const [providerChat, setProviderChat] = useState<{ provider: Provider; modelo?: string }>({
+        provider: 'claude',
+    });
+
+    useEffect(() => {
+        let cancelado = false;
+        void runClientAction({ area: 'chat', action: 'lerDefinicoes' }, lerDefinicoes).then((d) => {
+            if (cancelado || !d) return;
+            setProviderChat({
+                provider: d.chatProvider,
+                modelo: d.agentes[d.chatProvider]?.modelo,
+            });
+        });
+        return () => {
+            cancelado = true;
+        };
+    }, []);
 
     // Mantém a vista colada ao fundo (mensagens crescem de baixo para cima).
     useEffect(() => {
@@ -304,6 +327,18 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 </p>
             )}
 
+            {/* Link do modelo (#60 r3): o que responde ao chat, a um clique de mudar. */}
+            <div className="flex shrink-0 justify-end">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => pedirDefinicoes('agentes')}
+                    title="Mudar o provider/modelo do chat"
+                    className="h-5 px-1 text-[0.7rem] font-normal text-muted-foreground hover:text-foreground"
+                >
+                    {PROVIDER_LABEL[providerChat.provider]} · {providerChat.modelo ?? 'default'}
+                </Button>
+            </div>
             <div className="flex shrink-0 gap-2">
                 <Textarea
                     value={input}

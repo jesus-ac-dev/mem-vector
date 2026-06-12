@@ -1,5 +1,5 @@
 import { embedQuery } from '@/lib/embeddings';
-import { generate } from '@/lib/claude';
+import { providerDoChatCom } from '@/lib/providers/factory';
 import { createClient } from '@/lib/supabase/server';
 import {
     buildPrompt,
@@ -53,7 +53,7 @@ export interface TurnoDestilado {
 export interface ChatResult {
     answer: string;
     sources: Source[];
-    costUsd: number;
+    costUsd: number | null; // providers fora do claude-cli não reportam custo
 }
 
 interface DestilDeps {
@@ -224,7 +224,12 @@ export async function respond(
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
     // da resposta (não-fatal: sem Kernel, prompt igual ao de sempre).
     const kernel = await blocoKernelCom(db);
-    const { text, costUsd } = await generate(
+    // A mudança que a interface provoca (#60 r3): a resposta do chat sai do
+    // provider/modelo escolhido nas definições (FactoryProvider); o agente-
+    // autor (destilação/contrato) continua claude — as tools e o envelope
+    // estão afinados para ele.
+    const provider = await providerDoChatCom(db);
+    const { text, costUsd } = await provider.gerar(
         buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
     );
 

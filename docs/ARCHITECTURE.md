@@ -192,8 +192,12 @@ modelo não resolve prazos relativos).
 própria), forms à direita, gravação imediata. **Comportamento** acumula o
 COMO do agente-autor (método de destilação hoje; proatividade/estilo/
 personalidade a entrar); **Agentes** declara os providers/orquestradores
-(claude/codex/gemini/ollama, cli|api + key — o relay consome; keys plaintext
-na BD local, encriptar antes de multi-tenant). **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+(claude/codex/gemini/ollama, cli|api + key, modelo e esforço) e o
+**FactoryProvider** (`src/lib/providers`) fá-los reais: **a resposta do chat
+sai do provider escolhido** (`chat_provider`; claude/cli como rede de
+segurança), com link de troca sobre o botão Enviar e "Testar ligação" por
+provider. Keys cifradas at rest (AES-256-GCM, `MEMVECTOR_KEYS_SECRET`) e
+nunca devolvidas ao browser. O agente-autor (destilação) continua claude. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
 por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e

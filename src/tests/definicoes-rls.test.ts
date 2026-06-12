@@ -6,6 +6,9 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// A cifra precisa do segredo (em prod vem do .env.local).
+process.env.MEMVECTOR_KEYS_SECRET ??= 'segredo-de-teste-rls';
+
 async function userClient(email: string, password: string) {
     const admin = getSupabaseAdmin();
     const { error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
@@ -16,7 +19,25 @@ async function userClient(email: string, password: string) {
     return c;
 }
 
-// #60: definições por utilizador — defaults sem linha, upsert, isolamento.
+const AGENTES = {
+    claude: {
+        ativo: true,
+        modo: 'cli' as const,
+        modelo: undefined,
+        esforco: undefined,
+        apiKey: undefined,
+    },
+    gemini: {
+        ativo: true,
+        modo: 'api' as const,
+        modelo: 'gemini-2.5-flash',
+        esforco: undefined,
+        apiKey: 'sk-key-de-teste-wxyz',
+    },
+};
+
+// #60: definições por utilizador — defaults sem linha, cifra das keys,
+// máscara na vista, isolamento por dono.
 describe('definições (#60, integração RLS)', () => {
     let alice: Awaited<ReturnType<typeof userClient>>;
     let bruno: Awaited<ReturnType<typeof userClient>>;
@@ -33,39 +54,57 @@ describe('definições (#60, integração RLS)', () => {
     });
 
     it('sem linha devolve os defaults (one-shot, claude/cli)', { timeout: 30_000 }, async () => {
-        const { lerDefinicoesCom } = await import('@/modules/definicoes/definicoes.service');
-        const d = await lerDefinicoesCom(alice);
+        const { lerDefinicoesVistaCom } = await import('@/modules/definicoes/definicoes.service');
+        const d = await lerDefinicoesVistaCom(alice);
         expect(d.metodoDestilacao).toBe('one-shot');
-        expect(d.modulosAtivos).toEqual([]);
+        expect(d.chatProvider).toBe('claude');
         expect(d.agentes.claude?.ativo).toBe(true); // o orquestrador vivo
     });
 
-    it('grava, relê e isola por dono', { timeout: 30_000 }, async () => {
-        const { gravarDefinicoesCom, lerDefinicoesCom } =
-            await import('@/modules/definicoes/definicoes.service');
-        const agentes = {
-            claude: { ativo: true, modo: 'cli' as const, apiKey: undefined },
-            gemini: { ativo: true, modo: 'api' as const, apiKey: 'key-teste' },
-        };
-        await gravarDefinicoesCom(alice, {
-            metodoDestilacao: 'agentic',
-            modulosAtivos: ['github'],
-            agentes,
-        });
-        const lida = await lerDefinicoesCom(alice);
-        expect(lida.metodoDestilacao).toBe('agentic');
-        expect(lida.modulosAtivos).toEqual(['github']);
-        expect(lida.agentes.gemini).toEqual({ ativo: true, modo: 'api', apiKey: 'key-teste' });
-        // upsert: segunda gravação substitui, não duplica
-        await gravarDefinicoesCom(alice, {
-            metodoDestilacao: 'one-shot',
-            modulosAtivos: [],
-            agentes,
-        });
-        expect((await lerDefinicoesCom(alice)).metodoDestilacao).toBe('one-shot');
-        // o Bruno continua nos defaults dele
-        const doBruno = await lerDefinicoesCom(bruno);
-        expect(doBruno.metodoDestilacao).toBe('one-shot');
-        expect(doBruno.agentes.gemini).toBeUndefined();
-    });
+    it(
+        'grava com key: cifra at rest, mascara na vista, decifra no servidor',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, lerDefinicoesVistaCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+
+            const vista = await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'agentic',
+                modulosAtivos: ['github'],
+                chatProvider: 'gemini',
+                agentes: AGENTES,
+            });
+            // Vista (cliente): a key NUNCA aparece — só a máscara.
+            expect(vista.agentes.gemini?.temApiKey).toBe(true);
+            expect(vista.agentes.gemini?.apiKeySufixo).toBe('wxyz');
+            expect(JSON.stringify(vista)).not.toContain('sk-key-de-teste');
+
+            // At rest: cifrada (prefixo gcm:), nunca plaintext.
+            const { data: row } = await alice.from('definicoes').select('agentes').single();
+            const cifrada = (row!.agentes as Record<string, { apiKeyCifrada?: string }>).gemini
+                .apiKeyCifrada!;
+            expect(cifrada.startsWith('gcm:')).toBe(true);
+            expect(cifrada).not.toContain('sk-key-de-teste');
+
+            // Servidor (factory): decifra.
+            const servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.agentes.gemini?.apiKey).toBe('sk-key-de-teste-wxyz');
+            expect(servidor.chatProvider).toBe('gemini');
+
+            // Regravar SEM apiKey mantém a key existente.
+            await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                agentes: { ...AGENTES, gemini: { ...AGENTES.gemini, apiKey: undefined } },
+            });
+            const depois = await lerDefinicoesVistaCom(alice);
+            expect(depois.agentes.gemini?.temApiKey).toBe(true);
+
+            // O Bruno continua nos defaults dele.
+            const doBruno = await lerDefinicoesVistaCom(bruno);
+            expect(doBruno.chatProvider).toBe('claude');
+            expect(doBruno.agentes.gemini).toBeUndefined();
+        },
+    );
 });

@@ -7,9 +7,10 @@ import { z } from 'zod';
 export const METODOS_DESTILACAO = ['one-shot', 'agentic'] as const;
 export type MetodoDestilacao = (typeof METODOS_DESTILACAO)[number];
 
-// Agentes (#60 ronda 2, design do Carlos): os PROVIDERS que podem servir de
-// orquestrador — por cli (subscrição/local) ou api (precisa de key). Quem os
-// consome é o relay/orquestração; aqui é a declaração.
+// Agentes (#60 r2/r3, design do Carlos): os PROVIDERS que podem servir de
+// orquestrador — por cli (subscrição/local) ou api (key obrigatória). O
+// FactoryProvider (src/lib/providers) distribui; o chat responde com o
+// provider escolhido em `chatProvider`.
 export const PROVIDERS = ['claude', 'codex', 'gemini', 'ollama'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
@@ -23,16 +24,38 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
 export const MODOS_AGENTE = ['cli', 'api'] as const;
 export type ModoAgente = (typeof MODOS_AGENTE)[number];
 
+// Esforço de raciocínio (referência: codex aceita model_reasoning_effort).
+export const ESFORCOS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
+export type Esforco = (typeof ESFORCOS)[number];
+
+// Modelos curados por provider (vazio = default do provider). Codex e Ollama
+// têm texto livre na UI (os modelos locais variam).
+export const MODELOS_SUGERIDOS: Record<Provider, string[]> = {
+    claude: ['opus', 'sonnet', 'haiku'],
+    codex: [],
+    gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+    ollama: [],
+};
+
+// Config de um provider tal como o CLIENTE a escreve: apiKey só viaja na
+// gravação (undefined = manter a existente; '' = limpar).
 export const AgenteConfigSchema = z.object({
     ativo: z.boolean().default(false),
     modo: z.enum(MODOS_AGENTE).default('cli'),
-    // Em modo api a key é obrigatória para o provider contar como utilizável.
-    // Plaintext na BD local (single-tenant); encriptar antes de multi-tenant.
+    modelo: z
+        .string()
+        .max(100)
+        .nullish()
+        .transform((v) => v || undefined),
+    esforco: z
+        .enum(ESFORCOS)
+        .nullish()
+        .transform((v) => v ?? undefined),
     apiKey: z
         .string()
         .max(300)
         .nullish()
-        .transform((v) => v ?? undefined),
+        .transform((v) => (v === null ? '' : (v ?? undefined))), // null vira '' = limpar
 });
 export type AgenteConfig = z.infer<typeof AgenteConfigSchema>;
 
@@ -46,10 +69,39 @@ const AgentesSchema = z
     .default({});
 export type Agentes = z.infer<typeof AgentesSchema>;
 
-// O orquestrador de hoje: claude por cli (subscrição) — é o default vivo.
-export const AGENTES_DEFAULT: Agentes = {
-    claude: { ativo: true, modo: 'cli', apiKey: undefined },
-};
+// O que o CLIENTE vê de um provider: a key NUNCA volta ao browser — só a
+// máscara (cifra at rest em src/lib/cripto.ts).
+export interface AgenteVista {
+    ativo: boolean;
+    modo: ModoAgente;
+    modelo?: string;
+    esforco?: Esforco;
+    temApiKey: boolean;
+    apiKeySufixo?: string;
+}
+
+export interface DefinicoesVista {
+    metodoDestilacao: MetodoDestilacao;
+    modulosAtivos: Modulo[];
+    chatProvider: Provider;
+    agentes: Partial<Record<Provider, AgenteVista>>;
+}
+
+// O que o SERVIDOR usa (factory): key decifrada, nunca serializada p/ fora.
+export interface AgenteServidor {
+    ativo: boolean;
+    modo: ModoAgente;
+    modelo?: string;
+    esforco?: Esforco;
+    apiKey?: string;
+}
+
+export interface DefinicoesServidor {
+    metodoDestilacao: MetodoDestilacao;
+    modulosAtivos: Modulo[];
+    chatProvider: Provider;
+    agentes: Partial<Record<Provider, AgenteServidor>>;
+}
 
 // Módulos conhecidos (#60): a página de toggles. GitHub é o primeiro a sério;
 // os restantes estão reservados (vault: brief §5 lista Campanhas; a visão do
@@ -64,16 +116,26 @@ export const MODULO_LABEL: Record<Modulo, string> = {
     campanhas: 'Campanhas',
 };
 
+// Input de gravação (a porta valida isto).
 export const DefinicoesSchema = z.object({
     metodoDestilacao: z.enum(METODOS_DESTILACAO).default('one-shot'),
     modulosAtivos: z.array(z.enum(MODULOS)).default([]),
+    chatProvider: z.enum(PROVIDERS).default('claude'),
     agentes: AgentesSchema,
 });
 
 export type Definicoes = z.infer<typeof DefinicoesSchema>;
 
-export const DEFINICOES_DEFAULT: Definicoes = {
+// O orquestrador de hoje: claude por cli (subscrição) — é o default vivo.
+export const AGENTE_CLAUDE_DEFAULT: AgenteVista = {
+    ativo: true,
+    modo: 'cli',
+    temApiKey: false,
+};
+
+export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     metodoDestilacao: 'one-shot',
     modulosAtivos: [],
-    agentes: AGENTES_DEFAULT,
+    chatProvider: 'claude',
+    agentes: { claude: AGENTE_CLAUDE_DEFAULT },
 };

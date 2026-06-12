@@ -73,7 +73,7 @@ export function createAsyncSemaphore(concurrency: number): AsyncSemaphore {
     };
 }
 
-export function buildClaudeArgs(): string[] {
+export function buildClaudeArgs(model?: string): string[] {
     return [
         '-p',
         '--input-format',
@@ -84,6 +84,8 @@ export function buildClaudeArgs(): string[] {
         '--system-prompt',
         SYSTEM_PROMPT,
         '--exclude-dynamic-system-prompt-sections',
+        // Modelo escolhido nas definições (#60); sem ele, o default da conta.
+        ...(model ? ['--model', model] : []),
         '--disallowedTools',
         ...DISALLOWED_TOOLS,
     ];
@@ -142,8 +144,8 @@ const claudeQueue = createAsyncSemaphore(claudeConcurrency());
 // Conduz o claude CLI (subscrição) num contexto mínimo: sem MCP, sem tools, cwd
 // limpa e system prompt próprio. O prompt segue por stdin para evitar limites de
 // argv; a fila impede processos Claude concorrentes por defeito.
-export function generate(prompt: string): Promise<Generation> {
-    return claudeQueue.run(() => runClaudeCli(prompt));
+export function generate(prompt: string, opts?: { model?: string }): Promise<Generation> {
+    return claudeQueue.run(() => runClaudeCli(prompt, { args: buildClaudeArgs(opts?.model) }));
 }
 
 export function generateAgentic(prompt: string, cfg: AgenticConfig): Promise<Generation> {
