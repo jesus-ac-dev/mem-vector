@@ -36,6 +36,21 @@ export const NovaTarefaSchema = z
 
 export type NovaTarefa = z.infer<typeof NovaTarefaSchema>;
 
+// Edição pelo quick-add (#55): clicar no card reabre os tokens; campos sem
+// token ficam null (limpar projeto/data/descrição é remoção deliberada).
+export const AtualizarTarefaSchema = z.object({
+    titulo: z.string().min(1, 'O título é obrigatório').max(200),
+    projeto: z.string().max(60).nullable(),
+    prioridade: z.enum(PRIORIDADES_TAREFA),
+    dataFim: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data fim em AAAA-MM-DD')
+        .nullable(),
+    descricao: z.string().max(2000).nullable(),
+});
+
+export type AtualizarTarefa = z.infer<typeof AtualizarTarefaSchema>;
+
 // Envelope da destilação (#21): tarefas que o agente propõe criar num turno.
 // Na dúvida cria (decisão do Carlos) — apagar é barato.
 export const TarefaDestiladaSchema = z.object({

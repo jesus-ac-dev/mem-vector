@@ -2,11 +2,17 @@
 
 import { z } from 'zod';
 
-import { ESTADOS_TAREFA, NovaTarefaSchema, type Tarefa } from './tarefas.schema';
+import {
+    AtualizarTarefaSchema,
+    ESTADOS_TAREFA,
+    NovaTarefaSchema,
+    type Tarefa,
+} from './tarefas.schema';
 import {
     criarTarefa as criarTarefaService,
     listarTarefasAbertasCom,
     listarTarefasConcluidasCom,
+    atualizarTarefaCom,
     mudarEstadoTarefaCom,
     concluirTarefaCom,
     apagarTarefaCom,
@@ -36,6 +42,13 @@ const idSchema = z.string().uuid();
 const estadoSchema = z.enum(
     ESTADOS_TAREFA.filter((e) => e !== 'terminado') as [string, ...string[]],
 );
+
+// Edição pelo quick-add (#55): clicar no card → tokens → Enter atualiza.
+export async function atualizarTarefa(idInput: unknown, input: unknown): Promise<Tarefa> {
+    const id = idSchema.parse(idInput);
+    const campos = AtualizarTarefaSchema.parse(input);
+    return atualizarTarefaCom(await createClient(), id, campos);
+}
 
 export async function mudarEstadoTarefa(idInput: unknown, estadoInput: unknown): Promise<Tarefa> {
     const id = idSchema.parse(idInput);

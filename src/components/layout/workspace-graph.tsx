@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Play, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { dataPt } from '@/lib/datas';
 import { runClientAction } from '@/lib/client-error-log';
 import {
     construirGraphData,
@@ -129,7 +130,7 @@ export function WorkspaceGraph() {
         const n = node as NoGrafoView;
         if (n.group === 'fantasma') return; // não há nota para abrir
         if (n.group === 'daily') {
-            abrirFicheiro({ tipo: 'daily', id: n.id, chave: n.slug, titulo: n.title });
+            abrirFicheiro({ tipo: 'daily', id: n.id, chave: n.slug, titulo: dataPt(n.title) });
         } else {
             abrirFicheiro({ tipo: 'knowledge', id: n.id, chave: n.slug, titulo: n.title });
         }

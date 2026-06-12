@@ -1,4 +1,4 @@
-import { PRIORIDADES_TAREFA, type PrioridadeTarefa } from './tarefas.schema';
+import { PRIORIDADES_TAREFA, type PrioridadeTarefa, type Tarefa } from './tarefas.schema';
 
 // Quick-add de tarefas à la Obsidian (#51): um input único onde os tokens
 // compõem a tarefa — `!alta` prioridade, `#projeto` tag, `@AAAA-MM-DD` data
@@ -43,6 +43,18 @@ export function parseNovaTarefa(texto: string): TarefaQuickAdd {
         .trim();
 
     return { titulo, projeto, prioridade, dataFim, descricao };
+}
+
+// Inverso do parse (#55): clicar no card reabre a tarefa como tokens no input.
+// Ordem do Carlos: #projeto primeiro, prioridade só quando não é a default.
+export function serializarTarefa(t: Tarefa): string {
+    const partes = [
+        t.projeto ? `#${t.projeto}` : null,
+        t.titulo,
+        t.prioridade !== 'normal' ? `!${t.prioridade}` : null,
+        t.dataFim ? `@${t.dataFim}` : null,
+    ].filter(Boolean);
+    return partes.join(' ') + (t.descricao ? ` // ${t.descricao}` : '');
 }
 
 export interface GatilhoTarefa {

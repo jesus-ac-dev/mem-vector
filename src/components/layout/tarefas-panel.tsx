@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Lock, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { dataCurtaPt, dataPt } from '@/lib/datas';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,7 @@ import {
 import { useWorkspace } from '@/components/layout/workspace-context';
 import {
     apagarTarefa,
+    atualizarTarefa,
     concluirTarefa,
     criarTarefa,
     listarTarefasPainel,
@@ -25,6 +27,7 @@ import {
 import {
     detetarGatilhoTarefa,
     parseNovaTarefa,
+    serializarTarefa,
     sugestoesParaGatilho,
     type GatilhoTarefa,
 } from '@/modules/tarefas/tarefas-quickadd';
@@ -71,6 +74,8 @@ export function TarefasPanel({
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
     const [verConcluidas, setVerConcluidas] = useState(false);
     const [novoTexto, setNovoTexto] = useState('');
+    // Clicar no card edita (#55): o input reabre com os tokens da tarefa.
+    const [editandoId, setEditandoId] = useState<string | null>(null);
     const [gatilho, setGatilho] = useState<GatilhoTarefa | null>(null);
     const [sel, setSel] = useState(0);
     const [filtroEstado, setFiltroEstado] = useState<string>('todos');
@@ -92,9 +97,25 @@ export function TarefasPanel({
         };
     }, [workspaceVersion]);
 
+    const inputAberto = criarAberto || editandoId !== null;
+
     useEffect(() => {
-        if (criarAberto) inputRef.current?.focus();
-    }, [criarAberto]);
+        if (inputAberto) inputRef.current?.focus();
+    }, [inputAberto]);
+
+    function fecharInput() {
+        setEditandoId(null);
+        setNovoTexto('');
+        setGatilho(null);
+        onFecharCriar();
+    }
+
+    function iniciarEdicao(t: Tarefa) {
+        setEditandoId(t.id);
+        setNovoTexto(serializarTarefa(t));
+        setGatilho(null);
+        requestAnimationFrame(() => inputRef.current?.focus());
+    }
 
     const abertasIds = new Set(abertas.map((t) => t.id));
     const projetos = [
@@ -136,26 +157,39 @@ export function TarefasPanel({
     async function submeterNova() {
         const texto = novoTexto.trim();
         if (!texto) {
-            onFecharCriar();
+            fecharInput();
             return;
         }
         const { titulo, projeto, prioridade, dataFim, descricao } = parseNovaTarefa(texto);
         if (!titulo) return;
-        await runClientAction(
-            { area: 'left-sidebar', action: 'criarTarefa', meta: { titulo } },
-            () =>
-                criarTarefa({
-                    titulo,
-                    projeto,
-                    prioridade,
-                    dataFim,
-                    descricao,
-                    visibility: 'privado',
-                }),
-        );
-        setNovoTexto('');
-        setGatilho(null);
-        onFecharCriar();
+        if (editandoId) {
+            // Editar (#55): campos sem token limpam-se de propósito.
+            await runClientAction(
+                { area: 'left-sidebar', action: 'atualizarTarefa', meta: { id: editandoId } },
+                () =>
+                    atualizarTarefa(editandoId, {
+                        titulo,
+                        projeto: projeto ?? null,
+                        prioridade,
+                        dataFim: dataFim ?? null,
+                        descricao: descricao ?? null,
+                    }),
+            );
+        } else {
+            await runClientAction(
+                { area: 'left-sidebar', action: 'criarTarefa', meta: { titulo } },
+                () =>
+                    criarTarefa({
+                        titulo,
+                        projeto,
+                        prioridade,
+                        dataFim,
+                        descricao,
+                        visibility: 'privado',
+                    }),
+            );
+        }
+        fecharInput();
         notificarWorkspaceMudou();
     }
 
@@ -183,7 +217,7 @@ export function TarefasPanel({
             }
         }
         if (e.key === 'Enter') void submeterNova();
-        if (e.key === 'Escape') onFecharCriar();
+        if (e.key === 'Escape') fecharInput();
     }
 
     function mutacao(action: string, meta: Record<string, unknown>, fn: () => Promise<unknown>) {
@@ -194,7 +228,7 @@ export function TarefasPanel({
 
     return (
         <div className="flex h-full flex-col">
-            {criarAberto && (
+            {inputAberto && (
                 <div className="relative border-b p-2">
                     <Input
                         ref={inputRef}
@@ -208,7 +242,11 @@ export function TarefasPanel({
                         }
                         onKeyDown={onKeyDownNova}
                         onBlur={() => setTimeout(() => setGatilho(null), 120)}
-                        placeholder="#projeto tarefa !prioridade @2026-06-30 // descrição"
+                        placeholder={
+                            editandoId
+                                ? 'edita os tokens e Enter para guardar'
+                                : '#projeto tarefa !prioridade @2026-06-30 // descrição'
+                        }
                         className="h-7 text-sm"
                     />
                     {gatilho && sugestoes.length > 0 && (
@@ -285,7 +323,10 @@ export function TarefasPanel({
                             <li key={t.id} className="group px-2">
                                 <div className="rounded px-1 py-1 hover:bg-muted">
                                     {t.projeto && (
-                                        <p className="truncate text-[0.65rem] font-medium text-muted-foreground">
+                                        <p
+                                            className="cursor-pointer truncate text-[0.65rem] font-medium text-muted-foreground"
+                                            onClick={() => iniciarEdicao(t)}
+                                        >
                                             #{t.projeto}
                                         </p>
                                     )}
@@ -298,8 +339,9 @@ export function TarefasPanel({
                                             )}
                                         />
                                         <p
-                                            className="min-w-0 flex-1 truncate text-sm"
-                                            title={t.titulo}
+                                            className="min-w-0 flex-1 cursor-pointer truncate text-sm"
+                                            title={`${t.titulo} — clica para editar`}
+                                            onClick={() => iniciarEdicao(t)}
                                         >
                                             {t.titulo}
                                             {t.descricao && (
@@ -333,7 +375,7 @@ export function TarefasPanel({
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                title="Apagar (apaga mesmo)"
+                                                title="Apagar"
                                                 onClick={() =>
                                                     mutacao('apagarTarefa', { id: t.id }, () =>
                                                         apagarTarefa(t.id),
@@ -376,12 +418,12 @@ export function TarefasPanel({
                                             </span>
                                         )}
                                         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                                            <span title={`Criada em ${t.criadaEm.slice(0, 10)}`}>
-                                                ➕ {t.criadaEm.slice(5, 10)}
+                                            <span title={`Criada em ${dataPt(t.criadaEm)}`}>
+                                                ➕ {dataCurtaPt(t.criadaEm)}
                                             </span>
                                             {t.dataFim && (
-                                                <span title={`Data fim: ${t.dataFim}`}>
-                                                    📅 {t.dataFim.slice(5)}
+                                                <span title={`Data fim: ${dataPt(t.dataFim)}`}>
+                                                    📅 {dataCurtaPt(t.dataFim)}
                                                 </span>
                                             )}
                                         </span>
@@ -407,8 +449,11 @@ export function TarefasPanel({
                                 >
                                     <span className="line-through">{t.titulo}</span>
                                     {t.concluidaEm && (
-                                        <span className="ml-1.5">
-                                            ✅ {t.concluidaEm.slice(0, 10)}
+                                        <span
+                                            className="ml-1.5"
+                                            title={`Concluída em ${dataPt(t.concluidaEm)}`}
+                                        >
+                                            ✅ {dataCurtaPt(t.concluidaEm)}
                                         </span>
                                     )}
                                 </li>

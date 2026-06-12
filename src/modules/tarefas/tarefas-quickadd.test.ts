@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { detetarGatilhoTarefa, parseNovaTarefa, sugestoesParaGatilho } from './tarefas-quickadd';
+import {
+    detetarGatilhoTarefa,
+    parseNovaTarefa,
+    serializarTarefa,
+    sugestoesParaGatilho,
+} from './tarefas-quickadd';
 import { ordenarTarefasAbertas, TarefaDestiladaSchema, type Tarefa } from './tarefas.schema';
 
 describe('parseNovaTarefa', () => {
@@ -92,6 +97,34 @@ describe('sugestoesParaGatilho', () => {
         expect(sugestoesParaGatilho({ tipo: 'projeto', termo: 'vi', inicio: 0 }, projetos)).toEqual(
             ['viagens', 'vida'].map((p) => projetos.find((x) => x.toLowerCase() === p) ?? p),
         );
+    });
+});
+
+describe('serializarTarefa (clicar para editar, #55)', () => {
+    it('round-trip: serializar → parse devolve os mesmos campos', () => {
+        const t = tarefa({
+            id: 'x',
+            titulo: 'testar emails',
+            projeto: 'crmcredito',
+            prioridade: 'alta',
+            dataFim: '2026-06-14',
+            descricao: 'smoke completo',
+        });
+        expect(serializarTarefa(t)).toBe(
+            '#crmcredito testar emails !alta @2026-06-14 // smoke completo',
+        );
+        const r = parseNovaTarefa(serializarTarefa(t));
+        expect(r).toEqual({
+            titulo: 'testar emails',
+            projeto: 'crmcredito',
+            prioridade: 'alta',
+            dataFim: '2026-06-14',
+            descricao: 'smoke completo',
+        });
+    });
+
+    it('campos default/ausentes não geram tokens', () => {
+        expect(serializarTarefa(tarefa({ id: 'x', titulo: 'comprar pão' }))).toBe('comprar pão');
     });
 });
 

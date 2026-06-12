@@ -6,6 +6,7 @@ import { listarDailies } from '@/modules/daily/daily.service';
 import { listarPastas } from '@/modules/folders/folders.service';
 import { construirArvore } from '@/modules/folders/folders.tree';
 import { garantirKernelCom } from '@/agent/kernel';
+import { dataPt } from '@/lib/datas';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
 // Header em cima + WorkspaceShell (client) com as 4 zonas Obsidian:
@@ -48,7 +49,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             tags: n.tags ?? [],
         })),
     );
-    const dailyItems = dailies.map((d) => ({ id: d.id, slug: d.dia, title: d.dia }));
+    // Datas à portuguesa (#55): o slug/chave continua AAAA-MM-DD; só o título muda.
+    const dailyItems = dailies.map((d) => ({ id: d.id, slug: d.dia, title: dataPt(d.dia) }));
     const diasComDaily = dailies.map((d) => d.dia);
 
     return (
