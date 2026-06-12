@@ -48,3 +48,32 @@ describe('client-error-log', () => {
         expect(action).toHaveBeenCalledTimes(2);
     });
 });
+
+describe('runClientAction + app stale (#49)', () => {
+    it('dispara o evento STALE_APP_EVENT quando a action morre com resposta inesperada', async () => {
+        const { runClientAction, STALE_APP_EVENT } = await import('./client-error-log');
+        const ouvinte = vi.fn();
+        window.addEventListener(STALE_APP_EVENT, ouvinte);
+
+        const r = await runClientAction({ area: 'teste', action: 'x' }, async () => {
+            throw new Error('An unexpected response was received from the server.');
+        });
+
+        expect(r).toBeUndefined();
+        expect(ouvinte).toHaveBeenCalledOnce();
+        window.removeEventListener(STALE_APP_EVENT, ouvinte);
+    });
+
+    it('NÃO dispara o evento para erros normais', async () => {
+        const { runClientAction, STALE_APP_EVENT } = await import('./client-error-log');
+        const ouvinte = vi.fn();
+        window.addEventListener(STALE_APP_EVENT, ouvinte);
+
+        await runClientAction({ area: 'teste', action: 'x' }, async () => {
+            throw new Error('erro qualquer de negócio');
+        });
+
+        expect(ouvinte).not.toHaveBeenCalled();
+        window.removeEventListener(STALE_APP_EVENT, ouvinte);
+    });
+});

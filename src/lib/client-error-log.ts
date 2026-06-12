@@ -103,6 +103,11 @@ export function logClientError(context: ClientErrorContext, error: unknown): Cli
     return entry;
 }
 
+// Evento de app stale (#49): "unexpected response" = build novo com tab aberto
+// (action IDs rodados) OU sessão expirada (redirect de auth). Em vez de morrer
+// em silêncio, avisa-se a UI para oferecer a recarga.
+export const STALE_APP_EVENT = 'memvector:stale-app';
+
 export async function runClientAction<T>(
     context: ClientErrorContext,
     action: () => Promise<T>,
@@ -111,6 +116,9 @@ export async function runClientAction<T>(
         return await action();
     } catch (error) {
         logClientError(context, error);
+        if (typeof window !== 'undefined' && isUnexpectedServerActionResponse(error)) {
+            window.dispatchEvent(new CustomEvent(STALE_APP_EVENT, { detail: context }));
+        }
         return undefined;
     }
 }
