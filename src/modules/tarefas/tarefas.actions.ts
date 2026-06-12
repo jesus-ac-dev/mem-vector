@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { ESTADOS_TAREFA, NovaTarefaSchema, type Tarefa } from './tarefas.schema';
@@ -18,7 +17,6 @@ import { createClient } from '@/lib/supabase/server';
 export async function criarTarefa(input: unknown) {
     const dados = NovaTarefaSchema.parse(input);
     await criarTarefaService(dados);
-    revalidatePath('/tarefas');
 }
 
 // Painel de tarefas (#21): abertas + concluídas numa chamada.

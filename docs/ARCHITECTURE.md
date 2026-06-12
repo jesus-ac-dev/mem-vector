@@ -165,6 +165,17 @@ apaga MESMO — tarefas não têm arquivo); factos vão para notas, nunca para
 tarefas. UI: painel "Tarefas" na sidebar esquerda (+ no header, abertas,
 footer com concluídas); o kanban visual é a fatia seguinte.
 
+**Painel de tarefas v2 (#51):** feedback do smoke de UX. O painel é a única
+porta — a rota/página `/tarefas` morreu (ícone duplicado no ribbon; Tarefas
+desceu para o fundo do grupo de painéis). Quick-add à la Obsidian num input
+único: `tarefa !prioridade #projeto @AAAA-MM-DD // descrição`, com autocomplete
+nos gatilhos `!` (prioridades) e `#` (projetos já usados) — lógica pura em
+`tarefas-quickadd.ts`, espelho do `wikilink-autocomplete`. Coluna nova
+`data_fim` (deadline opcional). Ordenação do painel: data fim → prioridade →
+estado descendente do kanban (`ordenarTarefasAbertas`, aplicada no serviço).
+Filtros de estado e #tag no topo do painel. Na row, o toggle do estado vem
+antes do nome e a data de criação ocupa o lugar do chevron.
+
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,
 prioridades e regras do utilizador, injetadas em todos os arranques do agente

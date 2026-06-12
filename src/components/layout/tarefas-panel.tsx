@@ -22,11 +22,17 @@ import {
     listarTarefasPainel,
     mudarEstadoTarefa,
 } from '@/modules/tarefas/tarefas.actions';
+import {
+    detetarGatilhoTarefa,
+    parseNovaTarefa,
+    sugestoesParaGatilho,
+    type GatilhoTarefa,
+} from '@/modules/tarefas/tarefas-quickadd';
 import type { EstadoTarefa, PrioridadeTarefa, Tarefa } from '@/modules/tarefas/tarefas.schema';
 
-// Painel de tarefas (#21, design do Carlos): vive na sidebar esquerda — lista
-// das abertas, "+" no header do painel, footer com as concluídas. As tarefas
-// NÃO abrem nos panes do meio. Drag pelo kanban vem na fatia do kanban.
+// Painel de tarefas (#21/#51, design do Carlos): vive na sidebar esquerda —
+// quick-add à la Obsidian (tokens com autocomplete), filtros de estado/#tag,
+// lista das abertas já ordenada pelo servidor, footer com as concluídas.
 
 const ESTADO_LABEL: Record<EstadoTarefa, string> = {
     backlog: 'Backlog',
@@ -51,28 +57,6 @@ function corPrioridade(p: PrioridadeTarefa): string {
     return 'bg-primary/60';
 }
 
-// "ligar ao contabilista #zeta !alta" → titulo + projeto + prioridade.
-export function parseNovaTarefa(texto: string): {
-    titulo: string;
-    projeto?: string;
-    prioridade: PrioridadeTarefa;
-} {
-    let prioridade: PrioridadeTarefa = 'normal';
-    let projeto: string | undefined;
-    const titulo = texto
-        .replace(/!(alta|baixa)\b/i, (_, p: string) => {
-            prioridade = p.toLowerCase() as PrioridadeTarefa;
-            return '';
-        })
-        .replace(/#([\p{L}\p{N}-]+)/u, (_, tag: string) => {
-            projeto = tag;
-            return '';
-        })
-        .replace(/\s+/g, ' ')
-        .trim();
-    return { titulo, projeto, prioridade };
-}
-
 export function TarefasPanel({
     criarAberto,
     onFecharCriar,
@@ -85,6 +69,10 @@ export function TarefasPanel({
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
     const [verConcluidas, setVerConcluidas] = useState(false);
     const [novoTexto, setNovoTexto] = useState('');
+    const [gatilho, setGatilho] = useState<GatilhoTarefa | null>(null);
+    const [sel, setSel] = useState(0);
+    const [filtroEstado, setFiltroEstado] = useState<string>('todos');
+    const [filtroProjeto, setFiltroProjeto] = useState<string>('todos');
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -107,6 +95,41 @@ export function TarefasPanel({
     }, [criarAberto]);
 
     const abertasIds = new Set(abertas.map((t) => t.id));
+    const projetos = [
+        ...new Set(
+            [...abertas, ...concluidas].map((t) => t.projeto).filter((p): p is string => !!p),
+        ),
+    ].sort((a, b) => a.localeCompare(b, 'pt'));
+
+    const visiveis = abertas.filter(
+        (t) =>
+            (filtroEstado === 'todos' || t.estado === filtroEstado) &&
+            (filtroProjeto === 'todos' || t.projeto === filtroProjeto),
+    );
+
+    const sugestoes = gatilho ? sugestoesParaGatilho(gatilho, projetos) : [];
+
+    function recalcularGatilho(texto: string, cursor: number) {
+        setGatilho(detetarGatilhoTarefa(texto, cursor));
+        setSel(0);
+    }
+
+    // Substitui o termo escrito (entre o símbolo e o cursor) pela sugestão.
+    function inserirSugestao(s: string) {
+        const el = inputRef.current;
+        if (!el) return;
+        const cursor = el.selectionStart ?? el.value.length;
+        const g = detetarGatilhoTarefa(el.value, cursor);
+        if (!g) return setGatilho(null);
+        const novo = el.value.slice(0, g.inicio + 1) + s + ' ' + el.value.slice(cursor);
+        const pos = g.inicio + 1 + s.length + 1;
+        setNovoTexto(novo);
+        setGatilho(null);
+        requestAnimationFrame(() => {
+            el.focus();
+            el.setSelectionRange(pos, pos);
+        });
+    }
 
     async function submeterNova() {
         const texto = novoTexto.trim();
@@ -114,15 +137,51 @@ export function TarefasPanel({
             onFecharCriar();
             return;
         }
-        const { titulo, projeto, prioridade } = parseNovaTarefa(texto);
+        const { titulo, projeto, prioridade, dataFim, descricao } = parseNovaTarefa(texto);
         if (!titulo) return;
         await runClientAction(
             { area: 'left-sidebar', action: 'criarTarefa', meta: { titulo } },
-            () => criarTarefa({ titulo, projeto, prioridade, visibility: 'privado' }),
+            () =>
+                criarTarefa({
+                    titulo,
+                    projeto,
+                    prioridade,
+                    dataFim,
+                    descricao,
+                    visibility: 'privado',
+                }),
         );
         setNovoTexto('');
+        setGatilho(null);
         onFecharCriar();
         notificarWorkspaceMudou();
+    }
+
+    function onKeyDownNova(e: React.KeyboardEvent<HTMLInputElement>) {
+        if (gatilho && sugestoes.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSel((s) => (s + 1) % sugestoes.length);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSel((s) => (s - 1 + sugestoes.length) % sugestoes.length);
+                return;
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                inserirSugestao(sugestoes[sel]);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setGatilho(null);
+                return;
+            }
+        }
+        if (e.key === 'Enter') void submeterNova();
+        if (e.key === 'Escape') onFecharCriar();
     }
 
     function mutacao(action: string, meta: Record<string, unknown>, fn: () => Promise<unknown>) {
@@ -134,29 +193,87 @@ export function TarefasPanel({
     return (
         <div className="flex h-full flex-col">
             {criarAberto && (
-                <div className="border-b p-2">
+                <div className="relative border-b p-2">
                     <Input
                         ref={inputRef}
                         value={novoTexto}
-                        onChange={(e) => setNovoTexto(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') void submeterNova();
-                            if (e.key === 'Escape') onFecharCriar();
+                        onChange={(e) => {
+                            setNovoTexto(e.target.value);
+                            recalcularGatilho(e.target.value, e.target.selectionStart ?? 0);
                         }}
-                        placeholder="tarefa #projeto !alta"
+                        onClick={(e) =>
+                            recalcularGatilho(novoTexto, e.currentTarget.selectionStart ?? 0)
+                        }
+                        onKeyDown={onKeyDownNova}
+                        onBlur={() => setTimeout(() => setGatilho(null), 120)}
+                        placeholder="tarefa !prioridade #projeto @2026-06-30 // descrição"
                         className="h-7 text-sm"
                     />
+                    {gatilho && sugestoes.length > 0 && (
+                        <ul className="absolute left-2 right-2 top-full z-20 -mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                            {sugestoes.map((s, i) => (
+                                <li key={s}>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => inserirSugestao(s)}
+                                        className={cn(
+                                            'h-auto w-full justify-start rounded px-2 py-1 text-left text-xs font-normal',
+                                            i === sel
+                                                ? 'bg-accent text-accent-foreground'
+                                                : 'hover:bg-muted',
+                                        )}
+                                    >
+                                        {gatilho.tipo === 'projeto' ? `#${s}` : `!${s}`}
+                                    </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
             )}
 
+            {/* Filtros (#51): a lista acumula — estado + #tag à mão. */}
+            <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
+                <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                    <SelectTrigger className="h-6 flex-1 border-none px-1 text-[0.65rem] text-muted-foreground shadow-none focus:ring-0">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="todos">Estado: todos</SelectItem>
+                        {ESTADOS_ABERTOS.map((e) => (
+                            <SelectItem key={e} value={e}>
+                                {ESTADO_LABEL[e]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={filtroProjeto} onValueChange={setFiltroProjeto}>
+                    <SelectTrigger className="h-6 flex-1 border-none px-1 text-[0.65rem] text-muted-foreground shadow-none focus:ring-0">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="todos"># todas</SelectItem>
+                        {projetos.map((p) => (
+                            <SelectItem key={p} value={p}>
+                                #{p}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
             <div className="min-h-0 flex-1 overflow-y-auto py-1">
-                {abertas.length === 0 && (
+                {visiveis.length === 0 && (
                     <p className="px-3 py-2 text-xs text-muted-foreground">
-                        Sem tarefas em aberto.
+                        {abertas.length === 0
+                            ? 'Sem tarefas em aberto.'
+                            : 'Nada passa nos filtros.'}
                     </p>
                 )}
                 <ul className="space-y-0.5">
-                    {abertas.map((t) => {
+                    {visiveis.map((t) => {
                         const bloqueada = Boolean(t.dependeDe && abertasIds.has(t.dependeDe));
                         return (
                             <li key={t.id} className="group px-2">
@@ -172,7 +289,11 @@ export function TarefasPanel({
                                         <p className="truncate text-sm" title={t.titulo}>
                                             {t.titulo}
                                         </p>
-                                        <div className="flex flex-wrap items-center gap-1.5 text-[0.65rem] text-muted-foreground">
+                                        {/* Ordem da view = ordem do quick-add (#51):
+                                            estado (toggle antes do nome) → #tag →
+                                            descrição; a data de criação fica onde
+                                            estava o chevron. */}
+                                        <div className="flex items-center gap-1.5 text-[0.65rem] text-muted-foreground">
                                             <Select
                                                 value={t.estado}
                                                 onValueChange={(estado) =>
@@ -183,7 +304,7 @@ export function TarefasPanel({
                                                     )
                                                 }
                                             >
-                                                <SelectTrigger className="h-5 w-36 border-none px-1 text-[0.65rem] shadow-none focus:ring-0">
+                                                <SelectTrigger className="h-5 w-auto shrink-0 flex-row-reverse justify-end gap-0.5 border-none px-0 text-[0.65rem] shadow-none focus:ring-0">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -194,15 +315,34 @@ export function TarefasPanel({
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            {t.projeto && <span>#{t.projeto}</span>}
+                                            {t.projeto && (
+                                                <span className="shrink-0">#{t.projeto}</span>
+                                            )}
+                                            {t.descricao && (
+                                                <span className="truncate" title={t.descricao}>
+                                                    {t.descricao}
+                                                </span>
+                                            )}
                                             {bloqueada && (
                                                 <span
                                                     title="Bloqueada por dependência em aberto"
-                                                    className="inline-flex items-center gap-0.5"
+                                                    className="inline-flex shrink-0 items-center gap-0.5"
                                                 >
-                                                    <Lock className="h-3 w-3" /> bloqueada
+                                                    <Lock className="h-3 w-3" />
                                                 </span>
                                             )}
+                                            <span className="ml-auto flex shrink-0 items-center gap-1">
+                                                {t.dataFim && (
+                                                    <span title={`Data fim: ${t.dataFim}`}>
+                                                        📅 {t.dataFim.slice(5)}
+                                                    </span>
+                                                )}
+                                                <span
+                                                    title={`Criada em ${t.criadaEm.slice(0, 10)}`}
+                                                >
+                                                    {t.criadaEm.slice(0, 10)}
+                                                </span>
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">

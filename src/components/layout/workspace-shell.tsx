@@ -65,16 +65,17 @@ import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 // ──────────────────────────────────────────────
 type LeftPanel = 'explorer' | 'chats' | 'tarefas';
 
+// Tarefas no fundo do grupo (#51): junto da divisória, onde vivia o ícone de
+// rota duplicado — a rota /tarefas morreu, o painel é a única porta.
 const panelItems: { id: LeftPanel; label: string; Icon: React.ElementType }[] = [
     { id: 'explorer', label: 'Explorador', Icon: FolderTree },
-    { id: 'tarefas', label: 'Tarefas', Icon: ListTodo },
     { id: 'chats', label: 'Conversas', Icon: MessagesSquare },
+    { id: 'tarefas', label: 'Tarefas', Icon: ListTodo },
 ];
 
 // Route nav items (Knowledge e Daily vivem no file-explorer, não no ribbon)
 const navItems = [
     { href: '/chat', label: 'Chat', Icon: MessageSquare },
-    { href: '/tarefas', label: 'Tarefas', Icon: ListTodo },
     { href: '/grupos', label: 'Grupos', Icon: Users },
 ];
 
