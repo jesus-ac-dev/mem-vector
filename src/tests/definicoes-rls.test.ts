@@ -107,4 +107,66 @@ describe('definições (#60, integração RLS)', () => {
             expect(doBruno.agentes.gemini).toBeUndefined();
         },
     );
+
+    // r13: o bug do gemini do Carlos — a config tem de ser respeitada de
+    // ponta a ponta (gravar → ler → runtime), e a escolha do chat é
+    // CIRÚRGICA (nunca toca em modo/keys que não editou).
+    it(
+        'modelos viajam no gravar e a escolha do chat não esmaga modo/key',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, gravarEscolhaChatCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+            const { criarProvider } = await import('@/lib/providers/factory');
+
+            await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                agentes: {
+                    ...AGENTES,
+                    gemini: {
+                        ...AGENTES.gemini,
+                        modelos: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+                    },
+                },
+            });
+            let servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.agentes.gemini?.modelos).toEqual([
+                'gemini-2.5-flash',
+                'gemini-2.5-pro',
+            ]);
+
+            // Escolha cirúrgica: muda chat_provider + modelo, NADA mais.
+            await gravarEscolhaChatCom(alice, { provider: 'gemini', modelo: 'gemini-2.5-pro' });
+            servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.chatProvider).toBe('gemini');
+            expect(servidor.agentes.gemini?.modelo).toBe('gemini-2.5-pro');
+            expect(servidor.agentes.gemini?.modo).toBe('api'); // intacto
+            expect(servidor.agentes.gemini?.apiKey).toBe('sk-key-de-teste-wxyz'); // intacta
+            expect(servidor.agentes.claude?.ativo).toBe(true); // os outros intactos
+
+            // null = limpar o modelo (volta ao default do provider).
+            await gravarEscolhaChatCom(alice, { provider: 'gemini', modelo: null });
+            servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.agentes.gemini?.modelo).toBeUndefined();
+            expect(servidor.agentes.gemini?.apiKey).toBe('sk-key-de-teste-wxyz'); // continua
+
+            // Provider NUNCA parametrizado: muda a escolha, mas NÃO cria
+            // meia-config fantasma (o bug original do gemini).
+            await gravarEscolhaChatCom(alice, { provider: 'ollama', modelo: 'llama3.2' });
+            servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.chatProvider).toBe('ollama');
+            expect(servidor.agentes.ollama).toBeUndefined(); // sem entrada fabricada
+
+            // Runtime respeita a config: com modo api, o factory toma o ramo
+            // API (que exige key) — nunca o binário. Sem key dá o erro do
+            // ramo api, deterministicamente e sem rede.
+            const instancia = criarProvider('gemini', {
+                ...servidor.agentes.gemini!,
+                apiKey: undefined,
+            });
+            await expect(instancia.gerar('x')).rejects.toThrow(/API key em falta/);
+        },
+    );
 });

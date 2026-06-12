@@ -10,6 +10,7 @@ import {
     type Definicoes,
     type DefinicoesServidor,
     type DefinicoesVista,
+    type EscolhaChat,
     type Provider,
 } from './definicoes.schema';
 import { cifrar, decifrar, sufixoKey } from '@/lib/cripto';
@@ -149,13 +150,15 @@ export async function gravarDefinicoesCom(
         } else if (novo.apiKey !== '') {
             apiKeyCifrada = cifrar(novo.apiKey);
         }
+        const modelos = novo.modelos ?? anterior?.modelos;
         agentes[p] = {
             ativo: novo.ativo,
             modo: novo.modo,
             modelo: novo.modelo,
             esforco: novo.esforco,
-            // A lista descoberta pelo teste sobrevive às gravações do cliente.
-            ...(anterior?.modelos ? { modelos: anterior.modelos } : {}),
+            // A lista descoberta pelo teste viaja no payload (r13) e a antiga
+            // sobrevive a gravações que não a tragam.
+            ...(modelos ? { modelos } : {}),
             ...(apiKeyCifrada ? { apiKeyCifrada } : {}),
         };
     }
@@ -177,26 +180,43 @@ export async function lerDefinicoesCom(db: SupabaseClient): Promise<DefinicoesSe
     return lerDefinicoesServidorCom(db);
 }
 
-/** O Testar ligação descobriu modelos (#60 r5): persiste-os no provider. */
-export async function gravarModelosProviderCom(
+/** A ESCOLHA do chat (mini-modal, r13): update CIRÚRGICO — muda chat_provider
+ *  e modelo/esforço do escolhido, nunca toca em modo/keys/ativo nem nos outros
+ *  providers. Um escritor por estado: o antecessor (gravarModelosProviderCom)
+ *  escrevia durante o teste e fabricou a meia-config fantasma do gemini
+ *  (modo default sem key) que o chat foi ler. */
+export async function gravarEscolhaChatCom(
     db: SupabaseClient,
-    provider: Provider,
-    modelos: string[],
+    escolha: EscolhaChat,
 ): Promise<void> {
     const {
         data: { user },
     } = await db.auth.getUser();
     if (!user) throw new Error('sem sessão');
     const row = await lerRowCom(db);
-    const agentes: Record<string, AgenteRow> = row ? { ...(row.agentes ?? {}) } : {};
-    agentes[provider] = { ...(agentes[provider] ?? { ativo: true, modo: 'cli' }), modelos };
+    const agentes: Record<string, AgenteRow> = { ...(row?.agentes ?? {}) };
+    // Só se toca em providers JÁ parametrizados — criar entrada aqui seria a
+    // meia-config fantasma outra vez (modo default sem key). Sem entrada,
+    // muda só o chat_provider; parametrizar é trabalho das Definições.
+    // (NOTA: read-modify-write — em corrida com o Guardar ganha o último;
+    // aceitável single-user, re-avaliar em multi-tab/grupos.)
+    const atual = agentes[escolha.provider];
+    if (atual) {
+        agentes[escolha.provider] = {
+            ...atual,
+            // null limpa (a chave fica undefined e o JSON descarta-a);
+            // undefined mantém (a chave nem entra no spread).
+            ...(escolha.modelo !== undefined ? { modelo: escolha.modelo ?? undefined } : {}),
+            ...(escolha.esforco !== undefined ? { esforco: escolha.esforco ?? undefined } : {}),
+        };
+    }
     const { error } = await db.from('definicoes').upsert({
         owner_id: user.id,
         metodo_destilacao: row?.metodo_destilacao ?? 'one-shot',
         modulos_ativos: row?.modulos_ativos ?? [],
-        chat_provider: row?.chat_provider ?? 'claude',
+        chat_provider: escolha.provider,
         agentes,
         updated_at: new Date().toISOString(),
     });
-    if (error) throw new Error(`gravar modelos falhou: ${error.message}`);
+    if (error) throw new Error(`gravar escolha falhou: ${error.message}`);
 }

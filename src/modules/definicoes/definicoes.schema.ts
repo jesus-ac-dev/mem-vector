@@ -105,8 +105,20 @@ export const AgenteConfigSchema = z.object({
         .max(300)
         .nullish()
         .transform((v) => (v === null ? '' : (v ?? undefined))), // null vira '' = limpar
+    // Descobertos pelo Testar ligação; viajam NO GUARDAR (r13) — o teste já
+    // não escreve na BD (criava meia-config fantasma com modo default).
+    modelos: z.array(z.string().max(100)).max(300).optional(),
 });
 export type AgenteConfig = z.infer<typeof AgenteConfigSchema>;
+
+// A ESCOLHA do chat (mini-modal, r13): update cirúrgico — só o provider que
+// responde e o modelo/esforço dele. null = limpar; undefined = manter.
+export const EscolhaChatSchema = z.object({
+    provider: z.enum(PROVIDERS),
+    modelo: z.string().max(100).nullish(),
+    esforco: z.enum(ESFORCOS).nullish(),
+});
+export type EscolhaChat = z.infer<typeof EscolhaChatSchema>;
 
 const AgentesSchema = z
     .object({

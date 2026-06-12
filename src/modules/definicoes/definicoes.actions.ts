@@ -2,6 +2,7 @@
 
 import {
     DefinicoesSchema,
+    EscolhaChatSchema,
     TestarProviderSchema,
     modoEfetivo,
     type AgenteServidor,
@@ -9,7 +10,7 @@ import {
 } from './definicoes.schema';
 import {
     gravarDefinicoesCom,
-    gravarModelosProviderCom,
+    gravarEscolhaChatCom,
     lerDefinicoesServidorCom,
     lerDefinicoesVistaCom,
 } from './definicoes.service';
@@ -56,12 +57,19 @@ export async function testarProvider(
     if (!resultado.ok) return resultado;
     try {
         const modelos = await instancia.listarModelos();
-        if (modelos.length) {
-            await gravarModelosProviderCom(db, provider, modelos);
-            return { ...resultado, modelos };
-        }
+        // r13: a lista NÃO se grava aqui — o teste corre contra config
+        // PENDENTE e escrever criava meia-config fantasma na BD (modo default
+        // sem key — o bug do gemini). Os modelos viajam no Guardar.
+        if (modelos.length) return { ...resultado, modelos };
     } catch (e) {
         console.error('listar modelos falhou (teste ok na mesma):', e);
     }
     return resultado;
+}
+
+// A ESCOLHA do chat (mini-modal, r13): cirúrgica — nunca regrava o que a
+// mini-modal não edita (modo/keys/ativo ficam intactos).
+export async function gravarEscolhaChat(input: unknown): Promise<void> {
+    const escolha = EscolhaChatSchema.parse(input);
+    await gravarEscolhaChatCom(await createClient(), escolha);
 }

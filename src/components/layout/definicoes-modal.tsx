@@ -252,6 +252,8 @@ export function DefinicoesModal({
                         modo: modoEfetivo(p, a.modo),
                         modelo: a.modelo,
                         esforco: a.esforco,
+                        // A lista descoberta pelo teste viaja AQUI (r13).
+                        modelos: a.modelos,
                         // undefined = manter a key cifrada existente; '' = limpar.
                         apiKey: keysNovas[p],
                     },
@@ -455,6 +457,10 @@ export function DefinicoesModal({
                                                             <div className="flex items-center gap-2">
                                                                 <Input
                                                                     type="password"
+                                                                    // Sem autofill do browser: um type=password
+                                                                    // preenchido pelo gestor de passwords parece
+                                                                    // config feita sem o ser (relato do Carlos).
+                                                                    autoComplete="new-password"
                                                                     value={keysNovas[p] ?? ''}
                                                                     onChange={(e) =>
                                                                         escreverKey(

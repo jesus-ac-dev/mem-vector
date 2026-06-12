@@ -86,6 +86,16 @@ describe('claude em modo api (#60 r9)', () => {
         expect(corpoGeracao.model).toBe('claude-opus-4-8');
     });
 
+    it('quota DEPOIS da listagem autenticada = key provada, teste passa (r13)', async () => {
+        fetchMock
+            .mockResolvedValueOnce(resposta(200, { data: [{ id: 'claude-opus-4-8' }] }))
+            .mockResolvedValueOnce(resposta(429, { error: { type: 'rate_limit_error' } }));
+        const p = criarProvider('claude', cfgApi());
+        const r = await p.testar();
+        expect(r.ok).toBe(true);
+        expect(r.detalhe).toMatch(/quota excedida/);
+    });
+
     it('listarModelos descobre a lista real via /v1/models', async () => {
         fetchMock.mockResolvedValueOnce(
             resposta(200, { data: [{ id: 'claude-sonnet-4-6' }, { id: 'claude-opus-4-8' }] }),
@@ -234,6 +244,18 @@ describe('gemini e ollama — o teste deixa as coisas resolvidas (r8/r9)', () =>
         const p = criarProvider('gemini', cfgApi({ apiKey: 'pass-ao-calhas' }));
         const r = await p.testar();
         expect(r.ok).toBe(false);
+    });
+
+    it('gemini com quota esgotada mas key provada pela listagem PASSA (caso do Carlos, r13)', async () => {
+        fetchMock
+            .mockResolvedValueOnce(resposta(200, { models: [{ name: 'models/gemini-2.5-flash' }] }))
+            .mockResolvedValueOnce(
+                resposta(429, { error: { message: 'Resource has been exhausted (quota)' } }),
+            );
+        const p = criarProvider('gemini', cfgApi());
+        const r = await p.testar();
+        expect(r.ok).toBe(true);
+        expect(r.detalhe).toMatch(/quota excedida/);
     });
 
     it('gemini em modo CLI usa o binário, não a REST — lista é o contrato do --model (r10)', async () => {

@@ -142,8 +142,10 @@ function providerClaudeApi(cfg: AgenteServidor): ProviderLLM {
         // não apodrece); a escolha re-faz-se na mini-modal com a lista.
         async testar() {
             if (!cfg.apiKey) return { ok: false, detalhe: 'API key em falta' };
+            let nModelos: number | null = null;
             try {
                 const modelos = await listarModelosAnthropic(cfg.apiKey);
+                nModelos = modelos.length;
                 const modelo =
                     cfg.modelo && modelos.includes(cfg.modelo)
                         ? cfg.modelo
@@ -156,10 +158,19 @@ function providerClaudeApi(cfg: AgenteServidor): ProviderLLM {
                 );
                 return {
                     ok: true,
-                    detalhe: `key válida (${modelos.length} modelos) — gerou com ${r.model ?? modelo}`,
+                    detalhe: `key válida (${nModelos} modelos) — gerou com ${r.model ?? modelo}`,
                 };
             } catch (e) {
-                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+                const msg = e instanceof Error ? e.message : String(e);
+                // Quota DEPOIS da listagem autenticada = a key está provada;
+                // falta crédito, não config — não bloqueia o Guardar (r13).
+                if (nModelos !== null && QUOTA_REGEX.test(msg)) {
+                    return {
+                        ok: true,
+                        detalhe: `key válida (${nModelos} modelos) — quota excedida de momento, a geração volta quando repor`,
+                    };
+                }
+                return { ok: false, detalhe: msg };
             }
         },
         async listarModelos() {
@@ -234,8 +245,10 @@ function providerCodexApi(cfg: AgenteServidor): ProviderLLM {
         gerar: (prompt) => gerarCodexApi(cfg, prompt),
         async testar() {
             if (!cfg.apiKey) return { ok: false, detalhe: 'API key em falta' };
+            let nModelos: number | null = null;
             try {
                 const modelos = await listarModelosOpenAI(cfg.apiKey);
+                nModelos = modelos.length;
                 const modelo =
                     cfg.modelo && modelos.includes(cfg.modelo)
                         ? cfg.modelo
@@ -249,10 +262,18 @@ function providerCodexApi(cfg: AgenteServidor): ProviderLLM {
                 );
                 return {
                     ok: true,
-                    detalhe: `key válida (${modelos.length} modelos) — gerou com ${r.model ?? modelo}`,
+                    detalhe: `key válida (${nModelos} modelos) — gerou com ${r.model ?? modelo}`,
                 };
             } catch (e) {
-                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+                const msg = e instanceof Error ? e.message : String(e);
+                // Quota com a listagem já autenticada = key provada (r13).
+                if (nModelos !== null && QUOTA_REGEX.test(msg)) {
+                    return {
+                        ok: true,
+                        detalhe: `key válida (${nModelos} modelos) — quota excedida de momento, a geração volta quando repor`,
+                    };
+                }
+                return { ok: false, detalhe: msg };
             }
         },
         async listarModelos() {
@@ -487,6 +508,7 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
         // a key e a mini-geração prova o MESMO caminho do chat.
         async testar() {
             if (!cfg.apiKey) return { ok: false, detalhe: 'API key em falta' };
+            let listagemOk = false;
             try {
                 const res = await fetch(`${GEMINI_BASE}/models?pageSize=1`, {
                     headers: { 'x-goog-api-key': cfg.apiKey },
@@ -494,13 +516,23 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
                 if (!res.ok) {
                     return { ok: false, detalhe: `HTTP ${res.status} — key inválida?` };
                 }
+                listagemOk = true;
                 const r = await this.gerar('Responde apenas com a palavra: ok');
                 return {
                     ok: true,
                     detalhe: `key válida — gerou com ${r.model ?? modelo} «${r.text.slice(0, 30)}»`,
                 };
             } catch (e) {
-                return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+                const msg = e instanceof Error ? e.message : String(e);
+                // Quota com a listagem já autenticada = key provada (r13).
+                if (listagemOk && QUOTA_REGEX.test(msg)) {
+                    return {
+                        ok: true,
+                        detalhe:
+                            'key válida — quota excedida de momento, a geração volta quando repor',
+                    };
+                }
+                return { ok: false, detalhe: msg };
             }
         },
         async listarModelos() {

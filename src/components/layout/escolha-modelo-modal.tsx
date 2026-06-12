@@ -18,7 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { gravarDefinicoes, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
+import { gravarEscolhaChat, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
 import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import { ProviderIcon } from '@/components/layout/provider-icon';
 import {
@@ -64,43 +64,36 @@ export function EscolhaModeloModal({
         };
     }, [open]);
 
-    function gravar(novas: DefinicoesVista) {
-        setDefs(novas);
-        onEscolha(novas.chatProvider, novas.agentes[novas.chatProvider]?.modelo);
-        void runClientAction({ area: 'escolha-modelo', action: 'gravarDefinicoes' }, () =>
-            gravarDefinicoes({
-                metodoDestilacao: novas.metodoDestilacao,
-                modulosAtivos: novas.modulosAtivos,
-                chatProvider: novas.chatProvider,
-                agentes: Object.fromEntries(
-                    (Object.entries(novas.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
-                        p,
-                        {
-                            ativo: a.ativo,
-                            modo: a.modo,
-                            modelo: a.modelo,
-                            esforco: a.esforco,
-                            apiKey: undefined, // mantém as keys cifradas como estão
-                        },
-                    ]),
-                ),
-            }),
-        ).then((r) => {
-            if (r) setDefs(r);
-        });
-    }
-
-    function mudarAtual(campos: Partial<AgenteVista>) {
+    // Escolha CIRÚRGICA (r13): só viaja o provider + modelo/esforço dele
+    // (null = limpar, undefined = manter). A versão anterior regravava TODOS
+    // os agentes a partir do estado local — com estado stale, esmagava
+    // modo/config gravados por fora. Um escritor por estado.
+    function escolher(campos: {
+        provider?: Provider;
+        modelo?: string | null;
+        esforco?: Esforco | null;
+    }) {
         if (!defs) return;
-        const atual = defs.agentes[defs.chatProvider] ?? {
+        const provider = campos.provider ?? defs.chatProvider;
+        const atual: AgenteVista = defs.agentes[provider] ?? {
             ativo: true,
             modo: 'cli' as const,
             temApiKey: false,
         };
-        gravar({
+        const novoAgente: AgenteVista = {
+            ...atual,
+            ...(campos.modelo !== undefined ? { modelo: campos.modelo ?? undefined } : {}),
+            ...(campos.esforco !== undefined ? { esforco: campos.esforco ?? undefined } : {}),
+        };
+        setDefs({
             ...defs,
-            agentes: { ...defs.agentes, [defs.chatProvider]: { ...atual, ...campos } },
+            chatProvider: provider,
+            agentes: { ...defs.agentes, [provider]: novoAgente },
         });
+        onEscolha(provider, novoAgente.modelo);
+        void runClientAction({ area: 'escolha-modelo', action: 'gravarEscolhaChat' }, () =>
+            gravarEscolhaChat({ provider, modelo: campos.modelo, esforco: campos.esforco }),
+        );
     }
 
     const ativos = defs ? PROVIDERS.filter((p) => defs.agentes[p]?.ativo) : [];
@@ -127,7 +120,7 @@ export function EscolhaModeloModal({
                     <div className="space-y-3">
                         <Select
                             value={defs.chatProvider}
-                            onValueChange={(v) => gravar({ ...defs, chatProvider: v as Provider })}
+                            onValueChange={(v) => escolher({ provider: v as Provider })}
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -146,9 +139,7 @@ export function EscolhaModeloModal({
 
                         <Select
                             value={atual?.modelo ?? 'default'}
-                            onValueChange={(m) =>
-                                mudarAtual({ modelo: m === 'default' ? undefined : m })
-                            }
+                            onValueChange={(m) => escolher({ modelo: m === 'default' ? null : m })}
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -173,8 +164,8 @@ export function EscolhaModeloModal({
                             <Select
                                 value={atual?.esforco ?? 'default'}
                                 onValueChange={(v) =>
-                                    mudarAtual({
-                                        esforco: v === 'default' ? undefined : (v as Esforco),
+                                    escolher({
+                                        esforco: v === 'default' ? null : (v as Esforco),
                                     })
                                 }
                             >
