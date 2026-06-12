@@ -29,7 +29,8 @@ export const AGENT_CONTRACT = [
         'criar_tarefa — na dúvida, cria (apagar é barato). Antes de criar, listar_tarefas_abertas ' +
         'para não duplicar; se a conversa diz que algo está FEITO, concluir_tarefa com o id. ' +
         'Se a conversa traz um PRAZO ("até sexta", "este fim de semana"), passa dataFim com a ' +
-        'data concreta (fim de semana = o domingo). ' +
+        'data concreta (fim de semana = o domingo). O projeto é um nome real: usa um existente ' +
+        'ou um nome novo curto; sem projeto, a tarefa cai no "Pessoal". ' +
         'Factos e conhecimento vão para notas, NUNCA para tarefas.',
     '5. REGISTA O TURNO: no fim, acrescentar_daily com 1 a 5 bullets curtos do que aconteceu — ' +
         'factos, decisões, alterações, bloqueios, próximos passos. Só o que aconteceu de facto, ' +

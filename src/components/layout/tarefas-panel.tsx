@@ -84,6 +84,7 @@ export function TarefasPanel({
     const { workspaceVersion, notificarWorkspaceMudou } = useWorkspace();
     const [abertas, setAbertas] = useState<Tarefa[]>([]);
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
+    const [projetos, setProjetos] = useState<string[]>([]);
     const [verConcluidas, setVerConcluidas] = useState(false);
     const [novoTexto, setNovoTexto] = useState('');
     // Clicar no card edita (#55): o input reabre com os tokens da tarefa.
@@ -109,6 +110,7 @@ export function TarefasPanel({
             if (cancelado || !r) return;
             setAbertas(r.abertas);
             setConcluidas(r.concluidas);
+            setProjetos(r.projetos.map((p) => p.nome));
         });
         return () => {
             cancelado = true;
@@ -137,11 +139,6 @@ export function TarefasPanel({
     }
 
     const abertasIds = new Set(abertas.map((t) => t.id));
-    const projetos = [
-        ...new Set(
-            [...abertas, ...concluidas].map((t) => t.projeto).filter((p): p is string => !!p),
-        ),
-    ].sort((a, b) => a.localeCompare(b, 'pt'));
 
     const visiveis = abertas.filter(
         (t) =>

@@ -6,6 +6,7 @@ import { listarDailies } from '@/modules/daily/daily.service';
 import { listarPastas } from '@/modules/folders/folders.service';
 import { construirArvore } from '@/modules/folders/folders.tree';
 import { garantirKernelCom } from '@/agent/kernel';
+import { garantirPessoalCom, listarProjetosCom } from '@/modules/projetos/projetos.service';
 import { dataPt } from '@/lib/datas';
 
 // Shell dos ecrãs autenticados (route group `(app)` — não muda a URL).
@@ -31,12 +32,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // Seed do Kernel (#36): a pasta e as notas iniciais nascem sozinhas no
     // primeiro carregamento (idempotente, 1 query quando já existe; arquivar a
     // pasta é opt-out respeitado). Antes do listar, para aparecer já na árvore.
-    if (user) await garantirKernelCom(supabase, user.id);
+    // Seed do Pessoal (#47): o projeto-vida nasce com o utilizador, igual.
+    if (user) {
+        await Promise.all([garantirKernelCom(supabase, user.id), garantirPessoalCom(supabase)]);
+    }
 
-    const [pastas, notas, dailies] = await Promise.all([
+    const [pastas, notas, dailies, projetos] = await Promise.all([
         listarPastas(),
         listarKnowledge(),
         listarDailies(),
+        listarProjetosCom(supabase),
     ]);
 
     const arvore = construirArvore(
@@ -57,7 +62,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex h-dvh flex-col">
             <AppHeader displayName={displayName} />
             {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
-            <WorkspaceShell arvore={arvore} dailies={dailyItems} diasComDaily={diasComDaily}>
+            <WorkspaceShell
+                arvore={arvore}
+                dailies={dailyItems}
+                diasComDaily={diasComDaily}
+                projetos={projetos.map((p) => ({ id: p.id, nome: p.nome, folderId: p.folderId }))}
+            >
                 {children}
             </WorkspaceShell>
         </div>

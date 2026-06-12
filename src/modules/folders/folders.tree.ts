@@ -102,3 +102,20 @@ export function separarKernel(arvore: Arvore): { kernel: NoArvore | null; resto:
         },
     };
 }
+
+// Projetos como secção root (#47, retificação): cada projeto É uma pasta real
+// do knowledge — separa-as da árvore pelos folder_ids dos projetos. Mesma
+// regra do Kernel: só apresentação, os dados (RAG, links, versões) intactos.
+export function separarProjetos(
+    arvore: Arvore,
+    folderIds: string[],
+): { projetos: NoArvore[]; resto: Arvore } {
+    const ids = new Set(folderIds);
+    return {
+        projetos: arvore.raizPastas.filter((no) => ids.has(no.pasta.id)),
+        resto: {
+            raizPastas: arvore.raizPastas.filter((no) => !ids.has(no.pasta.id)),
+            raizNotas: arvore.raizNotas,
+        },
+    };
+}

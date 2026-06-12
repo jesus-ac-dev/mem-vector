@@ -152,7 +152,11 @@ const TOOLS = [
             type: 'object',
             properties: {
                 titulo: { type: 'string', description: 'Verbo + objeto, curto' },
-                projeto: { type: 'string', description: 'Tag curta do projeto (opcional)' },
+                projeto: {
+                    type: 'string',
+                    description:
+                        'Nome do projeto (#47): usa um existente (vê as tarefas abertas) ou um nome novo curto — resolve/cria sempre um projeto real; vazio = "Pessoal"',
+                },
                 prioridade: { type: 'string', enum: ['baixa', 'normal', 'alta'] },
                 dataFim: {
                     type: 'string',

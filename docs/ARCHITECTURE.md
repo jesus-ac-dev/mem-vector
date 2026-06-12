@@ -54,6 +54,7 @@ flowchart TD
 | **daily** | Notas diárias — a destilação acumula o recap do dia | [README](../src/modules/daily/README.md) |
 | **chat** | Pipeline RAG + a destilação proativa (assíncrona) que faz o agente escrever | [README](../src/modules/chat/README.md) |
 | **tarefas** | Tarefas do utilizador; o exemplo vivo do padrão feature-first | [README](../src/modules/tarefas/README.md) |
+| **projetos** | Projetos reais — toda a tarefa ancora a um; "Pessoal" = projeto-vida | [README](../src/modules/projetos/README.md) |
 | **grupos** | Grupos de pares — a base da visibilidade `protected` | [README](../src/modules/grupos/README.md) |
 | **auth** | Supabase Auth — a fundação do `auth.uid()` / RLS | [README](../src/modules/auth/README.md) |
 
@@ -196,11 +197,28 @@ tarefa @data-fim` com os 3 primeiros obrigatórios na criação manual,
 hint-fantasma no input com o que falta preencher, hover verde no concluir e
 modal de confirmação no concluir e no apagar (`ui/alert-dialog`, radix novo).
 
+**Projetos (#47):** toda a tarefa pertence a um projeto REAL (`projetos` +
+`tarefas.projeto_id`; a tag livre morreu na migração — tags usadas viraram
+projetos, órfãs foram para o Pessoal). "Pessoal" é o projeto-vida default,
+semeado por utilizador como o Kernel. A regra central é `resolverProjetoCom`:
+qualquer nome (quick-add, agente, edição) resolve sempre para um projeto —
+encontra case-insensitive, cria se não existir, sem nome = Pessoal. **Cada
+projeto é uma PASTA real do knowledge** (`projetos.folder_id`; criar projeto
+cria/aproveita a pasta root homónima): a secção root "Projetos" do explorer
+mostra as pastas a sério (notas, drag; arquivada = opt-out) e o agente
+lê/continua notas lá dentro pelo fluxo normal de candidatos. O prompt da
+destilação leva a lista de projetos para ancorar tarefas ao certo. Nasceu
+ANTES do módulo GitHub de propósito — o módulo vai usar os projetos, não o
+contrário. A página/kanban do projeto chega na fatia seguinte.
+
 **Kernel do workspace (#34):** a pasta `Kernel` na raiz é o CLAUDE.md/context do
 workspace — notas normais (editáveis, versionadas, RLS) com a identidade,
 prioridades e regras do utilizador, injetadas em todos os arranques do agente
 (chat, destilação one-shot, system da sessão agentic). Caps por nota/total;
-arquivadas e subpastas ficam fora (só notas diretamente na pasta); sem pasta = comportamento de sempre. Conteúdo do Kernel manda no agente por design (workspace é do utilizador) — re-avaliar quando houver grupos partilhados. Lição da auditoria do
+arquivadas e subpastas ficam fora (só notas diretamente na pasta); sem pasta = comportamento de sempre. UX (#44): a secção
+Kernel inicia colapsada e os ficheiros do Kernel ficam FORA do grafo (com as
+arestas que lhes tocam) — é infraestrutura do agente, não conhecimento
+ligável; o grafo deve acabar todo ligado como uma rede neuronal. Conteúdo do Kernel manda no agente por design (workspace é do utilizador) — re-avaliar quando houver grupos partilhados. Lição da auditoria do
 arranque do vault: estado do utilizador é escrito e tem dono; estado de sessão
 (candidatos, daily, conversa) é gerado na hora.
 

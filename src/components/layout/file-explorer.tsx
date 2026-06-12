@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,10 @@ import {
     renomearNotaPorH1Action,
     renomearPastaAction,
 } from '@/modules/workspace/workspace.actions';
+import { criarProjeto } from '@/modules/projetos/projetos.actions';
 import {
     separarKernel,
+    separarProjetos,
     type Arvore,
     type NoArvore,
     type NotaItem,
@@ -265,6 +267,7 @@ function Seccao({
     open: controlledOpen,
     onOpenChange,
     forceOpen = false,
+    defaultOpen = true,
     children,
 }: {
     label: string;
@@ -274,9 +277,10 @@ function Seccao({
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     forceOpen?: boolean;
+    defaultOpen?: boolean;
     children: React.ReactNode;
 }) {
-    const [uncontrolledOpen, setUncontrolledOpen] = useState(true);
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
     const [over, setOver] = useState(false);
     const open = controlledOpen ?? uncontrolledOpen;
     const aberto = open || forceOpen;
@@ -364,9 +368,16 @@ function DailyLink({ daily }: { daily: DailyItem }) {
     );
 }
 
+export interface ProjetoExplorerItem {
+    id: string;
+    nome: string;
+    folderId: string | null;
+}
+
 interface FileExplorerProps {
     arvore: Arvore;
     dailies: DailyItem[];
+    projetos: ProjetoExplorerItem[];
     pastaSelecionada: string | null;
     onSelecionarPasta: (id: string | null) => void;
     knowledgeOpen: boolean;
@@ -381,6 +392,7 @@ interface FileExplorerProps {
 export function FileExplorer({
     arvore,
     dailies,
+    projetos,
     pastaSelecionada,
     onSelecionarPasta,
     knowledgeOpen,
@@ -393,6 +405,19 @@ export function FileExplorer({
 }: FileExplorerProps) {
     const router = useRouter();
     const { atualizarFicheiroAberto, notificarWorkspaceMudou } = useWorkspace();
+    // Criar projeto inline na secção root (#47).
+    const [criandoProjeto, setCriandoProjeto] = useState(false);
+
+    async function confirmarCriarProjeto(nome: string) {
+        setCriandoProjeto(false);
+        if (!nome.trim()) return;
+        await runClientAction(
+            { area: 'left-sidebar', action: 'criarProjeto', meta: { nome } },
+            () => criarProjeto({ nome: nome.trim() }),
+        );
+        notificarWorkspaceMudou();
+        router.refresh();
+    }
 
     const ops: Ops = {
         mover: (slug, folderId, id) => {
@@ -459,7 +484,14 @@ export function FileExplorer({
     // Kernel é secção root (#39), par de Knowledge/Daily Notes — a pasta sai
     // da árvore do Knowledge e ganha casa própria no topo (é a personalidade
     // do agente). Arquivada = não aparece (opt-out, paridade com o motor #34).
-    const { kernel, resto: arvoreVisivel } = separarKernel(arvore);
+    const { kernel, resto: semKernel } = separarKernel(arvore);
+    // Projetos (#47): cada projeto é uma pasta real — sai do Knowledge e vive
+    // na secção própria. Pasta arquivada = projeto não aparece (opt-out, como
+    // o Kernel).
+    const { projetos: pastasProjetos, resto: arvoreVisivel } = separarProjetos(
+        semKernel,
+        projetos.map((p) => p.folderId).filter((id): id is string => !!id),
+    );
 
     const vazioKnowledge =
         arvoreVisivel.raizPastas.length === 0 && arvoreVisivel.raizNotas.length === 0;
@@ -469,6 +501,9 @@ export function FileExplorer({
                 {kernel && (
                     <Seccao
                         label="Kernel"
+                        // Colapsado por defeito (#44): é infraestrutura do agente,
+                        // não navegação do dia-a-dia.
+                        defaultOpen={false}
                         onDropRaiz={(slug, id) => ops.mover(slug, kernel.pasta.id, id)}
                         // Drop de pasta também aterra dentro do Kernel — sem isto o
                         // highlight aceitava e o drop morria em silêncio (audit #39).
@@ -485,6 +520,32 @@ export function FileExplorer({
                         )}
                     </Seccao>
                 )}
+                {/* Projetos é secção root (#47), como o Kernel — cada projeto é
+                    uma PASTA real do knowledge (notas, drag, agente escreve lá
+                    dentro); paridade com o GitHub chega com o módulo. */}
+                <Seccao label="Projetos">
+                    {pastasProjetos.map((no) => (
+                        <FolderNode key={no.pasta.id} no={no} depth={1} ops={ops} />
+                    ))}
+                    {criandoProjeto ? (
+                        <InlineInput
+                            valorInicial=""
+                            depth={1}
+                            onConfirm={(nome) => void confirmarCriarProjeto(nome)}
+                            onCancel={() => setCriandoProjeto(false)}
+                        />
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setCriandoProjeto(true)}
+                            style={{ paddingLeft: paddingNivel(1) }}
+                            className="h-auto w-full justify-start gap-1 rounded-none py-1 pr-3 text-xs text-muted-foreground hover:bg-muted"
+                        >
+                            <Plus className="h-3 w-3" /> novo projeto
+                        </Button>
+                    )}
+                </Seccao>
                 <Seccao
                     label="Knowledge"
                     onDropRaiz={(slug, id) => ops.mover(slug, null, id)}
