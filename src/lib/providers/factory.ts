@@ -340,7 +340,10 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
                     throw new Error(`codex falhou (exit ${code}): ${erro.slice(0, 300)}`);
                 }
                 const text = (await readFile(outputPath, 'utf8')).trim();
-                return { text, costUsd: null };
+                // O modelo REAL vem do cabeçalho do exec ("model: gpt-5.5"),
+                // provado por execução real (r11) — não do auto-relato.
+                const model = stdout.match(/^model:\s*(.+)$/m)?.[1]?.trim();
+                return { text, costUsd: null, model };
             } finally {
                 await rm(tempDir, { recursive: true, force: true });
             }
@@ -470,13 +473,15 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
             }
             const json = JSON.parse(corpo) as {
                 candidates?: { content?: { parts?: { text?: string }[] } }[];
+                // "Output only. The model version used" (referência REST, r11).
+                modelVersion?: string;
             };
             const text = (json.candidates?.[0]?.content?.parts ?? [])
                 .map((p) => p.text ?? '')
                 .join('')
                 .trim();
             if (!text) throw new Error('gemini: resposta vazia');
-            return { text, costUsd: null };
+            return { text, costUsd: null, model: json.modelVersion };
         },
         // Teste a sério (r9, regra do r8 estendida às APIs): a listagem valida
         // a key e a mini-geração prova o MESMO caminho do chat.
@@ -492,7 +497,7 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
                 const r = await this.gerar('Responde apenas com a palavra: ok');
                 return {
                     ok: true,
-                    detalhe: `key válida — gerou com ${modelo} «${r.text.slice(0, 30)}»`,
+                    detalhe: `key válida — gerou com ${r.model ?? modelo} «${r.text.slice(0, 30)}»`,
                 };
             } catch (e) {
                 return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
@@ -532,10 +537,11 @@ function providerOllama(cfg: AgenteServidor): ProviderLLM {
             if (!res.ok) {
                 throw new Error(`ollama HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
             }
-            const json = (await res.json()) as { response?: string };
+            // O /api/generate ecoa o modelo que correu (docs/api.md, r11).
+            const json = (await res.json()) as { response?: string; model?: string };
             const text = (json.response ?? '').trim();
             if (!text) throw new Error('ollama: resposta vazia');
-            return { text, costUsd: null };
+            return { text, costUsd: null, model: json.model };
         },
         async testar() {
             try {

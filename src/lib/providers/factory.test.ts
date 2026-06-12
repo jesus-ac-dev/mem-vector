@@ -153,6 +153,41 @@ describe('codex em modo api (#60 r9)', () => {
     });
 });
 
+describe('modelo REAL reportado por todos os providers (r11)', () => {
+    it('gemini api devolve o modelVersion da resposta', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, {
+                candidates: [{ content: { parts: [{ text: 'olá' }] } }],
+                modelVersion: 'gemini-2.5-flash-002',
+            }),
+        );
+        const p = criarProvider('gemini', cfgApi());
+        const r = await p.gerar('x');
+        expect(r.model).toBe('gemini-2.5-flash-002');
+    });
+
+    it('ollama devolve o model ecoado pelo daemon', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, { response: 'olá', model: 'llama3.2:latest' }),
+        );
+        const p = criarProvider('ollama', { ativo: true, modo: 'cli' });
+        const r = await p.gerar('x');
+        expect(r.model).toBe('llama3.2:latest');
+    });
+
+    it('codex api devolve o model da resposta', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, {
+                choices: [{ message: { content: 'olá' } }],
+                model: 'gpt-5.5-2026-04-01',
+            }),
+        );
+        const p = criarProvider('codex', cfgApi({ modelo: 'gpt-5.5' }));
+        const r = await p.gerar('x');
+        expect(r.model).toBe('gpt-5.5-2026-04-01');
+    });
+});
+
 describe('gemini e ollama — o teste deixa as coisas resolvidas (r8/r9)', () => {
     it('gemini testar faz mini-geração real depois de validar a key', async () => {
         fetchMock
