@@ -10,6 +10,7 @@ import {
     type SourceMetadata,
 } from './chat.prompt';
 import { classificarIntencao } from './chat.intencao';
+import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
@@ -225,6 +226,18 @@ export async function respond(
     // (sources honesto). Abaixo do corte → (sem contexto) → fallback limpo.
     const relevant = relevantSources((data ?? []) as Source[]);
     const sources = await enriquecerSourcesComMetadata(db, relevant);
+    // Expand pela teia (F3): junta ao contexto as entidades vizinhas (1-hop,
+    // forward+backward) das fontes recuperadas — a daily como hub para as notas
+    // ligadas e vice-versa. Só atua quando há fontes com entidade (meta-perguntas
+    // sem contexto não expandem → não amplifica o #62). As expandidas vão ao
+    // prompt, não à proveniência (que fica honesta com o que bateu direto).
+    let expandidas: Source[] = [];
+    try {
+        expandidas = await expandirFontesCom(db, sources);
+    } catch (e) {
+        console.error('expand de fontes falhou (segue sem):', e);
+    }
+    const contexto = [...sources, ...expandidas];
     // Declarativa sem marcas de pergunta = facto a registar (#19); a mesma
     // classificação determinística guia a destilação pós-turno.
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
@@ -237,7 +250,7 @@ export async function respond(
     const { instancia, modeloPedido } = await providerDoChatCom(db);
     const startedAt = Date.now();
     const { text, costUsd, model } = await instancia.gerar(
-        buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
+        buildPrompt(question, contexto, classificarIntencao(question), historico, kernel),
     );
     const latencyMs = Date.now() - startedAt;
 
