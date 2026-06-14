@@ -162,10 +162,16 @@ export async function executarDestilacaoTurnoCom(
 
     let daily = null;
     try {
-        daily = await aplicarDailyTurno(question, answer, nota, {
-            resumir: async () => resumoMd,
-            escrever: (linha) => acrescentarAoDailyCom(db, linha),
-        });
+        daily = await aplicarDailyTurno(
+            question,
+            answer,
+            nota,
+            {
+                resumir: async () => resumoMd,
+                escrever: (linha) => acrescentarAoDailyCom(db, linha),
+            },
+            contexto?.conversationId,
+        );
     } catch (e) {
         console.error('append daily falhou:', e);
     }

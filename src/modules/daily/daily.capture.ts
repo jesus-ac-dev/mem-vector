@@ -10,6 +10,8 @@ export interface DailyTurnoEntryInput {
     resumoMd: string;
     nota?: DailyTurnoNota | null;
     hora?: string;
+    // Liga o recap à conversa-fonte: o heading ganha [[conversa:<id>]] navegável (teia de memória).
+    conversationId?: string;
 }
 
 export function horaLisboa(date: Date = new Date()): string {
@@ -64,8 +66,17 @@ export function parseDailyCapture(raw: string): string {
     return bullets.map((line) => `- ${line}`).join('\n');
 }
 
-export function formatDailyTurnoEntry({ resumoMd, nota, hora }: DailyTurnoEntryInput): string {
-    const lines = [`### ${hora ?? horaLisboa()}`, parseDailyCapture(resumoMd)];
+export function formatDailyTurnoEntry({
+    resumoMd,
+    nota,
+    hora,
+    conversationId,
+}: DailyTurnoEntryInput): string {
+    const horaFmt = hora ?? horaLisboa();
+    const cabecalho = conversationId
+        ? `### ${horaFmt} · [[conversa:${conversationId}|conversa]]`
+        : `### ${horaFmt}`;
+    const lines = [cabecalho, parseDailyCapture(resumoMd)];
     if (nota) {
         const acao = nota.criada ? 'criada' : 'atualizada';
         lines.push(`- Estado escrito: [[${nota.slug}]] (${acao}: ${nota.title})`);

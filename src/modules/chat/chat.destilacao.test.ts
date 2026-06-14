@@ -95,4 +95,15 @@ describe('aplicarDailyTurno', () => {
         );
         expect(result).toEqual({ dia: '2026-06-06', criado: false });
     });
+
+    it('liga o heading à conversa-fonte quando recebe conversationId', async () => {
+        const resumir = vi.fn().mockResolvedValue('- Turno resumido');
+        const escrever = vi.fn().mockResolvedValue({ dia: '2026-06-06', criado: true });
+
+        await aplicarDailyTurno('q', 'a', null, { resumir, escrever }, 'abc-123');
+
+        expect(escrever).toHaveBeenCalledWith(
+            '### 09:30 · [[conversa:abc-123|conversa]]\n- Turno resumido',
+        );
+    });
 });

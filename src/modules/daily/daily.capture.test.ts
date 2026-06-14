@@ -37,6 +37,16 @@ describe('daily.capture', () => {
         );
     });
 
+    it('inclui o wikilink para a conversa no heading quando recebe conversationId', () => {
+        const entry = formatDailyTurnoEntry({
+            hora: '09:45',
+            resumoMd: '- User pediu daily',
+            conversationId: 'abc-123',
+        });
+
+        expect(entry).toBe('### 09:45 · [[conversa:abc-123|conversa]]\n- User pediu daily');
+    });
+
     it('calcula hora de Lisboa de forma determinística', () => {
         expect(horaLisboa(new Date('2026-06-06T08:30:00.000Z'))).toBe('09:30');
     });
