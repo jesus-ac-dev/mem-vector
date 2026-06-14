@@ -53,27 +53,31 @@ export function lerEscritas(file: string): RegistoEscrita[] {
     return registos;
 }
 
-// Reduz a lista de escritas ao formato do job: a ÚLTIMA nota e o ÚLTIMO daily
-// do turno (a sessão pode corrigir-se a si própria; vale o estado final).
+// Reduz a lista de escritas ao formato do job: as notas do turno (1 bloco → N
+// notas, dedup por slug — a última escrita do mesmo slug vence) e o ÚLTIMO daily.
 export function reduzirEscritas(registos: RegistoEscrita[]): {
-    nota: Omit<RegistoNota, 'tipo'> | null;
+    notas: Omit<RegistoNota, 'tipo'>[];
     daily: Omit<RegistoDaily, 'tipo'> | null;
     tarefas: {
         criadas: { id: string; titulo: string }[];
         concluidas: { id: string; titulo: string }[];
     };
 } {
-    let nota: Omit<RegistoNota, 'tipo'> | null = null;
+    const notas: Omit<RegistoNota, 'tipo'>[] = [];
     let daily: Omit<RegistoDaily, 'tipo'> | null = null;
     const tarefas = {
         criadas: [] as { id: string; titulo: string }[],
         concluidas: [] as { id: string; titulo: string }[],
     };
     for (const r of registos) {
-        if (r.tipo === 'nota') nota = { slug: r.slug, title: r.title, criada: r.criada };
-        else if (r.tipo === 'daily') daily = { dia: r.dia, criado: r.criado };
+        if (r.tipo === 'nota') {
+            const i = notas.findIndex((n) => n.slug === r.slug);
+            const entrada = { slug: r.slug, title: r.title, criada: r.criada };
+            if (i >= 0) notas[i] = entrada;
+            else notas.push(entrada);
+        } else if (r.tipo === 'daily') daily = { dia: r.dia, criado: r.criado };
         else if (r.acao === 'criada') tarefas.criadas.push({ id: r.id, titulo: r.titulo });
         else tarefas.concluidas.push({ id: r.id, titulo: r.titulo });
     }
-    return { nota, daily, tarefas };
+    return { notas, daily, tarefas };
 }

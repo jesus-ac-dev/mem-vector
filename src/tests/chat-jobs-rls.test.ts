@@ -69,7 +69,7 @@ describe('agent_jobs (integração RLS)', () => {
         expect(running.data?.locked_at).not.toBeNull();
 
         await concluirDestilacaoJobCom(alice, jobId, {
-            nota: null,
+            notas: [],
             daily: { dia: '2026-06-07', criado: true },
         });
 
@@ -77,7 +77,7 @@ describe('agent_jobs (integração RLS)', () => {
         await expect(estadoDestilacaoJobCom(alice, jobId)).resolves.toMatchObject({
             status: 'done',
             result: {
-                nota: null,
+                notas: [],
                 daily: { dia: '2026-06-07', criado: true },
             },
         });

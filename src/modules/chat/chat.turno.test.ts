@@ -125,52 +125,66 @@ describe('parseTurno', () => {
         const raw =
             '```json\n' +
             '{"daily":["fez X","decidiu Y"],' +
-            '"nota":{"title":"T","content_md":"c","links":[],"reason":"r"}}\n' +
+            '"notas":[{"title":"T","content_md":"c","links":[],"reason":"r"}]}\n' +
             '```';
         expect(parseTurno(raw)).toMatchObject({
             resumoMd: '- fez X\n- decidiu Y',
-            nota: { title: 'T', content_md: 'c', links: [], reason: 'r' },
+            notas: [{ title: 'T', content_md: 'c', links: [], reason: 'r' }],
         });
     });
 
-    it('nota null: devolve só o resumo, sem nota', () => {
-        const raw = '{"daily":["só registo"],"nota":null}';
-        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- só registo', nota: null });
+    it('sem notas: devolve só o resumo', () => {
+        const raw = '{"daily":["só registo"],"notas":[]}';
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- só registo', notas: [] });
     });
 
     // Turno trivial: "daily": [] deliberado fica vazio (sem o fallback do
     // parseDailyCapture), para o aplicarDailyTurno poder não escrever nada.
     it('daily [] deliberado devolve resumo vazio, sem bullet de fallback', () => {
-        const raw = '{"daily":[],"nota":null}';
-        expect(parseTurno(raw)).toMatchObject({ resumoMd: '', nota: null });
+        const raw = '{"daily":[],"notas":[]}';
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '', notas: [] });
     });
 
     it('daily como string também vira bullets', () => {
-        const raw = '{"daily":"- linha um\\n- linha dois","nota":null}';
-        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- linha um\n- linha dois', nota: null });
+        const raw = '{"daily":"- linha um\\n- linha dois","notas":[]}';
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- linha um\n- linha dois', notas: [] });
     });
 
     it('json inválido: trata o texto como bullets do daily e nota null (daily sobrevive)', () => {
         const raw = '- bullet solto\n- outro bullet';
         expect(parseTurno(raw)).toMatchObject({
             resumoMd: '- bullet solto\n- outro bullet',
-            nota: null,
+            notas: [],
         });
     });
 
     it('nota com campos em falta é descartada, mas o resumo mantém-se', () => {
-        const raw = '{"daily":["x"],"nota":{"title":"sem corpo"}}';
-        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- x', nota: null });
+        const raw = '{"daily":["x"],"notas":[{"title":"sem corpo"}]}';
+        expect(parseTurno(raw)).toMatchObject({ resumoMd: '- x', notas: [] });
     });
 
     it('extrai a nota mesmo quando o content_md tem um bloco de código (fence interno)', () => {
         const raw =
             '```json\n' +
-            '{"daily":["x"],"nota":{"title":"T","content_md":"exemplo:\\n```js\\nx=1\\n```","links":[],"reason":"r"}}\n' +
+            '{"daily":["x"],"notas":[{"title":"T","content_md":"exemplo:\\n```js\\nx=1\\n```","links":[],"reason":"r"}]}\n' +
             '```';
         const out = parseTurno(raw);
-        expect(out.nota?.title).toBe('T');
-        expect(out.nota?.content_md).toContain('x=1');
+        expect(out.notas[0]?.title).toBe('T');
+        expect(out.notas[0]?.content_md).toContain('x=1');
+    });
+
+    it('1 bloco → N notas: extrai várias notas de assuntos distintos', () => {
+        const raw =
+            '{"daily":["x"],"notas":[' +
+            '{"title":"Sofia","content_md":"# Sofia","links":[],"reason":"pessoa"},' +
+            '{"title":"Threshold","content_md":"# Threshold","links":[],"reason":"decisao"}]}';
+        expect(parseTurno(raw).notas.map((n) => n.title)).toEqual(['Sofia', 'Threshold']);
+    });
+
+    it('tolera "nota" single do envelope antigo', () => {
+        const raw =
+            '{"daily":["x"],"nota":{"title":"T","content_md":"# T","links":[],"reason":"r"}}';
+        expect(parseTurno(raw).notas.map((n) => n.title)).toEqual(['T']);
     });
 });
 
@@ -187,8 +201,8 @@ describe('buildTurnoPrompt: summary auto (#22)', () => {
 describe('parseTurno: summary auto (#22)', () => {
     it('passa o summary da nota quando o envelope o traz', () => {
         const raw =
-            '{"daily":["x"],"nota":{"title":"T","content_md":"c","links":[],"reason":"r","summary":"resumo da nota"}}';
-        expect(parseTurno(raw).nota).toEqual({
+            '{"daily":["x"],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r","summary":"resumo da nota"}]}';
+        expect(parseTurno(raw).notas[0]).toEqual({
             title: 'T',
             content_md: 'c',
             links: [],
@@ -198,18 +212,19 @@ describe('parseTurno: summary auto (#22)', () => {
     });
 
     it('nota sem summary continua válida (campo opcional)', () => {
-        const raw = '{"daily":["x"],"nota":{"title":"T","content_md":"c","links":[],"reason":"r"}}';
-        expect(parseTurno(raw).nota?.summary).toBeUndefined();
-        expect(parseTurno(raw).nota?.title).toBe('T');
+        const raw =
+            '{"daily":["x"],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r"}]}';
+        expect(parseTurno(raw).notas[0]?.summary).toBeUndefined();
+        expect(parseTurno(raw).notas[0]?.title).toBe('T');
     });
 });
 
 describe('parseTurno: summary longo não custa a nota (#22 nit do review)', () => {
     it('trunca o summary a 500 chars em vez de rejeitar o envelope', () => {
         const longo = 'x'.repeat(600);
-        const raw = `{"daily":["x"],"nota":{"title":"T","content_md":"c","links":[],"reason":"r","summary":"${longo}"}}`;
-        const nota = parseTurno(raw).nota;
-        expect(nota).not.toBeNull();
+        const raw = `{"daily":["x"],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r","summary":"${longo}"}]}`;
+        const nota = parseTurno(raw).notas[0];
+        expect(nota).not.toBeUndefined();
         expect(nota?.summary?.length).toBe(500);
     });
 });

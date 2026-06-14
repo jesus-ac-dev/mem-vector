@@ -32,7 +32,14 @@ const RESULT_FILE = process.env.MEMVECTOR_AGENT_RESULT_FILE ?? '';
 // sessão, não em estado de módulo — se este server um dia for reutilizado por
 // várias sessões, o estado não vaza entre elas (audit #27).
 interface EstadoTurno {
-    notaDoTurno: DailyTurnoNota | null;
+    notasDoTurno: DailyTurnoNota[];
+}
+
+// 1 bloco → N notas: regista cada nota tocada no turno, dedup por slug (a última vence).
+function registarNotaTurno(estado: EstadoTurno, nota: DailyTurnoNota): void {
+    const i = estado.notasDoTurno.findIndex((n) => n.slug === nota.slug);
+    if (i >= 0) estado.notasDoTurno[i] = nota;
+    else estado.notasDoTurno.push(nota);
 }
 
 async function criarDb(): Promise<SupabaseClient> {
@@ -231,7 +238,7 @@ async function executarTool(
                 'agent',
             );
             const criada = r.diff === null;
-            estado.notaDoTurno = { slug: r.slug, title: r.title, criada };
+            registarNotaTurno(estado, { slug: r.slug, title: r.title, criada });
             if (RESULT_FILE) {
                 registarEscrita(RESULT_FILE, {
                     tipo: 'nota',
@@ -250,7 +257,7 @@ async function executarTool(
                 'agent',
                 summaryDoAgente(typeof args.summary === 'string' ? args.summary : undefined),
             );
-            estado.notaDoTurno = { slug: r.slug, title: r.title, criada: false };
+            registarNotaTurno(estado, { slug: r.slug, title: r.title, criada: false });
             if (RESULT_FILE) {
                 registarEscrita(RESULT_FILE, {
                     tipo: 'nota',
@@ -266,7 +273,7 @@ async function executarTool(
             if (!bullets.length) throw new Error('daily sem bullets');
             const entrada = formatDailyTurnoEntry({
                 resumoMd: bullets.map((b) => `- ${b}`).join('\n'),
-                nota: estado.notaDoTurno,
+                notas: estado.notasDoTurno,
             });
             const r = await acrescentarAoDailyCom(db, entrada);
             if (RESULT_FILE) {
@@ -335,7 +342,7 @@ async function executarTool(
 
 async function main(): Promise<void> {
     const db = await criarDb();
-    const estado: EstadoTurno = { notaDoTurno: null };
+    const estado: EstadoTurno = { notasDoTurno: [] };
     const server = new Server(
         { name: 'memvector', version: '0.1.0' },
         { capabilities: { tools: {} } },

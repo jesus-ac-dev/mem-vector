@@ -54,7 +54,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     sources?: Source[];
-    escrita?: NotaEscrita | null;
+    escritas?: NotaEscrita[];
     daily?: DailyEscrito | null;
     tarefas?: TarefasDoTurno | null;
     distillationJobId?: string;
@@ -550,18 +550,18 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
 
             // Step 2: process the already-persisted distillation job in the background.
             processarDestilacaoJob(res.distillationJobId)
-                .then(({ nota, daily, tarefas }) => {
+                .then(({ notas, daily, tarefas }) => {
                     setMessages((prev) =>
                         prev.map((m) =>
                             m.id === asstMsgId
-                                ? { ...m, destilando: false, escrita: nota, daily, tarefas }
+                                ? { ...m, destilando: false, escritas: notas, daily, tarefas }
                                 : m,
                         ),
                     );
                     // O agente escreveu estado: o ambiente reage ao vivo — explorer,
                     // grafo, sidebar e panes abertos ouvem o workspaceVersion; o
                     // router.refresh cobre os server components (calendário, /daily).
-                    if (nota || daily || tarefas) {
+                    if (notas.length || daily || tarefas) {
                         notificarWorkspaceMudou();
                         router.refresh();
                     }
@@ -651,11 +651,12 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                                     pendente
                                 </p>
                             )}
-                            {m.role === 'assistant' && m.escrita && (
-                                <div>
-                                    <NotaEscritaChip escrita={m.escrita} />
-                                </div>
-                            )}
+                            {m.role === 'assistant' &&
+                                m.escritas?.map((e) => (
+                                    <div key={e.slug}>
+                                        <NotaEscritaChip escrita={e} />
+                                    </div>
+                                ))}
                             {m.role === 'assistant' && m.daily && (
                                 <div>
                                     <DailyEscritoChip daily={m.daily} />

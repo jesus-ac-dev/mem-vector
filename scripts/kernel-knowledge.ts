@@ -31,7 +31,9 @@ async function main(): Promise<void> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !anon) {
-        throw new Error('Falta NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY no ambiente.');
+        throw new Error(
+            'Falta NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY no ambiente.',
+        );
     }
 
     const db = createClient(url, anon, {
@@ -61,7 +63,9 @@ async function main(): Promise<void> {
         match_count: 5,
     });
     if (match.error) throw new Error(`match_chunks: ${match.error.message}`);
-    const achou = (match.data ?? []).some((m: { content: string }) => m.content.includes('kernel guarda'));
+    const achou = (match.data ?? []).some((m: { content: string }) =>
+        m.content.includes('kernel guarda'),
+    );
     console.log('retrieval achou a nota?', achou);
     console.log(`${achou ? '✅' : '❌'} eixo 2 — RAG retrieval`);
 

@@ -46,7 +46,7 @@ export interface TarefasDoTurno {
 }
 
 export interface TurnoDestilado {
-    nota: NotaEscrita | null;
+    notas: NotaEscrita[]; // 1 bloco → N notas escritas neste turno
     daily: DailyEscrito | null;
     // #21: tarefas criadas/concluídas pelo agente neste turno (ausente = nenhuma).
     tarefas?: TarefasDoTurno | null;
@@ -63,7 +63,7 @@ export interface ChatResult {
 }
 
 interface DestilDeps {
-    destilar: (q: string, a: string) => Promise<EscritaKnowledge | null>;
+    destilar: (q: string, a: string) => Promise<EscritaKnowledge[]>;
     escrever: (input: EscritaKnowledge) => Promise<ResultadoEscrita>;
 }
 
@@ -182,26 +182,39 @@ export async function aplicarDestilacao(
     question: string,
     answer: string,
     deps: Partial<DestilDeps> = {},
-): Promise<NotaEscrita | null> {
-    const { destilar = destilarReal, escrever = escreverNotaReal } = deps;
-    const nota = await destilar(question, answer);
-    if (!nota) return null;
-    const resultado = await escrever(nota);
-    return { slug: resultado.slug, title: resultado.title, criada: resultado.diff === null };
+): Promise<NotaEscrita[]> {
+    const {
+        destilar = async (q, a) => {
+            const n = await destilarReal(q, a);
+            return n ? [n] : [];
+        },
+        escrever = escreverNotaReal,
+    } = deps;
+    const notas = await destilar(question, answer);
+    const escritas: NotaEscrita[] = [];
+    for (const nota of notas) {
+        const resultado = await escrever(nota);
+        escritas.push({
+            slug: resultado.slug,
+            title: resultado.title,
+            criada: resultado.diff === null,
+        });
+    }
+    return escritas;
 }
 
 export async function aplicarDailyTurno(
     question: string,
     answer: string,
-    nota: NotaEscrita | null,
+    notas: NotaEscrita[],
     deps: Partial<DailyDeps> = {},
     conversationId?: string,
 ): Promise<DailyEscrito | null> {
     const { resumir = resumirTurnoParaDailyReal, escrever = acrescentarAoDailyReal } = deps;
     const resumoMd = await resumir(question, answer);
-    // Turno trivial: sem resumo e sem nota, o daily não regista o nada.
-    if (!resumoMd.trim() && !nota) return null;
-    const entrada = formatDailyTurnoEntry({ resumoMd, nota, conversationId });
+    // Turno trivial: sem resumo e sem notas, o daily não regista o nada.
+    if (!resumoMd.trim() && !notas.length) return null;
+    const entrada = formatDailyTurnoEntry({ resumoMd, notas, conversationId });
     const resultado = await escrever(entrada);
     return { dia: resultado.dia, criado: resultado.criado };
 }

@@ -38,7 +38,9 @@ async function main(): Promise<void> {
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !anon) throw new Error('Falta NEXT_PUBLIC_SUPABASE_URL/ANON_KEY no ambiente.');
 
-    const db = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const db = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
     const signIn = await db.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (signIn.error || !signIn.data.user) {
         throw new Error(`signIn falhou: ${signIn.error?.message ?? 'sem user'}`);
@@ -67,21 +69,31 @@ async function main(): Promise<void> {
 
     // Passo 3 — a destilação CONTINUA a nota (mesmo slug) com os candidatos.
     const turno = await destilarResumirTurno(question, answer, candidatos);
-    console.log('nota destilada:', turno.nota ? { title: turno.nota.title } : null);
-    const continuou = !!turno.nota && slugify(turno.nota.title) === SLUG;
+    console.log(
+        'notas destiladas:',
+        turno.notas.map((n) => ({ title: n.title })),
+    );
+    const notaDona = turno.notas.find((n) => slugify(n.title) === SLUG);
+    const continuou = !!notaDona;
     console.log(`${continuou ? '✅' : '❌'} eixo 2 — continuou a nota existente (mesmo slug)`);
 
-    const conteudo = turno.nota?.content_md ?? '';
+    const conteudo = notaDona?.content_md ?? '';
     const integrou =
-        /\b5\b/.test(conteudo) && /\b3\b/.test(conteudo) && /Rex/.test(conteudo) && /Bobi/.test(conteudo);
+        /\b5\b/.test(conteudo) &&
+        /\b3\b/.test(conteudo) &&
+        /Rex/.test(conteudo) &&
+        /Bobi/.test(conteudo);
     console.log(`${integrou ? '✅' : '❌'} eixo 3 — integrou as idades sem perder o que já havia`);
 
     // Passo 4 — a escrita é UPDATE (diff não-nulo) e a nota final tem as idades.
     let eixo4 = false;
-    if (turno.nota) {
-        const res = await escreverNotaCom(db, { ...turno.nota }, 'agent');
+    if (notaDona) {
+        const res = await escreverNotaCom(db, { ...notaDona }, 'agent');
         const nota = await getNotaCom(db, SLUG);
-        eixo4 = res.diff !== null && /\b5\b/.test(nota?.contentMd ?? '') && /\b3\b/.test(nota?.contentMd ?? '');
+        eixo4 =
+            res.diff !== null &&
+            /\b5\b/.test(nota?.contentMd ?? '') &&
+            /\b3\b/.test(nota?.contentMd ?? '');
     }
     console.log(`${eixo4 ? '✅' : '❌'} eixo 4 — escrita foi UPDATE e a nota final tem as idades`);
 

@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { criarPastaCom, listarPastasCom, renomearPastaCom } from '../src/modules/folders/folders.service';
+import {
+    criarPastaCom,
+    listarPastasCom,
+    renomearPastaCom,
+} from '../src/modules/folders/folders.service';
 import {
     escreverNotaCom,
     listarKnowledgeCom,
@@ -16,11 +20,18 @@ const PASSWORD = 'dev-password-123';
 
 async function main(): Promise<void> {
     const admin = getSupabaseAdmin();
-    const c = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true });
-    if (c.error && !c.error.message.includes('already been registered')) throw new Error(c.error.message);
+    const c = await admin.auth.admin.createUser({
+        email: EMAIL,
+        password: PASSWORD,
+        email_confirm: true,
+    });
+    if (c.error && !c.error.message.includes('already been registered'))
+        throw new Error(c.error.message);
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const db = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const db = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
     const si = await db.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (si.error) throw new Error(si.error.message);
 

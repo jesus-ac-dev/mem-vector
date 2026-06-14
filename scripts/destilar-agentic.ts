@@ -50,7 +50,7 @@ async function main(): Promise<void> {
         question: 'olá, tudo bem?',
         answer: 'Tudo ótimo, em que posso ajudar hoje?',
     });
-    const eixo1 = trivial.nota === null && trivial.daily === null;
+    const eixo1 = trivial.notas.length === 0 && trivial.daily === null;
     console.log(`${eixo1 ? '✅' : '❌'} eixo 1 — trivial: zero escritas`, JSON.stringify(trivial));
 
     // Eixo 2 — facto durável sem pedido explícito: escreve proativamente.
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
         candidatos: await candidatosParaFactoCom(db, `${q2}\n${a2}`),
         intencao: classificarIntencao(q2),
     });
-    const eixo2 = proativo.nota !== null && proativo.daily !== null;
+    const eixo2 = proativo.notas.length > 0 && proativo.daily !== null;
     console.log(
         `${eixo2 ? '✅' : '❌'} eixo 2 — facto durável: nota + daily`,
         JSON.stringify(proativo),
@@ -81,10 +81,8 @@ async function main(): Promise<void> {
             { role: 'assistant', content: a2 },
         ],
     });
-    const eixo3 =
-        continuar.nota !== null &&
-        continuar.nota.slug === proativo.nota?.slug &&
-        !continuar.nota.criada;
+    const slugsProativo = proativo.notas.map((n) => n.slug);
+    const eixo3 = continuar.notas.some((n) => slugsProativo.includes(n.slug) && !n.criada);
     console.log(`${eixo3 ? '✅' : '❌'} eixo 3 — continua a nota dona`, JSON.stringify(continuar));
 
     const ok = eixo1 && eixo2 && eixo3;

@@ -8,7 +8,7 @@ export interface DailyTurnoNota {
 
 export interface DailyTurnoEntryInput {
     resumoMd: string;
-    nota?: DailyTurnoNota | null;
+    notas?: DailyTurnoNota[]; // 1 bloco → N notas tocadas neste turno
     hora?: string;
     // Liga o recap à conversa-fonte: o heading ganha [[conversa:<id>]] navegável (teia de memória).
     conversationId?: string;
@@ -68,7 +68,7 @@ export function parseDailyCapture(raw: string): string {
 
 export function formatDailyTurnoEntry({
     resumoMd,
-    nota,
+    notas = [],
     hora,
     conversationId,
 }: DailyTurnoEntryInput): string {
@@ -77,7 +77,7 @@ export function formatDailyTurnoEntry({
         ? `### ${horaFmt} · [[conversa:${conversationId}|conversa]]`
         : `### ${horaFmt}`;
     const lines = [cabecalho, parseDailyCapture(resumoMd)];
-    if (nota) {
+    for (const nota of notas) {
         const acao = nota.criada ? 'criada' : 'atualizada';
         lines.push(`- Estado escrito: [[${nota.slug}]] (${acao}: ${nota.title})`);
     }

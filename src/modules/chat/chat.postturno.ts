@@ -44,7 +44,7 @@ export async function executarDestilacaoTurnoCom(
     const {
         data: { user },
     } = await db.auth.getUser();
-    if (!user) return { nota: null, daily: null };
+    if (!user) return { notas: [], daily: null };
 
     // Janela de conversa para a destilação resolver pronomes (não-fatal).
     let historico: MensagemConversa[] = [];
@@ -141,23 +141,23 @@ export async function executarDestilacaoTurnoCom(
         );
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);
-        return { nota: null, daily: null };
+        return { notas: [], daily: null };
     }
-    const { resumoMd, nota: notaProposta } = turno;
+    const { resumoMd, notas: notasPropostas } = turno;
 
     // As escritas não chamam o CLI: injetam-se os resultados já gerados, e usam a
     // MESMA sessão `db` (não abrir uma segunda). Mantêm-se isoladas para o daily
     // sobreviver se a escrita da nota falhar.
-    let nota: NotaEscrita | null = null;
+    let notas: NotaEscrita[] = [];
     try {
-        nota = await aplicarDestilacao(question, answer, {
-            destilar: async () => notaProposta,
+        notas = await aplicarDestilacao(question, answer, {
+            destilar: async () => notasPropostas,
             // "Continuar" uma candidata aterra NELA (update por id): o upsert por
             // slug escreve na raiz e duplicava candidatas dentro de pastas.
             escrever: (input) => escreverOuContinuarNotaCom(db, input, candidatos),
         });
     } catch (e) {
-        console.error('escrita da nota destilada falhou:', e);
+        console.error('escrita das notas destiladas falhou:', e);
     }
 
     let daily = null;
@@ -165,7 +165,7 @@ export async function executarDestilacaoTurnoCom(
         daily = await aplicarDailyTurno(
             question,
             answer,
-            nota,
+            notas,
             {
                 resumir: async () => resumoMd,
                 escrever: (linha) =>
@@ -210,7 +210,7 @@ export async function executarDestilacaoTurnoCom(
     }
 
     return {
-        nota,
+        notas,
         daily,
         tarefas: tarefas.criadas.length || tarefas.concluidas.length ? tarefas : null,
     };

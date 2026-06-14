@@ -19,7 +19,7 @@ export interface TarefaAbertaRef {
 
 export interface TurnoDestiladoRaw {
     resumoMd: string;
-    nota: EscritaKnowledge | null;
+    notas: EscritaKnowledge[]; // 1 bloco → N notas (uma por assunto distinto)
     tarefas: TarefaDestilada[];
     concluirIds: string[];
 }
@@ -104,18 +104,20 @@ export function buildTurnoPrompt(
         (kernel ? `${kernel}\n` : '') +
         'És o autor do workspace. Recebes uma troca (Pergunta/Resposta) e fazes QUATRO coisas, ' +
         'devolvidas num ÚNICO bloco ```json``` com a forma ' +
-        '{"daily": [...], "nota": null | {...}, "tarefas": [...], "concluir": [...]}.\n\n' +
+        '{"daily": [...], "notas": [...], "tarefas": [...], "concluir": [...]}.\n\n' +
         '1) "daily": array de 0 a 5 bullets curtos (strings, PT-PT) que resumem o que aconteceu ' +
         'neste turno — factos, decisões, alterações, bloqueios, próximos passos. Só o recap, não ' +
         'respondas ao utilizador. Escreve só o que aconteceu de facto, nunca mais do que foi dito ' +
         '— sem encher. Turno trivial (saudação, agradecimento, small talk sem conteúdo) = ' +
         '"daily": [] — o daily não regista o nada.\n' +
-        '2) "nota": és PROATIVO a registar. Se a troca traz um FACTO, DECISÃO, PLANO, PREFERÊNCIA ou ' +
-        'CONHECIMENTO durável sobre o utilizador, o trabalho ou a vida dele, ESCREVE-O — não esperes ' +
-        'que peçam licença. Na dúvida entre guardar e não guardar, GUARDA: continua a nota dona (se ' +
-        'houver candidata) e as versões são a rede; escrever no sítio certo consolida, não espalha. ' +
-        'Só "nota": null para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
-        'facto novo. Quando escreves, "nota": ' +
+        '2) "notas": array de 0..N — és PROATIVO a registar. Se a troca traz um FACTO, DECISÃO, PLANO, ' +
+        'PREFERÊNCIA ou CONHECIMENTO durável sobre o utilizador, o trabalho ou a vida dele, ESCREVE-O — ' +
+        'não esperes que peçam licença. Na dúvida entre guardar e não guardar, GUARDA: continua a nota ' +
+        'dona (se houver candidata) e as versões são a rede; escrever no sítio certo consolida. ' +
+        'Se a troca toca ASSUNTOS DISTINTOS (ex.: uma pessoa nova E uma decisão técnica), escreve UMA ' +
+        'NOTA POR ASSUNTO — cada facto no seu ficheiro, nunca tudo amontoado numa só nota. ' +
+        'Só "notas": [] para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
+        'facto novo. Cada nota é ' +
         '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase"}.\n' +
         'REGRA PARA summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA ' +
         'como fica depois desta escrita — não o que mudou neste turno. Ao continuar uma nota, ' +
@@ -183,14 +185,19 @@ function extrairObjeto(txt: string): Record<string, unknown> | null {
 // como bullets (o recap nunca se perde por causa de uma nota mal-formada).
 export function parseTurno(raw: string): TurnoDestiladoRaw {
     const rec = extrairObjeto(raw.trim());
-    if (!rec) return { resumoMd: parseDailyCapture(raw), nota: null, tarefas: [], concluirIds: [] };
+    if (!rec) return { resumoMd: parseDailyCapture(raw), notas: [], tarefas: [], concluirIds: [] };
 
     const dailyRaw = Array.isArray(rec.daily)
         ? rec.daily.join('\n')
         : typeof rec.daily === 'string'
           ? rec.daily
           : '';
-    const notaParsed = EscritaKnowledgeSchema.safeParse(rec.nota);
+    // notas: array de 0..N (1 bloco→N notas). Tolera "nota" single (envelope antigo).
+    const notasRaw = Array.isArray(rec.notas) ? rec.notas : rec.nota != null ? [rec.nota] : [];
+    const notas: EscritaKnowledge[] = notasRaw.flatMap((n) => {
+        const p = EscritaKnowledgeSchema.safeParse(n);
+        return p.success ? [p.data] : [];
+    });
 
     // Tarefas (#21): cada entrada válida conta; uma malformada não custa as
     // restantes (mesmo espírito tolerante do resto do parse).
@@ -210,7 +217,7 @@ export function parseTurno(raw: string): TurnoDestiladoRaw {
 
     return {
         resumoMd: dailyVazio ? '' : parseDailyCapture(dailyRaw),
-        nota: notaParsed.success ? notaParsed.data : null,
+        notas,
         tarefas,
         concluirIds,
     };

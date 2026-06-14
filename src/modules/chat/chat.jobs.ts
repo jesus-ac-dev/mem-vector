@@ -11,13 +11,11 @@ export const distillationJobPayloadSchema = z.object({
 });
 export type DistillationJobPayload = z.infer<typeof distillationJobPayloadSchema>;
 
-const notaResultadoSchema = z
-    .object({
-        slug: z.string(),
-        title: z.string(),
-        criada: z.boolean(),
-    })
-    .nullable();
+const notaResultadoSchema = z.object({
+    slug: z.string(),
+    title: z.string(),
+    criada: z.boolean(),
+});
 
 const dailyResultadoSchema = z
     .object({
@@ -27,7 +25,7 @@ const dailyResultadoSchema = z
     .nullable();
 
 export const distillationJobResultSchema = z.object({
-    nota: notaResultadoSchema,
+    notas: z.array(notaResultadoSchema),
     daily: dailyResultadoSchema,
 });
 
