@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
+import type { ChatTrace } from './chat.trace';
 import type { Source } from './chat.prompt';
 
 export interface ConversaResumo {
@@ -16,6 +17,7 @@ export interface MensagemHist {
     content: string;
     criadaEm: string;
     sources: Source[] | null; // só nas mensagens do assistente; religa as citações [N]
+    trace: ChatTrace | null;
 }
 
 export async function listarConversasCom(db: SupabaseClient): Promise<ConversaResumo[]> {
@@ -59,19 +61,52 @@ export async function listarConversasCom(db: SupabaseClient): Promise<ConversaRe
 export async function carregarConversaCom(db: SupabaseClient, id: string): Promise<MensagemHist[]> {
     const { data, error } = await db
         .from('messages')
-        .select('id, role, content, created_at, sources')
+        .select(
+            'id, role, content, created_at, sources, cost_usd, provider, model_requested, model_effective, latency_ms',
+        )
         .eq('conversation_id', id)
         .order('created_at', { ascending: true });
 
     if (error) throw new Error(`carregarConversa falhou: ${error.message}`);
 
-    return (data ?? []).map((m) => ({
-        id: m.id as string,
-        role: m.role as 'user' | 'assistant',
-        content: m.content as string,
-        criadaEm: m.created_at as string,
-        sources: (m.sources as Source[] | null) ?? null,
-    }));
+    return (data ?? []).map((m) => {
+        const role = m.role as 'user' | 'assistant';
+        const sources = (m.sources as Source[] | null) ?? null;
+        const trace =
+            role === 'assistant'
+                ? {
+                      provider: (m.provider as string | null) ?? null,
+                      requestedModel: (m.model_requested as string | null) ?? null,
+                      effectiveModel: (m.model_effective as string | null) ?? null,
+                      costUsd:
+                          m.cost_usd === null || m.cost_usd === undefined
+                              ? null
+                              : Number(m.cost_usd),
+                      latencyMs:
+                          m.latency_ms === null || m.latency_ms === undefined
+                              ? null
+                              : Number(m.latency_ms),
+                      sourcesCount: sources?.length ?? 0,
+                      createdAt: m.created_at as string,
+                  }
+                : null;
+        const hasTrace =
+            !!trace &&
+            (trace.provider !== null ||
+                trace.requestedModel !== null ||
+                trace.effectiveModel !== null ||
+                trace.costUsd !== null ||
+                trace.latencyMs !== null);
+
+        return {
+            id: m.id as string,
+            role,
+            content: m.content as string,
+            criadaEm: m.created_at as string,
+            sources,
+            trace: hasTrace ? trace : null,
+        };
+    });
 }
 
 // Janela de conversa para os prompts (anáfora: "eles", "deles" só se resolvem

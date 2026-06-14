@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Archive, Lock } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -158,22 +158,24 @@ export function KanbanBoard() {
         tipo: 'concluir' | 'apagar';
         tarefa: Tarefa;
     } | null>(null);
+    const loadSeqRef = useRef(0);
 
-    useEffect(() => {
-        let cancelado = false;
+    const carregarTarefas = useCallback(() => {
+        const seq = ++loadSeqRef.current;
         void runClientAction({ area: 'kanban', action: 'listarTarefasPainel', meta: {} }, () =>
             listarTarefasPainel(),
         ).then((r) => {
-            if (cancelado || !r) return;
+            if (seq !== loadSeqRef.current || !r) return;
             setAbertas(r.abertas);
             setConcluidas(r.concluidas);
             setProjetos(r.projetos.map((p) => p.nome));
             setCorteSemana(Date.now() - 7 * 24 * 60 * 60 * 1000);
         });
-        return () => {
-            cancelado = true;
-        };
-    }, [workspaceVersion]);
+    }, []);
+
+    useEffect(() => {
+        carregarTarefas();
+    }, [workspaceVersion, carregarTarefas]);
 
     const abertasIds = new Set(abertas.map((t) => t.id));
     const visiveis = abertas.filter(

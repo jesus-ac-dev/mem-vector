@@ -1,6 +1,7 @@
 import { embedQuery } from '@/lib/embeddings';
 import { providerDoChatCom } from '@/lib/providers/factory';
 import { createClient } from '@/lib/supabase/server';
+import type { Provider } from '@/modules/definicoes/definicoes.schema';
 import {
     buildPrompt,
     relevantSources,
@@ -54,6 +55,8 @@ export interface ChatResult {
     answer: string;
     sources: Source[];
     costUsd: number | null; // providers fora do claude-cli não reportam custo
+    provider: Provider; // adapter que recebeu a chamada, não auto-relato
+    latencyMs: number;
     modelo?: string; // o modelo REAL que respondeu (prova, não auto-relato)
     modeloPedido?: string; // o que foi ENVIADO ao provider — a legenda compara (r12)
 }
@@ -231,9 +234,19 @@ export async function respond(
     // autor (destilação/contrato) continua claude — as tools e o envelope
     // estão afinados para ele.
     const { instancia, modeloPedido } = await providerDoChatCom(db);
+    const startedAt = Date.now();
     const { text, costUsd, model } = await instancia.gerar(
         buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
     );
+    const latencyMs = Date.now() - startedAt;
 
-    return { answer: text, sources, costUsd, modelo: model, modeloPedido };
+    return {
+        answer: text,
+        sources,
+        costUsd,
+        provider: instancia.nome,
+        latencyMs,
+        modelo: model,
+        modeloPedido,
+    };
 }

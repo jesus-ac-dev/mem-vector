@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Lock, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -107,22 +107,24 @@ export function TarefasPanel({
     const [filtroEstado, setFiltroEstado] = useState<string>('todos');
     const [filtroProjeto, setFiltroProjeto] = useState<string>('todos');
     const inputRef = useRef<HTMLInputElement>(null);
+    const loadSeqRef = useRef(0);
 
-    useEffect(() => {
-        let cancelado = false;
+    const carregarTarefas = useCallback(() => {
+        const seq = ++loadSeqRef.current;
         void runClientAction(
             { area: 'left-sidebar', action: 'listarTarefasPainel', meta: {} },
             () => listarTarefasPainel(),
         ).then((r) => {
-            if (cancelado || !r) return;
+            if (seq !== loadSeqRef.current || !r) return;
             setAbertas(r.abertas);
             setConcluidas(r.concluidas);
             setProjetos(r.projetos.map((p) => p.nome));
         });
-        return () => {
-            cancelado = true;
-        };
-    }, [workspaceVersion]);
+    }, []);
+
+    useEffect(() => {
+        carregarTarefas();
+    }, [workspaceVersion, carregarTarefas]);
 
     const inputAberto = criarAberto || editandoId !== null;
 
