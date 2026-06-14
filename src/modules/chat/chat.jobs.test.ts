@@ -26,4 +26,18 @@ describe('chat jobs', () => {
             daily: { dia: '2026-06-07', criado: false },
         });
     });
+
+    it('tolera o shape antigo {nota} de jobs persistidos antes do N-notas', () => {
+        expect(
+            parseDistillationJobResult({
+                nota: { slug: 's', title: 'S', criada: true },
+                daily: null,
+            }),
+        ).toEqual({ notas: [{ slug: 's', title: 'S', criada: true }], daily: null });
+
+        expect(parseDistillationJobResult({ nota: null, daily: null })).toEqual({
+            notas: [],
+            daily: null,
+        });
+    });
 });
