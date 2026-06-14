@@ -95,4 +95,30 @@ describe('edge estrutural daily→conversa (integração RLS)', () => {
             .maybeSingle();
         expect(edge.data?.to_id).toBe(CONVERSA_ID);
     }, 120_000);
+
+    it('grafoDadosCom materializa a conversa como nó ligado à daily', async () => {
+        const { grafoDadosCom } = await import('@/modules/knowledge/knowledge.service');
+        const { acrescentarAoDailyCom } = await import('@/modules/daily/daily.service');
+        const conv = await alice
+            .from('conversations')
+            .insert({ title: 'Conversa do grafo', owner_id: aliceId })
+            .select('id')
+            .single();
+        const convId = String(conv.data!.id);
+        await acrescentarAoDailyCom(alice, '- no conversa no grafo', '2099-01-01', convId);
+        const daily = await alice
+            .from('dailies')
+            .select('id')
+            .eq('owner_id', aliceId)
+            .eq('dia', '2099-01-01')
+            .single();
+        const dailyId = String(daily.data!.id);
+
+        const grafo = await grafoDadosCom(alice);
+        const noConversa = grafo.nodes.find((n) => n.id === convId);
+        expect(noConversa?.group).toBe('conversa');
+        expect(
+            grafo.links.some((l) => String(l.source) === dailyId && String(l.target) === convId),
+        ).toBe(true);
+    }, 120_000);
 });

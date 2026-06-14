@@ -85,7 +85,7 @@ const RAIO_REL = 4;
 // mudança reiniciava o layout ("explosão") e deixava arestas soltas.
 export function WorkspaceGraph() {
     const router = useRouter();
-    const { abrirFicheiro, ficheiroAtivo, workspaceVersion } = useWorkspace();
+    const { abrirFicheiro, abrirConversa, ficheiroAtivo, workspaceVersion } = useWorkspace();
     const { resolvedTheme } = useTheme();
     const containerRef = useRef<HTMLDivElement>(null);
     const fg2dRef: Ref2D = useRef(undefined);
@@ -129,6 +129,11 @@ export function WorkspaceGraph() {
     function abrirNo(node: object) {
         const n = node as NoGrafoView;
         if (n.group === 'fantasma') return; // não há nota para abrir
+        if (n.group === 'conversa') {
+            abrirConversa(n.id);
+            router.push('/chat');
+            return;
+        }
         if (n.group === 'daily') {
             abrirFicheiro({ tipo: 'daily', id: n.id, chave: n.slug, titulo: dataPt(n.title) });
         } else {

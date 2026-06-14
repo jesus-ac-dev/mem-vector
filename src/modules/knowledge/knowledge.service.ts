@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
 import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projector';
-import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT } from '@/lib/cores';
+import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT, COR_CONVERSA_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
 import { normalizarTags, propriedadesDoRow, type PropriedadesNota } from './knowledge.props';
@@ -973,15 +973,42 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         createdAt: String(d.created_at),
     }));
 
-    const nodes = [...nodesK, ...nodesD];
-    const idsValidos = new Set(nodes.map((n) => n.id));
-
-    // Arestas: knowledge + daily. Pendentes/arquivadas viram fantasmas.
+    // Arestas: knowledge + daily (inclui a edge estrutural daily→conversa).
+    // Pendentes/arquivadas viram fantasmas.
     const { data: ed, error: eErr } = await db
         .from('edges')
-        .select('from_id, to_id, to_slug')
+        .select('from_id, to_id, to_slug, kind')
         .in('from_type', ['knowledge', 'daily']);
     if (eErr) throw new Error(`grafo edges: ${eErr.message}`);
+
+    // Conversas na teia: nós das conversas-fonte ligadas por edges estruturais
+    // (kind='conversa'). Sem elas em idsValidos, o link viraria fantasma; com
+    // elas, a conversa é um nó real e clicável (abre a conversa no chat).
+    const conversaIds = [
+        ...new Set(
+            (ed ?? []).filter((e) => e.kind === 'conversa' && e.to_id).map((e) => String(e.to_id)),
+        ),
+    ];
+    let nodesC: GrafoNode[] = [];
+    if (conversaIds.length) {
+        const { data: convs } = await db
+            .from('conversations')
+            .select('id, title, created_at')
+            .in('id', conversaIds);
+        nodesC = (convs ?? []).map((c) => ({
+            id: String(c.id),
+            slug: String(c.id),
+            title: (c.title as string | null) ?? 'Conversa',
+            group: 'conversa',
+            color: COR_CONVERSA_DEFAULT,
+            size: 200,
+            createdAt: String(c.created_at),
+        }));
+    }
+
+    const nodes = [...nodesK, ...nodesD, ...nodesC];
+    const idsValidos = new Set(nodes.map((n) => n.id));
+
     // Arestas que tocam no Kernel saem com ele (um alvo no Kernel viraria
     // fantasma e o Kernel voltava ao grafo pela porta de trás).
     const { links, fantasmas } = montarArestasGrafo(
