@@ -168,7 +168,8 @@ export async function executarDestilacaoTurnoCom(
             nota,
             {
                 resumir: async () => resumoMd,
-                escrever: (linha) => acrescentarAoDailyCom(db, linha),
+                escrever: (linha) =>
+                    acrescentarAoDailyCom(db, linha, undefined, contexto?.conversationId),
             },
             contexto?.conversationId,
         );
