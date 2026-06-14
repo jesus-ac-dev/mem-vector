@@ -130,6 +130,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     const router = useRouter();
     const {
         abrirFicheiro,
+        abrirConversa,
         atualizarFicheiroAberto,
         fecharFicheiro,
         notificarWorkspaceMudou,
@@ -299,6 +300,14 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     async function handleInternalLink(href: string) {
         try {
             const url = new URL(href, 'http://mem-vector.local');
+            // Conversa (teia de memória): o [[conversa:<id>]] da daily abre a
+            // conversa no chat, não uma tab de ficheiro (não é knowledge/daily).
+            const mChat = /^\/chat\/(.+)$/.exec(url.pathname);
+            if (mChat) {
+                setWikilinkAmbiguo(null);
+                abrirConversa(decodeURIComponent(mChat[1]));
+                return;
+            }
             const mKnow = /^\/knowledge\/(.+)$/.exec(url.pathname);
             if (mKnow) {
                 const slug = decodeURIComponent(mKnow[1]);
