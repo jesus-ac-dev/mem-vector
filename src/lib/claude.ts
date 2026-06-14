@@ -31,6 +31,7 @@ const DISALLOWED_TOOLS = [
 export interface Generation {
     text: string;
     costUsd: number;
+    model?: string; // o modelo REAL do envelope (modelUsage) — prova, não auto-relato
 }
 
 export function claudeTimeoutMs(envValue = process.env.CLAUDE_TIMEOUT_MS): number {
@@ -73,7 +74,7 @@ export function createAsyncSemaphore(concurrency: number): AsyncSemaphore {
     };
 }
 
-export function buildClaudeArgs(): string[] {
+export function buildClaudeArgs(model?: string): string[] {
     return [
         '-p',
         '--input-format',
@@ -84,6 +85,8 @@ export function buildClaudeArgs(): string[] {
         '--system-prompt',
         SYSTEM_PROMPT,
         '--exclude-dynamic-system-prompt-sections',
+        // Modelo escolhido nas definições (#60); sem ele, o default da conta.
+        ...(model ? ['--model', model] : []),
         '--disallowedTools',
         ...DISALLOWED_TOOLS,
     ];
@@ -142,8 +145,8 @@ const claudeQueue = createAsyncSemaphore(claudeConcurrency());
 // Conduz o claude CLI (subscrição) num contexto mínimo: sem MCP, sem tools, cwd
 // limpa e system prompt próprio. O prompt segue por stdin para evitar limites de
 // argv; a fila impede processos Claude concorrentes por defeito.
-export function generate(prompt: string): Promise<Generation> {
-    return claudeQueue.run(() => runClaudeCli(prompt));
+export function generate(prompt: string, opts?: { model?: string }): Promise<Generation> {
+    return claudeQueue.run(() => runClaudeCli(prompt, { args: buildClaudeArgs(opts?.model) }));
 }
 
 export function generateAgentic(prompt: string, cfg: AgenticConfig): Promise<Generation> {
@@ -206,11 +209,19 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                 return;
             }
             try {
-                const envelope = JSON.parse(stdout) as { result?: string; total_cost_usd?: number };
+                const envelope = JSON.parse(stdout) as {
+                    result?: string;
+                    total_cost_usd?: number;
+                    modelUsage?: Record<string, unknown>;
+                };
+                // O modelo REAL vem do envelope (#60 r8): o auto-relato dos
+                // modelos é mentiroso — isto é a prova de qual respondeu.
+                const modelo = Object.keys(envelope.modelUsage ?? {})[0];
                 finish(() =>
                     resolve({
                         text: envelope.result ?? '',
                         costUsd: Number(envelope.total_cost_usd ?? 0),
+                        model: modelo,
                     }),
                 );
             } catch {

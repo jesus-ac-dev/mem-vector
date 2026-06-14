@@ -3,17 +3,51 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { X } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
 import { ask, processarDestilacaoJob, carregarConversaAction } from '@/modules/chat/chat.actions';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
+import {
+    traceBadgeLabel,
+    traceModelEvidence,
+    traceProviderLabel,
+    type ChatTrace,
+} from '@/modules/chat/chat.trace';
 import { Button } from '@/components/ui/button';
 import { isUnexpectedServerActionResponse, logClientError } from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
+import { runClientAction } from '@/lib/client-error-log';
+import { gravarEscolhaChat, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
+import { ProviderIcon } from '@/components/layout/provider-icon';
+import {
+    ESFORCOS,
+    MODELOS_SUGERIDOS,
+    PROVIDER_LABEL,
+    PROVIDERS,
+    type AgenteVista,
+    type DefinicoesVista,
+    type Esforco,
+    type Provider,
+} from '@/modules/definicoes/definicoes.schema';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface Message {
     id: number;
@@ -26,6 +60,7 @@ interface Message {
     distillationJobId?: string;
     destilando?: boolean;
     destilacaoErro?: boolean;
+    trace?: ChatTrace | null;
 }
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
@@ -83,6 +118,326 @@ function DailyEscritoChip({ daily }: { daily: DailyEscrito }) {
     );
 }
 
+function formatarCusto(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'não reportado pelo provider';
+    return `$${value.toFixed(4)}`;
+}
+
+function formatarLatencia(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'não reportada pelo provider';
+    if (value < 1000) return `${value} ms`;
+    return `${(value / 1000).toFixed(1)} s`;
+}
+
+function formatarHora(value: string | null | undefined): string {
+    if (!value) return 'agora';
+    return new Intl.DateTimeFormat('pt-PT', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(new Date(value));
+}
+
+function TraceStateIcon({ trace }: { trace: ChatTrace | null | undefined }) {
+    if (!trace) return <Info className="h-3.5 w-3.5" />;
+    const evidence = traceModelEvidence(trace);
+    if (evidence.state === 'divergente') return <AlertTriangle className="h-3.5 w-3.5" />;
+    if (evidence.state === 'confirmado') return <CheckCircle2 className="h-3.5 w-3.5" />;
+    return <Info className="h-3.5 w-3.5" />;
+}
+
+function TraceChip({
+    trace,
+    fallback,
+    onClick,
+}: {
+    trace: ChatTrace | null;
+    fallback: { provider: Provider; modelo?: string };
+    onClick: () => void;
+}) {
+    const label = trace
+        ? traceBadgeLabel(trace)
+        : `${PROVIDER_LABEL[fallback.provider]} · ${fallback.modelo ?? 'default'}`;
+    const evidence = trace ? traceModelEvidence(trace) : null;
+
+    return (
+        <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClick}
+            title="Ver trace da conversa"
+            className={cn(
+                'h-6 min-w-0 max-w-full justify-start gap-1.5 px-2 text-[0.7rem] font-normal',
+                evidence?.state === 'divergente'
+                    ? 'text-destructive hover:text-destructive'
+                    : 'text-muted-foreground hover:text-foreground',
+            )}
+        >
+            <Activity className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{label}</span>
+            <TraceStateIcon trace={trace} />
+        </Button>
+    );
+}
+
+const PROVIDERS_COM_ESFORCO: Provider[] = ['codex'];
+
+function selectTriggerClass(className?: string) {
+    return cn(
+        'h-6 w-auto min-w-0 flex-row-reverse justify-end gap-1 border-none bg-transparent px-1 text-[0.7rem] text-muted-foreground shadow-none focus:ring-0',
+        className,
+    );
+}
+
+function agenteDefault(): AgenteVista {
+    return { ativo: true, modo: 'cli', temApiKey: false };
+}
+
+function ChatControls({
+    defs,
+    lastTrace,
+    onTraceClick,
+    onEscolha,
+}: {
+    defs: DefinicoesVista | null;
+    lastTrace: ChatTrace | null;
+    onTraceClick: () => void;
+    onEscolha: (defs: DefinicoesVista) => void;
+}) {
+    const provider = defs?.chatProvider ?? 'claude';
+    const atual = defs?.agentes[provider] ?? agenteDefault();
+    const modelos = defs
+        ? atual.modelos?.length
+            ? atual.modelos
+            : MODELOS_SUGERIDOS[provider]
+        : [];
+    const ativos = defs ? PROVIDERS.filter((p) => defs.agentes[p]?.ativo) : [];
+
+    function escolher(campos: {
+        provider?: Provider;
+        modelo?: string | null;
+        esforco?: Esforco | null;
+    }) {
+        if (!defs) return;
+        const proximoProvider = campos.provider ?? defs.chatProvider;
+        const proximoAtual = defs.agentes[proximoProvider] ?? agenteDefault();
+        const novoAgente: AgenteVista = {
+            ...proximoAtual,
+            ...(campos.modelo !== undefined ? { modelo: campos.modelo ?? undefined } : {}),
+            ...(campos.esforco !== undefined ? { esforco: campos.esforco ?? undefined } : {}),
+        };
+        const novasDefs: DefinicoesVista = {
+            ...defs,
+            chatProvider: proximoProvider,
+            agentes: { ...defs.agentes, [proximoProvider]: novoAgente },
+        };
+        onEscolha(novasDefs);
+        void runClientAction({ area: 'chat-controls', action: 'gravarEscolhaChat' }, () =>
+            gravarEscolhaChat({
+                provider: proximoProvider,
+                modelo: campos.modelo,
+                esforco: campos.esforco,
+            }),
+        );
+    }
+
+    return (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-muted-foreground">
+            <TraceChip
+                trace={lastTrace}
+                fallback={{ provider, modelo: atual.modelo }}
+                onClick={onTraceClick}
+            />
+
+            <Select
+                value={provider}
+                onValueChange={(v) => escolher({ provider: v as Provider })}
+                disabled={!defs}
+            >
+                <SelectTrigger className={selectTriggerClass('max-w-[9rem]')}>
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {(ativos.length ? ativos : (['claude'] as Provider[])).map((p) => (
+                        <SelectItem key={p} value={p}>
+                            <span className="flex items-center gap-2">
+                                <ProviderIcon provider={p} className="h-5 w-5" />
+                                {PROVIDER_LABEL[p]}
+                            </span>
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            <Select
+                value={atual.modelo ?? 'default'}
+                onValueChange={(m) => escolher({ modelo: m === 'default' ? null : m })}
+                disabled={!defs}
+            >
+                <SelectTrigger
+                    title={
+                        modelos.length
+                            ? 'Modelo que responde ao chat'
+                            : 'Sem lista descoberta; usar default do provider'
+                    }
+                    className={selectTriggerClass('max-w-[12rem]')}
+                >
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="default">modelo default</SelectItem>
+                    {modelos.map((m) => (
+                        <SelectItem key={m} value={m}>
+                            {m}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            {PROVIDERS_COM_ESFORCO.includes(provider) && (
+                <Select
+                    value={atual.esforco ?? 'default'}
+                    onValueChange={(v) =>
+                        escolher({ esforco: v === 'default' ? null : (v as Esforco) })
+                    }
+                    disabled={!defs}
+                >
+                    <SelectTrigger
+                        title="Esforço de raciocínio"
+                        className={selectTriggerClass('max-w-[8rem]')}
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="default">esforço default</SelectItem>
+                        {ESFORCOS.map((e) => (
+                            <SelectItem key={e} value={e}>
+                                {e}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+        </div>
+    );
+}
+
+function TraceInspector({
+    open,
+    onOpenChange,
+    messages,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    messages: Message[];
+}) {
+    const turnos = messages.reduce<Array<{ message: Message; pergunta?: string }>>(
+        (acc, message, index) => {
+            if (message.role !== 'assistant') return acc;
+            const pergunta = [...messages.slice(0, index)]
+                .reverse()
+                .find((m) => m.role === 'user')?.content;
+            acc.push({ message, pergunta });
+            return acc;
+        },
+        [],
+    );
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="left-auto right-0 top-0 flex h-dvh w-[min(30rem,100vw)] max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none p-0 sm:rounded-none">
+                <DialogHeader className="border-b px-4 py-3">
+                    <DialogTitle className="flex items-center gap-2 text-sm">
+                        <Radio className="h-4 w-4" />
+                        Trace da conversa
+                    </DialogTitle>
+                    <DialogDescription>
+                        Provider, modelo e sinais técnicos guardados por resposta.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto">
+                    {turnos.length === 0 ? (
+                        <p className="px-4 py-6 text-sm text-muted-foreground">
+                            Ainda não há chamadas de modelo nesta conversa.
+                        </p>
+                    ) : (
+                        <div className="divide-y">
+                            {turnos.map(({ message, pergunta }, index) => {
+                                const trace = message.trace;
+                                const evidence = trace ? traceModelEvidence(trace) : null;
+                                return (
+                                    <section key={message.id} className="space-y-3 px-4 py-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                    Turno {index + 1}
+                                                </p>
+                                                <p className="mt-1 line-clamp-2 text-sm">
+                                                    {pergunta ?? 'Pergunta indisponível'}
+                                                </p>
+                                            </div>
+                                            <span
+                                                className={cn(
+                                                    'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
+                                                    evidence?.state === 'divergente'
+                                                        ? 'border-destructive text-destructive'
+                                                        : 'border-border text-muted-foreground',
+                                                )}
+                                            >
+                                                <TraceStateIcon trace={trace} />
+                                                {evidence?.label ?? 'trace indisponível'}
+                                            </span>
+                                        </div>
+
+                                        <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-xs">
+                                            <dt className="text-muted-foreground">provider</dt>
+                                            <dd>{traceProviderLabel(trace?.provider)}</dd>
+                                            <dt className="text-muted-foreground">modelo pedido</dt>
+                                            <dd>
+                                                {trace?.requestedModel ?? 'default do provider'}
+                                            </dd>
+                                            <dt className="text-muted-foreground">
+                                                modelo efetivo
+                                            </dt>
+                                            <dd>
+                                                {trace?.effectiveModel ??
+                                                    'não reportado pelo provider'}
+                                            </dd>
+                                            <dt className="text-muted-foreground">fontes</dt>
+                                            <dd>
+                                                {trace?.sourcesCount ??
+                                                    message.sources?.length ??
+                                                    0}
+                                            </dd>
+                                            <dt className="text-muted-foreground">latência</dt>
+                                            <dd className="inline-flex items-center gap-1">
+                                                <Clock3 className="h-3 w-3" />
+                                                {formatarLatencia(trace?.latencyMs)}
+                                            </dd>
+                                            <dt className="text-muted-foreground">custo</dt>
+                                            <dd>{formatarCusto(trace?.costUsd)}</dd>
+                                            <dt className="text-muted-foreground">hora</dt>
+                                            <dd>{formatarHora(trace?.createdAt)}</dd>
+                                            <dt className="text-muted-foreground">job</dt>
+                                            <dd>
+                                                {trace?.distillationJobId
+                                                    ? trace.distillationJobId.slice(0, 8)
+                                                    : (message.distillationJobId?.slice(0, 8) ??
+                                                      'não ligado')}
+                                            </dd>
+                                        </dl>
+                                    </section>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 // Coluna do chat, reutilizável: página /chat (coluna 50/50) e rodapé do
 // kanban (#58 — visão fechada 2026-06-05: em modo kanban o chat desce para
 // a faixa inferior, ao nível do grafo e do calendário). Em rodapé esconde o
@@ -93,12 +448,26 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [pending, setPending] = useState(false);
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
-    const [lastCost, setLastCost] = useState<number | null>(null);
+    const [lastTrace, setLastTrace] = useState<ChatTrace | null>(null);
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
     const bottomRef = useRef<HTMLDivElement>(null);
     const { conversaAberta, abrirConversa, fecharChat, notificarWorkspaceMudou } = useWorkspace();
     const conversaCarregadaRef = useRef<string | null>(null);
+    // Provider/modelo do chat (#60): controlos inline abaixo da textarea.
+    const [defsChat, setDefsChat] = useState<DefinicoesVista | null>(null);
+    const [traceAberto, setTraceAberto] = useState(false);
+
+    useEffect(() => {
+        let cancelado = false;
+        void runClientAction({ area: 'chat', action: 'lerDefinicoes' }, lerDefinicoes).then((d) => {
+            if (cancelado || !d) return;
+            setDefsChat(d);
+        });
+        return () => {
+            cancelado = true;
+        };
+    }, []);
 
     // Mantém a vista colada ao fundo (mensagens crescem de baixo para cima).
     useEffect(() => {
@@ -121,8 +490,11 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                     content: m.content,
                     // Religa as citações [N] e mostra a proveniência na conversa reaberta.
                     sources: m.sources ?? undefined,
+                    trace: m.trace,
                 })),
             );
+            const ultimoTrace = [...msgs].reverse().find((m) => m.trace)?.trace ?? null;
+            setLastTrace(ultimoTrace);
         }).catch(() => {
             // on failure, don't half-load
         });
@@ -150,8 +522,18 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 conversaCarregadaRef.current = res.conversationId;
                 abrirConversa(res.conversationId);
             }
-            setLastCost(res.costUsd);
             asstMsgId = nextIdRef.current++;
+            const trace: ChatTrace = {
+                provider: res.provider,
+                requestedModel: res.modeloPedido ?? null,
+                effectiveModel: res.modelo ?? null,
+                costUsd: res.costUsd,
+                latencyMs: res.latencyMs,
+                sourcesCount: res.sources.length,
+                createdAt: new Date().toISOString(),
+                distillationJobId: res.distillationJobId,
+            };
+            setLastTrace(trace);
             setMessages((prev) => [
                 ...prev,
                 {
@@ -161,6 +543,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                     sources: res.sources,
                     distillationJobId: res.distillationJobId,
                     destilando: true,
+                    trace,
                 },
             ]);
             setPending(false);
@@ -298,11 +681,6 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             </div>
 
             {error && <p className="shrink-0 text-sm text-destructive">{error}</p>}
-            {lastCost !== null && (
-                <p className="shrink-0 text-xs text-muted-foreground">
-                    último custo: ${lastCost.toFixed(4)}
-                </p>
-            )}
 
             <div className="flex shrink-0 gap-2">
                 <Textarea
@@ -319,6 +697,13 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                     Enviar
                 </Button>
             </div>
+            <ChatControls
+                defs={defsChat}
+                lastTrace={lastTrace}
+                onTraceClick={() => setTraceAberto(true)}
+                onEscolha={setDefsChat}
+            />
+            <TraceInspector open={traceAberto} onOpenChange={setTraceAberto} messages={messages} />
         </div>
     );
 }

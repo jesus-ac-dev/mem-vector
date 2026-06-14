@@ -73,7 +73,7 @@ Versao              { id: string; contentMd: string; author: string; createdAt: 
 4. `acrescentarAoDaily(linha, dia?)` resolve `dia` para hoje em `Europe/Lisbon` se omitido (`hojeLisboa()` via `Intl.DateTimeFormat('sv-SE', ...)`).
 5. Chama a RPC `append_daily_entry(dia, linha)`, que serializa por `(owner,dia)`, cria ou atualiza `dailies` e insere a versão em `file_versions` no mesmo statement transacional.
 6. Enfileira e processa o projector `agent_jobs(type='derived_index_entity')`, que reindexa chunks/embeddings e regenera edges dos `[[wikilinks]]` encontrados no daily.
-8. Devolve `{ dia, criado }`.
+7. Devolve `{ dia, criado }`.
 
 ## Ligações
 

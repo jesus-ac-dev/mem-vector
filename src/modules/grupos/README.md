@@ -10,10 +10,10 @@
 
 ## Ficheiros
 
-| Ficheiro | Responsabilidade |
-|---|---|
-| `grupos.schema.ts` | Schemas Zod (`NovoGrupoSchema`, `ConviteSchema`) e tipos TypeScript (`Grupo`, `ConvitePendente`) |
-| `grupos.service.ts` | Queries de leitura autenticadas: `listarMeusGrupos`, `membros`, `convitesParaMim` |
+| Ficheiro            | Responsabilidade                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `grupos.schema.ts`  | Schemas Zod (`NovoGrupoSchema`, `ConviteSchema`) e tipos TypeScript (`Grupo`, `ConvitePendente`)              |
+| `grupos.service.ts` | Queries de leitura autenticadas: `listarMeusGrupos`, `membros`, `convitesParaMim`                             |
 | `grupos.actions.ts` | Server Actions (Next.js `'use server'`): `criarGrupo`, `convidar`, `aceitarConvite`, `recusarConvite`, `sair` |
 
 ## Modelo de dados
@@ -34,10 +34,10 @@ grupo_convites
 
 **Funções SECURITY DEFINER** (migração `20260603140000_grupos_protected.sql`):
 
-| Função | Assinatura | Papel |
-|---|---|---|
-| `meus_grupos()` | `() → setof uuid` | Devolve os `grupo_id` do utilizador autenticado; usada por todas as policies `protected`. `search_path=''` |
-| `meu_email()` | `() → text` | Devolve o email do utilizador (auth.users não é legível em contexto invoker); usada na policy de select dos convites. `search_path=''` |
+| Função                              | Assinatura              | Papel                                                                                                                                                                  |
+| ----------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `meus_grupos()`                     | `() → setof uuid`       | Devolve os `grupo_id` do utilizador autenticado; usada por todas as policies `protected`. `search_path=''`                                                             |
+| `meu_email()`                       | `() → text`             | Devolve o email do utilizador (auth.users não é legível em contexto invoker); usada na policy de select dos convites. `search_path=''`                                 |
 | `criar_grupo(p_nome, p_descricao?)` | `(text, text) → grupos` | Insere o grupo e adiciona o criador como membro numa única transação (SECURITY DEFINER evita a race condition onde o criador ainda não é membro no momento do INSERT). |
 
 ## API principal (exports)
@@ -82,11 +82,11 @@ Todas as actions chamam `revalidatePath('/grupos')` no final.
 
 ### Tabelas de grupos
 
-| Tabela | SELECT | INSERT | UPDATE | DELETE |
-|---|---|---|---|---|
-| `grupos` | membros do grupo (`meus_grupos()`) | via `criar_grupo()` SECURITY DEFINER | — | — |
-| `grupo_membros` | membros dos meus grupos | só `user_id = auth.uid()` (auto-adição) | — | só `user_id = auth.uid()` (sair) |
-| `grupo_convites` | para o meu email **ou** dos meus grupos | membro do grupo (`convidado_por = uid()`) | só o convidado (`email = meu_email()`) | — |
+| Tabela           | SELECT                                  | INSERT                                    | UPDATE                                 | DELETE                           |
+| ---------------- | --------------------------------------- | ----------------------------------------- | -------------------------------------- | -------------------------------- |
+| `grupos`         | membros do grupo (`meus_grupos()`)      | via `criar_grupo()` SECURITY DEFINER      | —                                      | —                                |
+| `grupo_membros`  | membros dos meus grupos                 | só `user_id = auth.uid()` (auto-adição)   | —                                      | só `user_id = auth.uid()` (sair) |
+| `grupo_convites` | para o meu email **ou** dos meus grupos | membro do grupo (`convidado_por = uid()`) | só o convidado (`email = meu_email()`) | —                                |
 
 ### RLS `protected` colaborativa (padrão por-comando)
 

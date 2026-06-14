@@ -55,6 +55,7 @@ flowchart TD
 | **chat** | Pipeline RAG + a destilação proativa (assíncrona) que faz o agente escrever | [README](../src/modules/chat/README.md) |
 | **tarefas** | Tarefas do utilizador; o exemplo vivo do padrão feature-first | [README](../src/modules/tarefas/README.md) |
 | **projetos** | Projetos reais — toda a tarefa ancora a um; "Pessoal" = projeto-vida | [README](../src/modules/projetos/README.md) |
+| **definicoes** | Opções por utilizador (mega modal): método de destilação + módulos ativos | [README](../src/modules/definicoes/README.md) |
 | **grupos** | Grupos de pares — a base da visibilidade `protected` | [README](../src/modules/grupos/README.md) |
 | **auth** | Supabase Auth — a fundação do `auth.uid()` / RLS | [README](../src/modules/auth/README.md) |
 
@@ -185,6 +186,22 @@ alta vermelho. O agente também define `dataFim` quando a conversa traz prazo
 ("este fim de semana" = domingo): o envelope one-shot e a tool `criar_tarefa`
 ganham o campo, e os prompts dos dois caminhos levam a data de hoje (sem ela o
 modelo não resolve prazos relativos).
+
+**Definições (#60):** mega modal aberta pelo badge do user — menu lateral
+(Comportamento, Agentes, Módulos; módulo ativo ganha grupo com página
+própria), forms à direita, gravação imediata. **Comportamento** acumula o
+COMO do agente-autor (método de destilação hoje; proatividade/estilo/
+personalidade a entrar); **Agentes** declara os providers/orquestradores
+(claude/codex/gemini/ollama, cli|api + key, modelo e esforço) e o
+**FactoryProvider** (`src/lib/providers`) fá-los reais: **a resposta do chat
+sai do provider escolhido** (`chat_provider`; claude/cli como rede de
+segurança), com link de troca sobre o botão Enviar e "Testar ligação" por
+provider. Keys cifradas at rest (AES-256-GCM, `MEMVECTOR_KEYS_SECRET`) e
+nunca devolvidas ao browser. O agente-autor (destilação) continua claude. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
+default — decisão #38; agentic opt-in); a env flag continua como override para
+evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e
+Emails (reservado).
 
 **Kanban visual (#58):** rota `/kanban` (ícone no ribbon entre Chat e
 Tarefas), as tarefas pelas 6 colunas canónicas. Drag entre colunas =

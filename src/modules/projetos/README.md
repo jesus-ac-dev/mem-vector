@@ -11,11 +11,11 @@ contrário. Conceptualmente liga à pasta `projects/` do vault MythosEngine.
 
 ## Ficheiros
 
-| Ficheiro | Responsabilidade |
-|---|---|
-| `projetos.schema.ts` | `NovoProjetoSchema` (Zod), `PROJETO_PESSOAL`, tipo `Projeto` |
+| Ficheiro              | Responsabilidade                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `projetos.schema.ts`  | `NovoProjetoSchema` (Zod), `PROJETO_PESSOAL`, tipo `Projeto`                            |
 | `projetos.service.ts` | listar/criar + **`resolverProjetoCom`** (a regra central) + `garantirPessoalCom` (seed) |
-| `projetos.actions.ts` | Server Actions finas (listar, criar) |
+| `projetos.actions.ts` | Server Actions finas (listar, criar)                                                    |
 
 UI: secção root "Projetos" no explorer (como o Kernel) — **cada projeto é uma PASTA
 real do knowledge** (retificação do Carlos): notas dentro, drag, e o agente lê/continua

@@ -1,10 +1,10 @@
 # tarefas
 
-Ultima atualizacao: 2026-06-10
+Ultima atualizacao: 2026-06-14
 
 ## Retoma rapida
 
-- Branch: `fix/smoke-tests-and-others`.
+- Branch: `feat/definicoes`.
 - Objetivo ativo: **#19 FECHADO 2026-06-10 — M0 fechado.** Próxima frente: #21 (placement de tarefas na destilação). Branch `fix/smoke-tests-and-others` pronto para PR/merge (decisão Carlos).
 - App local: `http://localhost:2500`; Supabase local esperado em `npm run db:status` (`mem-vector`, portas 560xx).
 - Ultima validação 2026-06-10: `npm run verify` (36 files / 226 tests), `npx playwright test e2e/home.spec.ts` e `npm run build` verdes.
@@ -29,6 +29,9 @@ Sem pendentes de média.
 
 ## Concluidas Recentemente
 
+- [x] **Chat trace — provider/modelo auditável** — cada resposta guarda `provider`, modelo pedido, modelo efetivo, latência, custo e fontes em `messages`; o chat mostra um chip junto à textarea e um inspector lateral com timeline da conversa. Divergência de modelo aparece como aviso informativo, sem bloquear a resposta. Ref: `src/modules/chat/chat.service.ts`, `src/modules/chat/chat.actions.ts`, `src/modules/chat/chat.conversas.ts`, `src/components/layout/chat-content.tsx`, `supabase/migrations/20260612230000_messages_model_trace.sql`.
+- [x] **Chat composer — controlos inline** — o chip do trace e a escolha de provider/modelo/esforço passaram para uma faixa inline debaixo da textarea; a mini-modal de escolha deixou de ser usada no composer. Rótulos do inspector afinados: `modelo pedido`, `modelo efetivo` e `não reportado pelo provider`. Ref: `src/components/layout/chat-content.tsx`, `src/modules/chat/chat.trace.ts`.
+- [x] **Kanban — refresh após tarefas criadas pelo chat** — loaders do kanban e do painel de tarefas ignoram respostas antigas fora de ordem, evitando que um load stale sobrescreva a lista nova depois da destilação criar tarefas. Ref: `src/components/layout/kanban-board.tsx`, `src/components/layout/tarefas-panel.tsx`.
 - [x] **FilePane — leitura de ficheiro por API estável** — o pane deixou de depender de Server Action chamada em `useEffect` para carregar conteúdo; nova rota `GET /api/file` devolve knowledge/daily por `id` quando existe, mantendo `lerFicheiro` como compatibilidade. Adicionado retry/helper testado para erro transiente de Server Action e smoke autenticado sem logs client-side. Ref: `src/app/api/file/route.ts`, `src/modules/workspace/workspace.files.ts`, `src/components/layout/file-pane.tsx`, `src/lib/client-error-log.test.ts`.
 - [x] **Client error logging** — adicionado log estruturado para `error`/`unhandledrejection` e wrapper `runClientAction` nas server actions/handlers async principais. Logs saem como `[mem-vector/client-error]` e ficam em `window.__MEM_VECTOR_ERRORS__` para debug rápido. Ref: `src/lib/client-error-log.ts`, `src/components/layout/client-error-listener.tsx`.
 - [x] **Explorer — smokes de árvore fechados** — headers `16px`, itens de 1.º nível `36px`, filhos `64px`; criar pasta/nota abre `Knowledge` ou pasta selecionada quando collapsed; pasta selecionada usa border e ficheiro selecionado usa background; drag/drop move notas e pastas entre pastas/raiz; drop no Archive marca a pasta/subpastas como arquivadas, arquiva as notas descendentes e não devolve ficheiros à raiz. Ref: `src/components/layout/file-explorer.tsx`, `src/components/layout/workspace-shell.tsx`, `src/modules/folders/folders.service.ts`.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Archive, Lock } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -152,33 +152,43 @@ export function KanbanBoard() {
     const [archiveOver, setArchiveOver] = useState(false);
     // Hover no cadeado destaca a tarefa-mãe (a dependência que bloqueia).
     const [maeDestacada, setMaeDestacada] = useState<string | null>(null);
+    const [corteSemana, setCorteSemana] = useState(0);
     const [erro, setErro] = useState<string | null>(null);
     const [confirmar, setConfirmar] = useState<{
         tipo: 'concluir' | 'apagar';
         tarefa: Tarefa;
     } | null>(null);
+    const loadSeqRef = useRef(0);
 
-    useEffect(() => {
-        let cancelado = false;
+    const carregarTarefas = useCallback(() => {
+        const seq = ++loadSeqRef.current;
         void runClientAction({ area: 'kanban', action: 'listarTarefasPainel', meta: {} }, () =>
             listarTarefasPainel(),
         ).then((r) => {
-            if (cancelado || !r) return;
+            if (seq !== loadSeqRef.current || !r) return;
             setAbertas(r.abertas);
             setConcluidas(r.concluidas);
             setProjetos(r.projetos.map((p) => p.nome));
+            setCorteSemana(Date.now() - 7 * 24 * 60 * 60 * 1000);
         });
-        return () => {
-            cancelado = true;
-        };
-    }, [workspaceVersion]);
+    }, []);
+
+    useEffect(() => {
+        carregarTarefas();
+    }, [workspaceVersion, carregarTarefas]);
 
     const abertasIds = new Set(abertas.map((t) => t.id));
     const visiveis = abertas.filter(
         (t) => filtroProjeto === 'todos' || t.projeto === filtroProjeto,
     );
+    // Terminado mostra só a última semana (#60 r2, pedido do Carlos): num mês
+    // a coluna virava um scroll gigante. O histórico completo continua no
+    // painel ("Ver concluídas") e no daily. O corte calcula-se no load (o
+    // lint da casa não deixa Date.now() no render).
     const concluidasVisiveis = concluidas.filter(
-        (t) => filtroProjeto === 'todos' || t.projeto === filtroProjeto,
+        (t) =>
+            (filtroProjeto === 'todos' || t.projeto === filtroProjeto) &&
+            (!t.concluidaEm || new Date(t.concluidaEm).getTime() >= corteSemana),
     );
     const grupos = agruparPorEstado(visiveis, concluidasVisiveis);
 

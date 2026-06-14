@@ -1,6 +1,7 @@
 import { embedQuery } from '@/lib/embeddings';
-import { generate } from '@/lib/claude';
+import { providerDoChatCom } from '@/lib/providers/factory';
 import { createClient } from '@/lib/supabase/server';
+import type { Provider } from '@/modules/definicoes/definicoes.schema';
 import {
     buildPrompt,
     relevantSources,
@@ -53,7 +54,11 @@ export interface TurnoDestilado {
 export interface ChatResult {
     answer: string;
     sources: Source[];
-    costUsd: number;
+    costUsd: number | null; // providers fora do claude-cli não reportam custo
+    provider: Provider; // adapter que recebeu a chamada, não auto-relato
+    latencyMs: number;
+    modelo?: string; // o modelo REAL que respondeu (prova, não auto-relato)
+    modeloPedido?: string; // o que foi ENVIADO ao provider — a legenda compara (r12)
 }
 
 interface DestilDeps {
@@ -224,9 +229,24 @@ export async function respond(
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
     // da resposta (não-fatal: sem Kernel, prompt igual ao de sempre).
     const kernel = await blocoKernelCom(db);
-    const { text, costUsd } = await generate(
+    // A mudança que a interface provoca (#60 r3): a resposta do chat sai do
+    // provider/modelo escolhido nas definições (FactoryProvider); o agente-
+    // autor (destilação/contrato) continua claude — as tools e o envelope
+    // estão afinados para ele.
+    const { instancia, modeloPedido } = await providerDoChatCom(db);
+    const startedAt = Date.now();
+    const { text, costUsd, model } = await instancia.gerar(
         buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
     );
+    const latencyMs = Date.now() - startedAt;
 
-    return { answer: text, sources, costUsd };
+    return {
+        answer: text,
+        sources,
+        costUsd,
+        provider: instancia.nome,
+        latencyMs,
+        modelo: model,
+        modeloPedido,
+    };
 }

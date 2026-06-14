@@ -74,6 +74,10 @@ export async function ask(
             role: 'assistant',
             content: result.answer,
             cost_usd: result.costUsd,
+            provider: result.provider,
+            model_requested: result.modeloPedido,
+            model_effective: result.modelo,
+            latency_ms: result.latencyMs,
             // Guardar as fontes religa as citações [N] quando a conversa é reaberta.
             sources: result.sources,
         })
