@@ -11,6 +11,7 @@ import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/c
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import {
     formatarTokens,
+    totaisDoTrace,
     traceBadgeLabel,
     traceModelEvidence,
     traceProviderLabel,
@@ -363,6 +364,7 @@ function TraceInspector({
         },
         [],
     );
+    const totais = totaisDoTrace(turnos.map((t) => t.message.trace));
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -461,6 +463,25 @@ function TraceInspector({
                         </div>
                     )}
                 </div>
+                {turnos.length > 0 && (
+                    // Footer fixo (pedido do Carlos): os turnos fazem scroll, o
+                    // total da conversa fica sempre à vista.
+                    <div className="border-t px-4 py-3 text-xs">
+                        <p className="font-medium uppercase text-muted-foreground">
+                            Total da conversa
+                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-3">
+                            <span>
+                                {formatarTokens(
+                                    totais.tokensIn,
+                                    totais.tokensCache,
+                                    totais.tokensOut,
+                                )}
+                            </span>
+                            <span className="font-medium">{formatarCusto(totais.custoUsd)}</span>
+                        </div>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );

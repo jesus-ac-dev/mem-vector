@@ -60,6 +60,31 @@ export function formatarTokens(
     return `${semIn ? '—' : tokensIn} in · ${semOut ? '—' : tokensOut} out`;
 }
 
+export interface TraceTotais {
+    custoUsd: number | null;
+    tokensIn: number | null;
+    tokensCache: number | null;
+    tokensOut: number | null;
+}
+
+function somar(valores: (number | null | undefined)[]): number | null {
+    const numeros = valores.filter((n): n is number => typeof n === 'number' && Number.isFinite(n));
+    return numeros.length ? numeros.reduce((a, b) => a + b, 0) : null;
+}
+
+// Totalizador da conversa (#65, pedido do Carlos): soma custo e tokens de todos
+// os turnos para o footer fixo do trace. Soma só o que foi reportado — null se
+// nenhum turno o trouxe (turnos pré-feature não estragam o total).
+export function totaisDoTrace(traces: (ChatTrace | null | undefined)[]): TraceTotais {
+    const t = traces.filter((x): x is ChatTrace => !!x);
+    return {
+        custoUsd: somar(t.map((x) => x.costUsd)),
+        tokensIn: somar(t.map((x) => x.tokensIn)),
+        tokensCache: somar(t.map((x) => x.tokensCache)),
+        tokensOut: somar(t.map((x) => x.tokensOut)),
+    };
+}
+
 export function traceModelEvidence(trace: ChatTrace): TraceModelEvidence {
     const state = confirmacaoModelo(
         trace.requestedModel ?? undefined,

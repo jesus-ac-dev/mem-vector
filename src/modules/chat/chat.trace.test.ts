@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatarTokens, traceBadgeLabel, traceModelEvidence, type ChatTrace } from './chat.trace';
+import {
+    formatarTokens,
+    totaisDoTrace,
+    traceBadgeLabel,
+    traceModelEvidence,
+    type ChatTrace,
+} from './chat.trace';
 
 describe('chat trace', () => {
     it('mostra provider e modelo efetivo quando o provider reporta o modelo real', () => {
@@ -50,6 +56,43 @@ describe('chat trace', () => {
         expect(traceModelEvidence(trace)).toEqual({
             state: 'nao-reportado',
             label: 'provider não reportou modelo efetivo',
+        });
+    });
+});
+
+describe('totaisDoTrace (#65 — totalizador da conversa)', () => {
+    it('soma custo e tokens (in/cache/out) de todos os turnos', () => {
+        const turnos: ChatTrace[] = [
+            { costUsd: 0.1054, tokensIn: 23952, tokensCache: 15182, tokensOut: 969 },
+            { costUsd: 0.1124, tokensIn: 23545, tokensCache: 14775, tokensOut: 1412 },
+        ];
+        expect(totaisDoTrace(turnos)).toEqual({
+            custoUsd: 0.1054 + 0.1124,
+            tokensIn: 23952 + 23545,
+            tokensCache: 15182 + 14775,
+            tokensOut: 969 + 1412,
+        });
+    });
+
+    it('ignora turnos sem valor (pré-feature) e dá null se nenhum reportou', () => {
+        const turnos: ChatTrace[] = [
+            { costUsd: 0.2, tokensIn: null, tokensCache: null, tokensOut: null },
+            { costUsd: null, tokensIn: 100, tokensCache: null, tokensOut: 40 },
+        ];
+        expect(totaisDoTrace(turnos)).toEqual({
+            custoUsd: 0.2,
+            tokensIn: 100,
+            tokensCache: null, // nenhum turno reportou cache
+            tokensOut: 40,
+        });
+    });
+
+    it('conversa vazia = tudo null', () => {
+        expect(totaisDoTrace([])).toEqual({
+            custoUsd: null,
+            tokensIn: null,
+            tokensCache: null,
+            tokensOut: null,
         });
     });
 });
