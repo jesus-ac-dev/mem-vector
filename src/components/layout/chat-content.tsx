@@ -10,6 +10,8 @@ import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import {
+    formatarTokens,
+    totaisDoTrace,
     traceBadgeLabel,
     traceModelEvidence,
     traceProviderLabel,
@@ -362,6 +364,7 @@ function TraceInspector({
         },
         [],
     );
+    const totais = totaisDoTrace(turnos.map((t) => t.message.trace));
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -436,6 +439,14 @@ function TraceInspector({
                                             </dd>
                                             <dt className="text-muted-foreground">custo</dt>
                                             <dd>{formatarCusto(trace?.costUsd)}</dd>
+                                            <dt className="text-muted-foreground">tokens</dt>
+                                            <dd>
+                                                {formatarTokens(
+                                                    trace?.tokensIn,
+                                                    trace?.tokensCache,
+                                                    trace?.tokensOut,
+                                                )}
+                                            </dd>
                                             <dt className="text-muted-foreground">hora</dt>
                                             <dd>{formatarHora(trace?.createdAt)}</dd>
                                             <dt className="text-muted-foreground">job</dt>
@@ -452,6 +463,25 @@ function TraceInspector({
                         </div>
                     )}
                 </div>
+                {turnos.length > 0 && (
+                    // Footer fixo (pedido do Carlos): os turnos fazem scroll, o
+                    // total da conversa fica sempre à vista.
+                    <div className="border-t px-4 py-3 text-xs">
+                        <p className="font-medium uppercase text-muted-foreground">
+                            Total da conversa
+                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-3">
+                            <span>
+                                {formatarTokens(
+                                    totais.tokensIn,
+                                    totais.tokensCache,
+                                    totais.tokensOut,
+                                )}
+                            </span>
+                            <span className="font-medium">{formatarCusto(totais.custoUsd)}</span>
+                        </div>
+                    </div>
+                )}
             </DialogContent>
         </Dialog>
     );
@@ -554,6 +584,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 requestedModel: res.modeloPedido ?? null,
                 effectiveModel: res.modelo ?? null,
                 costUsd: res.costUsd,
+                tokensIn: res.tokensIn,
+                tokensCache: res.tokensCache,
+                tokensOut: res.tokensOut,
                 latencyMs: res.latencyMs,
                 sourcesCount: res.sources.length,
                 createdAt: new Date().toISOString(),

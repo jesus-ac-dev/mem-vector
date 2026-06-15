@@ -62,7 +62,7 @@ export async function carregarConversaCom(db: SupabaseClient, id: string): Promi
     const { data, error } = await db
         .from('messages')
         .select(
-            'id, role, content, created_at, sources, cost_usd, provider, model_requested, model_effective, latency_ms',
+            'id, role, content, created_at, sources, cost_usd, tokens_in, tokens_cache, tokens_out, provider, model_requested, model_effective, latency_ms',
         )
         .eq('conversation_id', id)
         .order('created_at', { ascending: true });
@@ -82,6 +82,18 @@ export async function carregarConversaCom(db: SupabaseClient, id: string): Promi
                           m.cost_usd === null || m.cost_usd === undefined
                               ? null
                               : Number(m.cost_usd),
+                      tokensIn:
+                          m.tokens_in === null || m.tokens_in === undefined
+                              ? null
+                              : Number(m.tokens_in),
+                      tokensCache:
+                          m.tokens_cache === null || m.tokens_cache === undefined
+                              ? null
+                              : Number(m.tokens_cache),
+                      tokensOut:
+                          m.tokens_out === null || m.tokens_out === undefined
+                              ? null
+                              : Number(m.tokens_out),
                       latencyMs:
                           m.latency_ms === null || m.latency_ms === undefined
                               ? null
@@ -96,6 +108,8 @@ export async function carregarConversaCom(db: SupabaseClient, id: string): Promi
                 trace.requestedModel !== null ||
                 trace.effectiveModel !== null ||
                 trace.costUsd !== null ||
+                trace.tokensIn !== null ||
+                trace.tokensOut !== null ||
                 trace.latencyMs !== null);
 
         return {

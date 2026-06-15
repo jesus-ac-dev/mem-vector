@@ -32,6 +32,45 @@ export interface Generation {
     text: string;
     costUsd: number;
     model?: string; // o modelo REAL do envelope (modelUsage) — prova, não auto-relato
+    tokensIn?: number | null; // input total do turno (fresco + cache)
+    tokensCache?: number | null; // porção lida/criada em cache (subconjunto de tokensIn)
+    tokensOut?: number | null; // tokens de output do turno
+}
+
+export interface TokenUsage {
+    tokensIn: number | null; // total: fresco + cache lido + cache criado
+    tokensCache: number | null; // só a porção de cache (lido + criado)
+    tokensOut: number | null;
+}
+
+function numeroOuNull(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function somaOuNull(...partes: (number | null)[]): number | null {
+    const numeros = partes.filter((n): n is number => n !== null);
+    return numeros.length ? numeros.reduce((a, b) => a + b, 0) : null;
+}
+
+// Tokens do envelope do claude (#65). O CLI (--output-format json) e a Messages
+// API partilham os MESMOS campos em `usage`. O `input_tokens` é só o input
+// FRESCO; o cache lido/criado foi processado na mesma, por isso o tokens_in
+// honesto = a soma dos três (o contexto real que o modelo viu). Devolve também
+// a porção de cache à parte para o trace mostrar fresco/cache/out — um total só
+// engana (parece enorme, mas o grosso é cache barato). Ausente → null.
+export function tokensDoEnvelopeClaude(usage: unknown): TokenUsage {
+    if (!usage || typeof usage !== 'object') {
+        return { tokensIn: null, tokensCache: null, tokensOut: null };
+    }
+    const u = usage as Record<string, unknown>;
+    const fresco = numeroOuNull(u.input_tokens);
+    const cacheRead = numeroOuNull(u.cache_read_input_tokens);
+    const cacheCreate = numeroOuNull(u.cache_creation_input_tokens);
+    return {
+        tokensIn: somaOuNull(fresco, cacheRead, cacheCreate),
+        tokensCache: somaOuNull(cacheRead, cacheCreate),
+        tokensOut: numeroOuNull(u.output_tokens),
+    };
 }
 
 export function claudeTimeoutMs(envValue = process.env.CLAUDE_TIMEOUT_MS): number {
@@ -213,15 +252,20 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                     result?: string;
                     total_cost_usd?: number;
                     modelUsage?: Record<string, unknown>;
+                    usage?: unknown;
                 };
                 // O modelo REAL vem do envelope (#60 r8): o auto-relato dos
                 // modelos é mentiroso — isto é a prova de qual respondeu.
                 const modelo = Object.keys(envelope.modelUsage ?? {})[0];
+                const tokens = tokensDoEnvelopeClaude(envelope.usage);
                 finish(() =>
                     resolve({
                         text: envelope.result ?? '',
                         costUsd: Number(envelope.total_cost_usd ?? 0),
                         model: modelo,
+                        tokensIn: tokens.tokensIn,
+                        tokensCache: tokens.tokensCache,
+                        tokensOut: tokens.tokensOut,
                     }),
                 );
             } catch {
