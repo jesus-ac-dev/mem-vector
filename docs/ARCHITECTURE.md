@@ -202,6 +202,12 @@ por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e
 Emails (reservado).
+**Prova por turno:** cada mensagem do assistente guarda em `messages` a prova
+técnica — `provider`, modelo pedido/efetivo, latência, custo e **tokens in/out**
+(#65; o `tokens_in` do claude soma input fresco + cache lido/criado = o contexto
+real que o modelo viu; `null` onde o provider não os reporta). O chip junto à
+textarea e o inspector "Trace da conversa" mostram-na; divergência modelo
+pedido≠efetivo aparece como aviso, não bloqueia.
 
 **Kanban visual (#58):** rota `/kanban` (ícone no ribbon entre Chat e
 Tarefas), as tarefas pelas 6 colunas canónicas. Drag entre colunas =

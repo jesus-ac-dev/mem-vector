@@ -32,6 +32,36 @@ export interface Generation {
     text: string;
     costUsd: number;
     model?: string; // o modelo REAL do envelope (modelUsage) — prova, não auto-relato
+    tokensIn?: number | null; // tokens de input do turno (contexto que o modelo viu)
+    tokensOut?: number | null; // tokens de output do turno
+}
+
+export interface TokenUsage {
+    tokensIn: number | null;
+    tokensOut: number | null;
+}
+
+function numeroOuNull(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+// Tokens do envelope do claude (#65). O CLI (--output-format json) e a Messages
+// API partilham os MESMOS campos em `usage`. O `input_tokens` é só o input
+// FRESCO; o cache lido/criado foi processado na mesma, por isso o tokens_in
+// honesto = a soma dos três (o contexto real que o modelo viu). `output_tokens`
+// é direto. Campos ausentes → null (não inventa).
+export function tokensDoEnvelopeClaude(usage: unknown): TokenUsage {
+    if (!usage || typeof usage !== 'object') return { tokensIn: null, tokensOut: null };
+    const u = usage as Record<string, unknown>;
+    const partes = [
+        numeroOuNull(u.input_tokens),
+        numeroOuNull(u.cache_read_input_tokens),
+        numeroOuNull(u.cache_creation_input_tokens),
+    ].filter((n): n is number => n !== null);
+    return {
+        tokensIn: partes.length ? partes.reduce((a, b) => a + b, 0) : null,
+        tokensOut: numeroOuNull(u.output_tokens),
+    };
 }
 
 export function claudeTimeoutMs(envValue = process.env.CLAUDE_TIMEOUT_MS): number {
@@ -213,15 +243,19 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                     result?: string;
                     total_cost_usd?: number;
                     modelUsage?: Record<string, unknown>;
+                    usage?: unknown;
                 };
                 // O modelo REAL vem do envelope (#60 r8): o auto-relato dos
                 // modelos é mentiroso — isto é a prova de qual respondeu.
                 const modelo = Object.keys(envelope.modelUsage ?? {})[0];
+                const tokens = tokensDoEnvelopeClaude(envelope.usage);
                 finish(() =>
                     resolve({
                         text: envelope.result ?? '',
                         costUsd: Number(envelope.total_cost_usd ?? 0),
                         model: modelo,
+                        tokensIn: tokens.tokensIn,
+                        tokensOut: tokens.tokensOut,
                     }),
                 );
             } catch {

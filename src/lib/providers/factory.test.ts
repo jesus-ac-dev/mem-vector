@@ -223,6 +223,79 @@ describe('modelo REAL reportado por todos os providers (r11)', () => {
     });
 });
 
+describe('tokens in/out por turno (#65)', () => {
+    it('claude api soma input+cache no tokens_in e devolve output (mesmo envelope do CLI)', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, {
+                content: [{ type: 'text', text: 'olá' }],
+                model: 'claude-opus-4-8',
+                usage: {
+                    input_tokens: 10,
+                    cache_read_input_tokens: 200,
+                    cache_creation_input_tokens: 0,
+                    output_tokens: 42,
+                },
+            }),
+        );
+        const r = await criarProvider('claude', cfgApi({ modelo: 'claude-opus-4-8' })).gerar('x');
+        expect(r.tokensIn).toBe(210);
+        expect(r.tokensOut).toBe(42);
+    });
+
+    it('codex api lê prompt_tokens/completion_tokens', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, {
+                choices: [{ message: { content: 'olá' } }],
+                model: 'gpt-5.5',
+                usage: { prompt_tokens: 30, completion_tokens: 12, total_tokens: 42 },
+            }),
+        );
+        const r = await criarProvider('codex', cfgApi({ modelo: 'gpt-5.5' })).gerar('x');
+        expect(r.tokensIn).toBe(30);
+        expect(r.tokensOut).toBe(12);
+    });
+
+    it('gemini api lê usageMetadata (prompt/candidates)', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, {
+                candidates: [{ content: { parts: [{ text: 'olá' }] } }],
+                modelVersion: 'gemini-2.5-flash-002',
+                usageMetadata: {
+                    promptTokenCount: 25,
+                    candidatesTokenCount: 8,
+                    totalTokenCount: 33,
+                },
+            }),
+        );
+        const r = await criarProvider('gemini', cfgApi()).gerar('x');
+        expect(r.tokensIn).toBe(25);
+        expect(r.tokensOut).toBe(8);
+    });
+
+    it('ollama lê prompt_eval_count/eval_count do daemon', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, {
+                response: 'olá',
+                model: 'llama3.2',
+                prompt_eval_count: 15,
+                eval_count: 7,
+            }),
+        );
+        const r = await criarProvider('ollama', { ativo: true, modo: 'cli' }).gerar('x');
+        expect(r.tokensIn).toBe(15);
+        expect(r.tokensOut).toBe(7);
+    });
+
+    it('provider que não reporta tokens devolve null (não inventa)', async () => {
+        fetchMock.mockResolvedValueOnce(
+            resposta(200, { candidates: [{ content: { parts: [{ text: 'olá' }] } }] }),
+        );
+        const r = await criarProvider('gemini', cfgApi()).gerar('x');
+        expect(r.tokensIn).toBeNull();
+        expect(r.tokensOut).toBeNull();
+    });
+});
+
 describe('gemini e ollama — o teste deixa as coisas resolvidas (r8/r9)', () => {
     it('gemini testar faz mini-geração real depois de validar a key', async () => {
         fetchMock

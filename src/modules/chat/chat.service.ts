@@ -56,6 +56,8 @@ export interface ChatResult {
     answer: string;
     sources: Source[];
     costUsd: number | null; // providers fora do claude-cli não reportam custo
+    tokensIn: number | null; // tokens de input do turno (null onde o provider não reporta)
+    tokensOut: number | null; // tokens de output do turno
     provider: Provider; // adapter que recebeu a chamada, não auto-relato
     latencyMs: number;
     modelo?: string; // o modelo REAL que respondeu (prova, não auto-relato)
@@ -262,7 +264,7 @@ export async function respond(
     // estão afinados para ele.
     const { instancia, modeloPedido } = await providerDoChatCom(db);
     const startedAt = Date.now();
-    const { text, costUsd, model } = await instancia.gerar(
+    const { text, costUsd, model, tokensIn, tokensOut } = await instancia.gerar(
         buildPrompt(question, contexto, classificarIntencao(question), historico, kernel),
     );
     const latencyMs = Date.now() - startedAt;
@@ -271,6 +273,8 @@ export async function respond(
         answer: text,
         sources,
         costUsd,
+        tokensIn: tokensIn ?? null,
+        tokensOut: tokensOut ?? null,
         provider: instancia.nome,
         latencyMs,
         modelo: model,

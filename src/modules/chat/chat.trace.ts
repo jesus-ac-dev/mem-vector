@@ -10,6 +10,8 @@ export interface ChatTrace {
     requestedModel?: string | null;
     effectiveModel?: string | null;
     costUsd?: number | null;
+    tokensIn?: number | null;
+    tokensOut?: number | null;
     latencyMs?: number | null;
     sourcesCount?: number | null;
     createdAt?: string | null;
@@ -36,6 +38,18 @@ export function traceBadgeLabel(trace: ChatTrace | null | undefined): string {
     if (!trace) return 'Trace indisponível';
     const model = trace.effectiveModel ?? trace.requestedModel ?? 'modelo default';
     return `${traceProviderLabel(trace.provider)} · ${model}`;
+}
+
+// Tokens in/out do turno (#65) para o inspector de trace. Nenhum reportado =
+// diz alto (como o custo/latência); só um = travessão no lado em falta.
+export function formatarTokens(
+    tokensIn: number | null | undefined,
+    tokensOut: number | null | undefined,
+): string {
+    const semIn = tokensIn === null || tokensIn === undefined;
+    const semOut = tokensOut === null || tokensOut === undefined;
+    if (semIn && semOut) return 'não reportado pelo provider';
+    return `${semIn ? '—' : tokensIn} in · ${semOut ? '—' : tokensOut} out`;
 }
 
 export function traceModelEvidence(trace: ChatTrace): TraceModelEvidence {

@@ -10,6 +10,7 @@ import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/chat.service';
 import type { MensagemHist } from '@/modules/chat/chat.conversas';
 import {
+    formatarTokens,
     traceBadgeLabel,
     traceModelEvidence,
     traceProviderLabel,
@@ -436,6 +437,10 @@ function TraceInspector({
                                             </dd>
                                             <dt className="text-muted-foreground">custo</dt>
                                             <dd>{formatarCusto(trace?.costUsd)}</dd>
+                                            <dt className="text-muted-foreground">tokens</dt>
+                                            <dd>
+                                                {formatarTokens(trace?.tokensIn, trace?.tokensOut)}
+                                            </dd>
                                             <dt className="text-muted-foreground">hora</dt>
                                             <dd>{formatarHora(trace?.createdAt)}</dd>
                                             <dt className="text-muted-foreground">job</dt>
@@ -554,6 +559,8 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 requestedModel: res.modeloPedido ?? null,
                 effectiveModel: res.modelo ?? null,
                 costUsd: res.costUsd,
+                tokensIn: res.tokensIn,
+                tokensOut: res.tokensOut,
                 latencyMs: res.latencyMs,
                 sourcesCount: res.sources.length,
                 createdAt: new Date().toISOString(),

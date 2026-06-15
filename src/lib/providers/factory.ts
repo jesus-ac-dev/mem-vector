@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { generate, type Generation } from '@/lib/claude';
+import { generate, tokensDoEnvelopeClaude, type Generation } from '@/lib/claude';
 import { lerDefinicoesServidorCom } from '@/modules/definicoes/definicoes.service';
 import type { AgenteServidor, Provider } from '@/modules/definicoes/definicoes.schema';
 
@@ -19,6 +19,14 @@ export interface RespostaLLM {
     text: string;
     costUsd: number | null;
     model?: string; // o modelo REAL que respondeu (quando o provider o reporta)
+    // Tokens do turno (#65); null onde o provider não os reporta (não inventa).
+    tokensIn?: number | null;
+    tokensOut?: number | null;
+}
+
+// Lê um inteiro de tokens de um campo do envelope; ausente/não-número → null.
+function tokensOuNull(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export interface ProviderLLM {
@@ -109,6 +117,7 @@ async function gerarClaudeApi(cfg: AgenteServidor, prompt: string): Promise<Resp
     const json = JSON.parse(corpo) as {
         content?: { type: string; text?: string }[];
         model?: string;
+        usage?: unknown;
     };
     const text = (json.content ?? [])
         .filter((b) => b.type === 'text')
@@ -116,7 +125,15 @@ async function gerarClaudeApi(cfg: AgenteServidor, prompt: string): Promise<Resp
         .join('')
         .trim();
     if (!text) throw new Error('claude api: resposta vazia');
-    return { text, costUsd: null, model: json.model };
+    // Mesmo `usage` do envelope do CLI (input_tokens + cache + output_tokens).
+    const tokens = tokensDoEnvelopeClaude(json.usage);
+    return {
+        text,
+        costUsd: null,
+        model: json.model,
+        tokensIn: tokens.tokensIn,
+        tokensOut: tokens.tokensOut,
+    };
 }
 
 async function listarModelosAnthropic(apiKey: string): Promise<string[]> {
@@ -218,10 +235,17 @@ async function gerarCodexApi(cfg: AgenteServidor, prompt: string): Promise<Respo
     const json = JSON.parse(corpo) as {
         choices?: { message?: { content?: string } }[];
         model?: string;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
     const text = (json.choices?.[0]?.message?.content ?? '').trim();
     if (!text) throw new Error('codex api: resposta vazia');
-    return { text, costUsd: null, model: json.model };
+    return {
+        text,
+        costUsd: null,
+        model: json.model,
+        tokensIn: tokensOuNull(json.usage?.prompt_tokens),
+        tokensOut: tokensOuNull(json.usage?.completion_tokens),
+    };
 }
 
 async function listarModelosOpenAI(apiKey: string): Promise<string[]> {
@@ -294,7 +318,13 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
         nome: 'claude',
         async gerar(prompt) {
             const g: Generation = await generate(prompt, { model: cfg.modelo });
-            return { text: g.text, costUsd: g.costUsd, model: g.model };
+            return {
+                text: g.text,
+                costUsd: g.costUsd,
+                model: g.model,
+                tokensIn: g.tokensIn ?? null,
+                tokensOut: g.tokensOut ?? null,
+            };
         },
         // Teste a sério (#60 r8, lição do Carlos: "isto vai para outros
         // computadores"): mini-geração pelo MESMO caminho do chat — auth,
@@ -364,7 +394,8 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
                 // O modelo REAL vem do cabeçalho do exec ("model: gpt-5.5"),
                 // provado por execução real (r11) — não do auto-relato.
                 const model = stdout.match(/^model:\s*(.+)$/m)?.[1]?.trim();
-                return { text, costUsd: null, model };
+                // O exec do codex não expõe contagem de tokens fiável (#65).
+                return { text, costUsd: null, model, tokensIn: null, tokensOut: null };
             } finally {
                 await rm(tempDir, { recursive: true, force: true });
             }
@@ -446,7 +477,14 @@ function providerGeminiCli(cfg: AgenteServidor): ProviderLLM {
             const text = (json.response ?? '').trim();
             if (!text) throw new Error('gemini cli: resposta vazia');
             // O modelo REAL vem das stats (mapa por modelo), como o envelope do claude.
-            return { text, costUsd: null, model: Object.keys(json.stats?.models ?? {})[0] };
+            // Tokens: a shape das stats não está verificada (#65) — null, não inventa.
+            return {
+                text,
+                costUsd: null,
+                model: Object.keys(json.stats?.models ?? {})[0],
+                tokensIn: null,
+                tokensOut: null,
+            };
         },
         // Teste a sério: versão + mini-geração pelo MESMO caminho do chat
         // (login Google/quota rebentam aqui, não na 1.ª mensagem).
@@ -496,13 +534,20 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
                 candidates?: { content?: { parts?: { text?: string }[] } }[];
                 // "Output only. The model version used" (referência REST, r11).
                 modelVersion?: string;
+                usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
             };
             const text = (json.candidates?.[0]?.content?.parts ?? [])
                 .map((p) => p.text ?? '')
                 .join('')
                 .trim();
             if (!text) throw new Error('gemini: resposta vazia');
-            return { text, costUsd: null, model: json.modelVersion };
+            return {
+                text,
+                costUsd: null,
+                model: json.modelVersion,
+                tokensIn: tokensOuNull(json.usageMetadata?.promptTokenCount),
+                tokensOut: tokensOuNull(json.usageMetadata?.candidatesTokenCount),
+            };
         },
         // Teste a sério (r9, regra do r8 estendida às APIs): a listagem valida
         // a key e a mini-geração prova o MESMO caminho do chat.
@@ -569,11 +614,23 @@ function providerOllama(cfg: AgenteServidor): ProviderLLM {
             if (!res.ok) {
                 throw new Error(`ollama HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
             }
-            // O /api/generate ecoa o modelo que correu (docs/api.md, r11).
-            const json = (await res.json()) as { response?: string; model?: string };
+            // O /api/generate ecoa o modelo que correu + contagens de eval
+            // (docs/api.md, r11): prompt_eval_count = input, eval_count = output.
+            const json = (await res.json()) as {
+                response?: string;
+                model?: string;
+                prompt_eval_count?: number;
+                eval_count?: number;
+            };
             const text = (json.response ?? '').trim();
             if (!text) throw new Error('ollama: resposta vazia');
-            return { text, costUsd: null, model: json.model };
+            return {
+                text,
+                costUsd: null,
+                model: json.model,
+                tokensIn: tokensOuNull(json.prompt_eval_count),
+                tokensOut: tokensOuNull(json.eval_count),
+            };
         },
         async testar() {
             try {

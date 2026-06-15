@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { traceBadgeLabel, traceModelEvidence, type ChatTrace } from './chat.trace';
+import { formatarTokens, traceBadgeLabel, traceModelEvidence, type ChatTrace } from './chat.trace';
 
 describe('chat trace', () => {
     it('mostra provider e modelo efetivo quando o provider reporta o modelo real', () => {
@@ -51,5 +51,21 @@ describe('chat trace', () => {
             state: 'nao-reportado',
             label: 'provider não reportou modelo efetivo',
         });
+    });
+});
+
+describe('formatarTokens (#65)', () => {
+    it('mostra in e out quando o provider reporta', () => {
+        expect(formatarTokens(9, 117)).toBe('9 in · 117 out');
+    });
+
+    it('diz alto quando nenhum provider reporta tokens', () => {
+        expect(formatarTokens(null, null)).toBe('não reportado pelo provider');
+        expect(formatarTokens(undefined, undefined)).toBe('não reportado pelo provider');
+    });
+
+    it('mostra travessão no lado em falta quando só um é reportado', () => {
+        expect(formatarTokens(9, null)).toBe('9 in · — out');
+        expect(formatarTokens(null, 117)).toBe('— in · 117 out');
     });
 });

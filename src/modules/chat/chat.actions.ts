@@ -74,6 +74,8 @@ export async function ask(
             role: 'assistant',
             content: result.answer,
             cost_usd: result.costUsd,
+            tokens_in: result.tokensIn,
+            tokens_out: result.tokensOut,
             provider: result.provider,
             model_requested: result.modeloPedido,
             model_effective: result.modelo,

@@ -6,6 +6,7 @@ import {
     claudeConcurrency,
     claudeTimeoutMs,
     createAsyncSemaphore,
+    tokensDoEnvelopeClaude,
 } from './claude';
 
 describe('claudeTimeoutMs', () => {
@@ -76,6 +77,35 @@ describe('claudeAgenticTimeoutMs', () => {
     it('usa valor do ambiente e cai no default agentic (5 min)', () => {
         expect(claudeAgenticTimeoutMs('60000')).toBe(60_000);
         expect(claudeAgenticTimeoutMs('nope')).toBe(300_000);
+    });
+});
+
+describe('tokensDoEnvelopeClaude', () => {
+    it('soma o input fresco com os tokens de cache (o contexto real que o modelo viu)', () => {
+        // Envelope real do CLI (#65): input_tokens é só o fresco; o cache lido/criado
+        // foi processado na mesma. tokens_in honesto = a soma dos três.
+        const usage = {
+            input_tokens: 9,
+            cache_creation_input_tokens: 11545,
+            cache_read_input_tokens: 17283,
+            output_tokens: 117,
+        };
+        expect(tokensDoEnvelopeClaude(usage)).toEqual({
+            tokensIn: 9 + 11545 + 17283,
+            tokensOut: 117,
+        });
+    });
+
+    it('funciona sem campos de cache (só input/output)', () => {
+        expect(tokensDoEnvelopeClaude({ input_tokens: 50, output_tokens: 20 })).toEqual({
+            tokensIn: 50,
+            tokensOut: 20,
+        });
+    });
+
+    it('devolve nulls quando o envelope não traz usage', () => {
+        expect(tokensDoEnvelopeClaude(undefined)).toEqual({ tokensIn: null, tokensOut: null });
+        expect(tokensDoEnvelopeClaude({})).toEqual({ tokensIn: null, tokensOut: null });
     });
 });
 
