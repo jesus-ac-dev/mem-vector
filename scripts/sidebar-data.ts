@@ -34,11 +34,18 @@ async function main(): Promise<void> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !anon) throw new Error('Falta NEXT_PUBLIC_SUPABASE_URL/ANON_KEY.');
-    const db = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const db = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
     const signIn = await db.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (signIn.error) throw new Error(`signIn: ${signIn.error.message}`);
 
-    await escreverNotaCom(db, { title: 'Beta SidebarProva', content_md: '# Beta', links: [], reason: 'p' });
+    await escreverNotaCom(db, {
+        title: 'Beta SidebarProva',
+        content_md: '# Beta',
+        links: [],
+        reason: 'p',
+    });
     await escreverNotaCom(db, {
         title: 'Alfa SidebarProva',
         content_md: `# Alfa\n\nLiga a [[${SLUG_BETA}]] e a um [[fantasma-sidebarprova]].\n\n## Secção dois\ncorpo`,
@@ -47,7 +54,10 @@ async function main(): Promise<void> {
     });
 
     const backBeta = await backlinksDeCom(db, SLUG_BETA);
-    console.log('backlinks de beta:', backBeta.map((n) => n.slug));
+    console.log(
+        'backlinks de beta:',
+        backBeta.map((n) => n.slug),
+    );
     const eixo1 = backBeta.some((n) => n.slug === SLUG_ALFA);
     console.log(`${eixo1 ? '✅' : '❌'} eixo 1 — backlink de Beta inclui Alfa`);
 
@@ -57,11 +67,17 @@ async function main(): Promise<void> {
     const eixo2 =
         fwd.some((l) => l.slug === SLUG_BETA && l.existe) &&
         fwd.some((l) => l.slug === 'fantasma-sidebarprova' && !l.existe);
-    console.log(`${eixo2 ? '✅' : '❌'} eixo 2 — forward de Alfa: Beta (existe) + fantasma (quebrado)`);
+    console.log(
+        `${eixo2 ? '✅' : '❌'} eixo 2 — forward de Alfa: Beta (existe) + fantasma (quebrado)`,
+    );
 
     const outline = extrairOutline(alfa?.contentMd ?? '');
-    console.log('outline de alfa:', outline.map((h) => `${h.nivel}:${h.texto}`));
-    const eixo3 = outline.some((h) => h.texto === 'Alfa' && h.nivel === 1) &&
+    console.log(
+        'outline de alfa:',
+        outline.map((h) => `${h.nivel}:${h.texto}`),
+    );
+    const eixo3 =
+        outline.some((h) => h.texto === 'Alfa' && h.nivel === 1) &&
         outline.some((h) => h.texto === 'Secção dois' && h.nivel === 2);
     console.log(`${eixo3 ? '✅' : '❌'} eixo 3 — outline de Alfa tem os headings`);
 

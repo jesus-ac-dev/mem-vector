@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { nomesDosAutoresCom } from '@/modules/knowledge/versoes-nomes';
 import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projector';
+import { registarEdgeConversaCom } from '@/modules/knowledge/edges';
 
 export interface ResultadoAcrescento {
     dia: string;
@@ -52,6 +53,7 @@ export async function acrescentarAoDailyCom(
     db: SupabaseClient,
     linha: string,
     dia?: string,
+    conversationId?: string,
 ): Promise<ResultadoAcrescento> {
     const {
         data: { user },
@@ -78,6 +80,16 @@ export async function acrescentarAoDailyCom(
         entityType: 'daily',
         entityId: daily.id,
     });
+
+    // Edge estrutural daily→conversa (teia de memória): liga o recap à conversa-
+    // fonte para o grafo/expand, sem passar pelo markdown nem pelo regenerar.
+    if (conversationId) {
+        await registarEdgeConversaCom(db, {
+            ownerId: user.id,
+            dailyId: daily.id,
+            conversationId,
+        });
+    }
 
     return { dia: daily.dia, criado: Boolean(daily.criado) };
 }

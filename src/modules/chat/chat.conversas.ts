@@ -109,6 +109,28 @@ export async function carregarConversaCom(db: SupabaseClient, id: string): Promi
     });
 }
 
+export interface ConversaMeta {
+    id: string;
+    titulo: string;
+    criadaEm: string;
+}
+
+// Metadados de uma conversa (título/existência) para a vista navegável /chat/[id].
+export async function getConversaCom(db: SupabaseClient, id: string): Promise<ConversaMeta | null> {
+    const { data, error } = await db
+        .from('conversations')
+        .select('id, title, created_at')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw new Error(`getConversa falhou: ${error.message}`);
+    if (!data) return null;
+    return {
+        id: data.id as string,
+        titulo: (data.title as string | null) ?? 'Sem título',
+        criadaEm: data.created_at as string,
+    };
+}
+
 // Janela de conversa para os prompts (anáfora: "eles", "deles" só se resolvem
 // com o fio da conversa). Últimas `limite` mensagens, ordem cronológica,
 // opcionalmente excluindo ids (o turno atual já vai explícito no prompt).
@@ -141,3 +163,6 @@ export const listarConversas = async (): Promise<ConversaResumo[]> =>
 
 export const carregarConversa = async (id: string): Promise<MensagemHist[]> =>
     carregarConversaCom(await createClient(), id);
+
+export const getConversa = async (id: string): Promise<ConversaMeta | null> =>
+    getConversaCom(await createClient(), id);

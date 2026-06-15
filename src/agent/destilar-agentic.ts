@@ -94,9 +94,9 @@ export async function destilarTurnoAgenticCom(
             },
         );
 
-        const { nota, daily, tarefas } = reduzirEscritas(lerEscritas(resultFile));
+        const { notas, daily, tarefas } = reduzirEscritas(lerEscritas(resultFile));
         return {
-            nota,
+            notas,
             daily,
             tarefas: tarefas.criadas.length || tarefas.concluidas.length ? tarefas : null,
         };

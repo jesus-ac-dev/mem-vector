@@ -26,7 +26,9 @@ async function main(): Promise<void> {
         throw new Error(c.error.message);
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const db = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const db = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
     const si = await db.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (si.error) throw new Error(si.error.message);
 
@@ -56,10 +58,14 @@ async function main(): Promise<void> {
     const noDaily = grafo.nodes.find((n) => n.group === 'daily' && n.slug === dia);
 
     const eixo1 = noNota?.color === COR;
-    console.log(`${eixo1 ? '✅' : '❌'} eixo 1 — nó knowledge tem a cor da pasta (${noNota?.color})`);
+    console.log(
+        `${eixo1 ? '✅' : '❌'} eixo 1 — nó knowledge tem a cor da pasta (${noNota?.color})`,
+    );
 
     const eixo2 = !!noDaily && noDaily.color === COR_D;
-    console.log(`${eixo2 ? '✅' : '❌'} eixo 2 — nó daily presente com a cor daily (${noDaily?.color})`);
+    console.log(
+        `${eixo2 ? '✅' : '❌'} eixo 2 — nó daily presente com a cor daily (${noDaily?.color})`,
+    );
 
     const eixo3 =
         !!noNota &&

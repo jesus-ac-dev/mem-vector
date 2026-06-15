@@ -10,6 +10,11 @@ export function slugify(text: string): string {
 
 const PADRAO_DATA = /^\d{4}-\d{2}-\d{2}$/;
 
+// Namespace dos wikilinks que apontam para uma conversa do chat (não uma nota
+// knowledge): [[conversa:<id>]] resolve para a vista da conversa e é ignorado
+// pelo parser de edges — a ligação daily→conversa é estrutural, não derivada do texto.
+const PREFIXO_CONVERSA = 'conversa:';
+
 export interface WikilinkParts {
     target: string;
     label: string;
@@ -86,6 +91,7 @@ function substituirPrefixoPath(
 // (YYYY-MM-DD) apontam para o daily desse dia; o resto para uma nota knowledge.
 export function alvoParaHref(target: string): string {
     const t = target.trim();
+    if (t.startsWith(PREFIXO_CONVERSA)) return `/chat/${t.slice(PREFIXO_CONVERSA.length)}`;
     if (PADRAO_DATA.test(t)) return `/daily/${t}`;
     const slug = slugify(ultimoSegmento(t));
     if (t.includes('/')) return `/knowledge/${slug}?path=${encodeURIComponent(t)}`;
@@ -102,6 +108,7 @@ export function parseWikilinkTargets(markdown: string): WikilinkTarget[] {
     for (const m of markdown.matchAll(/\[\[([^\]]+)\]\]/g)) {
         const { target } = partesWikilink(m[1]);
         const alvo = target.trim().replace(/^\/+|\/+$/g, '');
+        if (alvo.startsWith(PREFIXO_CONVERSA)) continue;
         const slug = slugify(ultimoSegmento(alvo));
         const path = alvo.includes('/') ? alvo : null;
         const key = path ? `${slug}:${path}` : slug;

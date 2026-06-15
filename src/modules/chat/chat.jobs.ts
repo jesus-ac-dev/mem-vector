@@ -11,13 +11,11 @@ export const distillationJobPayloadSchema = z.object({
 });
 export type DistillationJobPayload = z.infer<typeof distillationJobPayloadSchema>;
 
-const notaResultadoSchema = z
-    .object({
-        slug: z.string(),
-        title: z.string(),
-        criada: z.boolean(),
-    })
-    .nullable();
+const notaResultadoSchema = z.object({
+    slug: z.string(),
+    title: z.string(),
+    criada: z.boolean(),
+});
 
 const dailyResultadoSchema = z
     .object({
@@ -26,10 +24,21 @@ const dailyResultadoSchema = z
     })
     .nullable();
 
-export const distillationJobResultSchema = z.object({
-    nota: notaResultadoSchema,
-    daily: dailyResultadoSchema,
-});
+// Tolera o shape antigo {nota: {...}|null} de jobs persistidos antes do 1 bloco→N
+// notas (espelha a tolerância do parseTurno), mapeando-o para {notas: [...]}.
+export const distillationJobResultSchema = z.preprocess(
+    (v) => {
+        if (v && typeof v === 'object' && !Array.isArray(v) && 'nota' in v && !('notas' in v)) {
+            const { nota, ...resto } = v as Record<string, unknown>;
+            return { ...resto, notas: nota ? [nota] : [] };
+        }
+        return v;
+    },
+    z.object({
+        notas: z.array(notaResultadoSchema),
+        daily: dailyResultadoSchema,
+    }),
+);
 
 interface AgentJobRow {
     id: string;

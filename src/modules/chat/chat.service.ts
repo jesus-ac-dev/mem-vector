@@ -10,6 +10,7 @@ import {
     type SourceMetadata,
 } from './chat.prompt';
 import { classificarIntencao } from './chat.intencao';
+import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
@@ -45,7 +46,7 @@ export interface TarefasDoTurno {
 }
 
 export interface TurnoDestilado {
-    nota: NotaEscrita | null;
+    notas: NotaEscrita[]; // 1 bloco → N notas escritas neste turno
     daily: DailyEscrito | null;
     // #21: tarefas criadas/concluídas pelo agente neste turno (ausente = nenhuma).
     tarefas?: TarefasDoTurno | null;
@@ -62,7 +63,7 @@ export interface ChatResult {
 }
 
 interface DestilDeps {
-    destilar: (q: string, a: string) => Promise<EscritaKnowledge | null>;
+    destilar: (q: string, a: string) => Promise<EscritaKnowledge[]>;
     escrever: (input: EscritaKnowledge) => Promise<ResultadoEscrita>;
 }
 
@@ -181,25 +182,39 @@ export async function aplicarDestilacao(
     question: string,
     answer: string,
     deps: Partial<DestilDeps> = {},
-): Promise<NotaEscrita | null> {
-    const { destilar = destilarReal, escrever = escreverNotaReal } = deps;
-    const nota = await destilar(question, answer);
-    if (!nota) return null;
-    const resultado = await escrever(nota);
-    return { slug: resultado.slug, title: resultado.title, criada: resultado.diff === null };
+): Promise<NotaEscrita[]> {
+    const {
+        destilar = async (q, a) => {
+            const n = await destilarReal(q, a);
+            return n ? [n] : [];
+        },
+        escrever = escreverNotaReal,
+    } = deps;
+    const notas = await destilar(question, answer);
+    const escritas: NotaEscrita[] = [];
+    for (const nota of notas) {
+        const resultado = await escrever(nota);
+        escritas.push({
+            slug: resultado.slug,
+            title: resultado.title,
+            criada: resultado.diff === null,
+        });
+    }
+    return escritas;
 }
 
 export async function aplicarDailyTurno(
     question: string,
     answer: string,
-    nota: NotaEscrita | null,
+    notas: NotaEscrita[],
     deps: Partial<DailyDeps> = {},
+    conversationId?: string,
 ): Promise<DailyEscrito | null> {
     const { resumir = resumirTurnoParaDailyReal, escrever = acrescentarAoDailyReal } = deps;
     const resumoMd = await resumir(question, answer);
-    // Turno trivial: sem resumo e sem nota, o daily não regista o nada.
-    if (!resumoMd.trim() && !nota) return null;
-    const entrada = formatDailyTurnoEntry({ resumoMd, nota });
+    // Turno trivial: sem resumo e sem notas, o daily não regista o nada.
+    if (!resumoMd.trim() && !notas.length) return null;
+    const entrada = formatDailyTurnoEntry({ resumoMd, notas, conversationId });
     const resultado = await escrever(entrada);
     return { dia: resultado.dia, criado: resultado.criado };
 }
@@ -224,6 +239,18 @@ export async function respond(
     // (sources honesto). Abaixo do corte → (sem contexto) → fallback limpo.
     const relevant = relevantSources((data ?? []) as Source[]);
     const sources = await enriquecerSourcesComMetadata(db, relevant);
+    // Expand pela teia (F3): junta ao contexto as entidades vizinhas (1-hop,
+    // forward+backward) das fontes recuperadas — a daily como hub para as notas
+    // ligadas e vice-versa. Só atua quando há fontes com entidade (meta-perguntas
+    // sem contexto não expandem → não amplifica o #62). As expandidas vão ao
+    // prompt, não à proveniência (que fica honesta com o que bateu direto).
+    let expandidas: Source[] = [];
+    try {
+        expandidas = await expandirFontesCom(db, sources);
+    } catch (e) {
+        console.error('expand de fontes falhou (segue sem):', e);
+    }
+    const contexto = [...sources, ...expandidas];
     // Declarativa sem marcas de pergunta = facto a registar (#19); a mesma
     // classificação determinística guia a destilação pós-turno.
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
@@ -236,7 +263,7 @@ export async function respond(
     const { instancia, modeloPedido } = await providerDoChatCom(db);
     const startedAt = Date.now();
     const { text, costUsd, model } = await instancia.gerar(
-        buildPrompt(question, sources, classificarIntencao(question), historico, kernel),
+        buildPrompt(question, contexto, classificarIntencao(question), historico, kernel),
     );
     const latencyMs = Date.now() - startedAt;
 

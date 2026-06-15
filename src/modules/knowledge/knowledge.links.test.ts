@@ -143,4 +143,17 @@ describe('alvoParaHref', () => {
     it('ignora espaços à volta', () => {
         expect(alvoParaHref('  2026-01-02  ')).toBe('/daily/2026-01-02');
     });
+    it('alvo conversa:<id> aponta para a vista da conversa', () => {
+        expect(alvoParaHref('conversa:11111111-2222-3333-4444-555555555555')).toBe(
+            '/chat/11111111-2222-3333-4444-555555555555',
+        );
+    });
+});
+
+describe('parseWikilinkTargets — namespace conversa', () => {
+    it('ignora [[conversa:<id>]] (não é nota knowledge, não gera edge)', () => {
+        const md = 'recap [[conversa:abc-123]] e [[Embeddings E5]]';
+        expect(parseWikilinkTargets(md).map((t) => t.slug)).toEqual(['embeddings-e5']);
+        expect(parseWikilinks(md)).toEqual(['embeddings-e5']);
+    });
 });

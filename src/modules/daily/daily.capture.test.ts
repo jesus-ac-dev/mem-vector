@@ -26,7 +26,7 @@ describe('daily.capture', () => {
         const entry = formatDailyTurnoEntry({
             hora: '09:45',
             resumoMd: '- User pediu daily\n- Assistente explicou o fluxo',
-            nota: { slug: 'daily-notes', title: 'Daily Notes', criada: true },
+            notas: [{ slug: 'daily-notes', title: 'Daily Notes', criada: true }],
         });
 
         expect(entry).toBe(
@@ -35,6 +35,34 @@ describe('daily.capture', () => {
                 '- Assistente explicou o fluxo\n' +
                 '- Estado escrito: [[daily-notes]] (criada: Daily Notes)',
         );
+    });
+
+    it('lista N notas escritas no mesmo turno (1 bloco → N notas)', () => {
+        const entry = formatDailyTurnoEntry({
+            hora: '09:45',
+            resumoMd: '- recap',
+            notas: [
+                { slug: 'sofia', title: 'Sofia', criada: true },
+                { slug: 'threshold', title: 'Threshold', criada: false },
+            ],
+        });
+
+        expect(entry).toBe(
+            '### 09:45\n' +
+                '- recap\n' +
+                '- Estado escrito: [[sofia]] (criada: Sofia)\n' +
+                '- Estado escrito: [[threshold]] (atualizada: Threshold)',
+        );
+    });
+
+    it('inclui o wikilink para a conversa no heading quando recebe conversationId', () => {
+        const entry = formatDailyTurnoEntry({
+            hora: '09:45',
+            resumoMd: '- User pediu daily',
+            conversationId: 'abc-123',
+        });
+
+        expect(entry).toBe('### 09:45 · [[conversa:abc-123|conversa]]\n- User pediu daily');
     });
 
     it('calcula hora de Lisboa de forma determinística', () => {

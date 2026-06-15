@@ -47,21 +47,32 @@ describe('registarEscrita / lerEscritas', () => {
 });
 
 describe('reduzirEscritas', () => {
-    it('sem escritas devolve nota e daily nulos', () => {
+    it('sem escritas devolve notas vazias e daily nulo', () => {
         expect(reduzirEscritas([])).toEqual({
-            nota: null,
+            notas: [],
             daily: null,
             tarefas: { criadas: [], concluidas: [] },
         });
     });
 
-    it('fica com a última nota e o último daily (a sessão pode corrigir-se)', () => {
+    it('junta TODAS as notas do turno (1 bloco → N notas) e o último daily', () => {
         const r = reduzirEscritas([
             { tipo: 'nota', slug: 'a', title: 'A', criada: true },
             { tipo: 'nota', slug: 'b', title: 'B', criada: false },
             { tipo: 'daily', dia: '2026-06-11', criado: true },
         ]);
-        expect(r.nota).toEqual({ slug: 'b', title: 'B', criada: false });
+        expect(r.notas).toEqual([
+            { slug: 'a', title: 'A', criada: true },
+            { slug: 'b', title: 'B', criada: false },
+        ]);
         expect(r.daily).toEqual({ dia: '2026-06-11', criado: true });
+    });
+
+    it('dedup por slug: a última escrita do mesmo slug vence', () => {
+        const r = reduzirEscritas([
+            { tipo: 'nota', slug: 'a', title: 'A', criada: true },
+            { tipo: 'nota', slug: 'a', title: 'A v2', criada: false },
+        ]);
+        expect(r.notas).toEqual([{ slug: 'a', title: 'A v2', criada: false }]);
     });
 });

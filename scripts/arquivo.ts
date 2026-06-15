@@ -35,7 +35,9 @@ async function main(): Promise<void> {
         throw new Error(c.error.message);
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const db = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const db = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
     const si = await db.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (si.error) throw new Error(si.error.message);
 
@@ -50,7 +52,9 @@ async function main(): Promise<void> {
 
     const chunksAntes = await contarChunks(db, nota.id);
     const eixo0 = chunksAntes > 0;
-    console.log(`${eixo0 ? '✅' : '❌'} eixo 0 — a nota tem chunks antes de arquivar (${chunksAntes})`);
+    console.log(
+        `${eixo0 ? '✅' : '❌'} eixo 0 — a nota tem chunks antes de arquivar (${chunksAntes})`,
+    );
 
     await arquivarNotaCom(db, slug);
     const ativas = await listarKnowledgeCom(db);
@@ -59,7 +63,9 @@ async function main(): Promise<void> {
 
     const chunksDepois = await contarChunks(db, nota.id);
     const eixo2 = chunksDepois === 0;
-    console.log(`${eixo2 ? '✅' : '❌'} eixo 2 — arquivar apagou os chunks (RAG) (${chunksDepois})`);
+    console.log(
+        `${eixo2 ? '✅' : '❌'} eixo 2 — arquivar apagou os chunks (RAG) (${chunksDepois})`,
+    );
 
     const arq = await listarArquivadosCom(db);
     const eixo3 = arq.some((n) => n.slug === slug);

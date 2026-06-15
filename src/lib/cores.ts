@@ -17,6 +17,7 @@ export const PALETA: Cor[] = [
 
 export const COR_DEFAULT = '#9ca3af'; // cinza — knowledge sem pasta/cor
 export const COR_DAILY_DEFAULT = '#64748b'; // slate — daily sem cor configurada
+export const COR_CONVERSA_DEFAULT = '#a78bfa'; // violeta — conversa (folha da teia)
 
 // Resolve a cor guardada (hex ou null) para um hex utilizável, com fallback.
 export function resolverCor(

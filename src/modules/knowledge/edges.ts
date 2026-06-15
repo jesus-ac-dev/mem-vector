@@ -112,12 +112,15 @@ export async function regenerarEdgesCom(
     db: SupabaseClient,
     { ownerId, fromType, fromId, alvos }: RegenerarEdgesInput,
 ): Promise<void> {
+    // Apaga só as edges derivadas do texto (kind='wikilink'); edges estruturais
+    // de outro kind (ex.: daily→conversa) são geridas à parte e sobrevivem.
     const { error: dErr } = await db
         .from('edges')
         .delete()
         .eq('owner_id', ownerId)
         .eq('from_type', fromType)
-        .eq('from_id', fromId);
+        .eq('from_id', fromId)
+        .eq('kind', 'wikilink');
     if (dErr) throw new Error(`apagar edges: ${dErr.message}`);
 
     const unicos = Array.from(
@@ -183,4 +186,38 @@ export async function regenerarEdgesCom(
         }),
     );
     if (iErr) throw new Error(`inserir edges: ${iErr.message}`);
+}
+
+export interface RegistarEdgeConversaInput {
+    ownerId: string;
+    dailyId: string;
+    conversationId: string;
+}
+
+// Edge ESTRUTURAL daily→conversa (kind='conversa'): liga o recap à conversa-fonte
+// na teia (grafo/expand), fora do markdown e fora do regenerar de wikilinks.
+// Idempotente: apaga a anterior desta daily e insere a atual.
+export async function registarEdgeConversaCom(
+    db: SupabaseClient,
+    { ownerId, dailyId, conversationId }: RegistarEdgeConversaInput,
+): Promise<void> {
+    const { error: dErr } = await db
+        .from('edges')
+        .delete()
+        .eq('owner_id', ownerId)
+        .eq('from_type', 'daily')
+        .eq('from_id', dailyId)
+        .eq('kind', 'conversa');
+    if (dErr) throw new Error(`apagar edge conversa: ${dErr.message}`);
+
+    const { error: iErr } = await db.from('edges').insert({
+        owner_id: ownerId,
+        from_type: 'daily',
+        from_id: dailyId,
+        to_type: 'conversa',
+        to_slug: `conversa:${conversationId}`,
+        to_id: conversationId,
+        kind: 'conversa',
+    });
+    if (iErr) throw new Error(`inserir edge conversa: ${iErr.message}`);
 }

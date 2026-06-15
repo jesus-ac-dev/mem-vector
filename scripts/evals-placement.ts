@@ -85,7 +85,8 @@ const CENARIOS: Cenario[] = [
         ],
         checksFinais: async (db, resultados) => {
             const problemas: string[] = [];
-            const slug = resultados[0].nota?.slug;
+            const notasT1 = resultados[0].notas;
+            const slug = (notasT1.find((n) => n.criada) ?? notasT1[0])?.slug;
             if (slug) {
                 const { data } = await db
                     .from('knowledge')
@@ -329,21 +330,26 @@ async function correrCenario(cenario: Cenario, modo: Modo): Promise<ResultadoCen
 
             // asserts de placement do turno
             if (turno.nota === 'create') {
-                if (!r.nota) detalhes.push(`t${i + 1}: esperava criar nota, não escreveu`);
-                else if (!r.nota.criada)
-                    detalhes.push(`t${i + 1}: esperava criar, atualizou ${r.nota.slug}`);
+                if (!r.notas.length) detalhes.push(`t${i + 1}: esperava criar nota, não escreveu`);
+                else if (!r.notas.some((n) => n.criada))
+                    detalhes.push(
+                        `t${i + 1}: esperava criar, atualizou ${r.notas.map((n) => n.slug).join(', ')}`,
+                    );
             } else if (turno.nota === 'continuar') {
                 if (!slugAnterior)
                     detalhes.push(
                         `t${i + 1}: precondição falhou (turno anterior não escreveu nota)`,
                     );
-                else if (!r.nota) detalhes.push(`t${i + 1}: esperava continuar, não escreveu`);
-                else if (r.nota.slug !== slugAnterior)
+                else if (!r.notas.length)
+                    detalhes.push(`t${i + 1}: esperava continuar, não escreveu`);
+                else if (!r.notas.some((n) => n.slug === slugAnterior))
                     detalhes.push(
-                        `t${i + 1}: esperava continuar ${slugAnterior}, foi para ${r.nota.slug} (criada=${r.nota.criada})`,
+                        `t${i + 1}: esperava continuar ${slugAnterior}, foi para ${r.notas.map((n) => `${n.slug} (criada=${n.criada})`).join(', ')}`,
                     );
-            } else if (turno.nota === null && r.nota) {
-                detalhes.push(`t${i + 1}: não devia escrever nota, escreveu ${r.nota.slug}`);
+            } else if (turno.nota === null && r.notas.length) {
+                detalhes.push(
+                    `t${i + 1}: não devia escrever nota, escreveu ${r.notas.map((n) => n.slug).join(', ')}`,
+                );
             }
             if (turno.daily === true && !r.daily)
                 detalhes.push(`t${i + 1}: esperava daily, não registou`);
@@ -365,7 +371,13 @@ async function correrCenario(cenario: Cenario, modo: Modo): Promise<ResultadoCen
                     `t${i + 1}: esperava ${turno.tarefasConcluidas} concluída(s), houve ${concluidas}`,
                 );
 
-            if (r.nota) slugAnterior = r.nota.slug;
+            // Segue a nota dona do assunto: uma criada abre cadeia nova, senão
+            // mantém a que continuou o slug anterior; só assim 'continuar' encadeia.
+            if (r.notas.length) {
+                const criada = r.notas.find((n) => n.criada);
+                const continuada = r.notas.find((n) => n.slug === slugAnterior);
+                slugAnterior = (criada ?? continuada ?? r.notas[0]).slug;
+            }
         }
 
         if (cenario.checksFinais) detalhes.push(...(await cenario.checksFinais(db, resultados)));
