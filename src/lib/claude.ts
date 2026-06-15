@@ -32,12 +32,14 @@ export interface Generation {
     text: string;
     costUsd: number;
     model?: string; // o modelo REAL do envelope (modelUsage) — prova, não auto-relato
-    tokensIn?: number | null; // tokens de input do turno (contexto que o modelo viu)
+    tokensIn?: number | null; // input total do turno (fresco + cache)
+    tokensCache?: number | null; // porção lida/criada em cache (subconjunto de tokensIn)
     tokensOut?: number | null; // tokens de output do turno
 }
 
 export interface TokenUsage {
-    tokensIn: number | null;
+    tokensIn: number | null; // total: fresco + cache lido + cache criado
+    tokensCache: number | null; // só a porção de cache (lido + criado)
     tokensOut: number | null;
 }
 
@@ -45,21 +47,28 @@ function numeroOuNull(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function somaOuNull(...partes: (number | null)[]): number | null {
+    const numeros = partes.filter((n): n is number => n !== null);
+    return numeros.length ? numeros.reduce((a, b) => a + b, 0) : null;
+}
+
 // Tokens do envelope do claude (#65). O CLI (--output-format json) e a Messages
 // API partilham os MESMOS campos em `usage`. O `input_tokens` é só o input
 // FRESCO; o cache lido/criado foi processado na mesma, por isso o tokens_in
-// honesto = a soma dos três (o contexto real que o modelo viu). `output_tokens`
-// é direto. Campos ausentes → null (não inventa).
+// honesto = a soma dos três (o contexto real que o modelo viu). Devolve também
+// a porção de cache à parte para o trace mostrar fresco/cache/out — um total só
+// engana (parece enorme, mas o grosso é cache barato). Ausente → null.
 export function tokensDoEnvelopeClaude(usage: unknown): TokenUsage {
-    if (!usage || typeof usage !== 'object') return { tokensIn: null, tokensOut: null };
+    if (!usage || typeof usage !== 'object') {
+        return { tokensIn: null, tokensCache: null, tokensOut: null };
+    }
     const u = usage as Record<string, unknown>;
-    const partes = [
-        numeroOuNull(u.input_tokens),
-        numeroOuNull(u.cache_read_input_tokens),
-        numeroOuNull(u.cache_creation_input_tokens),
-    ].filter((n): n is number => n !== null);
+    const fresco = numeroOuNull(u.input_tokens);
+    const cacheRead = numeroOuNull(u.cache_read_input_tokens);
+    const cacheCreate = numeroOuNull(u.cache_creation_input_tokens);
     return {
-        tokensIn: partes.length ? partes.reduce((a, b) => a + b, 0) : null,
+        tokensIn: somaOuNull(fresco, cacheRead, cacheCreate),
+        tokensCache: somaOuNull(cacheRead, cacheCreate),
         tokensOut: numeroOuNull(u.output_tokens),
     };
 }
@@ -255,6 +264,7 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                         costUsd: Number(envelope.total_cost_usd ?? 0),
                         model: modelo,
                         tokensIn: tokens.tokensIn,
+                        tokensCache: tokens.tokensCache,
                         tokensOut: tokens.tokensOut,
                     }),
                 );

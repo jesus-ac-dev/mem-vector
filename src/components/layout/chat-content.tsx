@@ -439,7 +439,11 @@ function TraceInspector({
                                             <dd>{formatarCusto(trace?.costUsd)}</dd>
                                             <dt className="text-muted-foreground">tokens</dt>
                                             <dd>
-                                                {formatarTokens(trace?.tokensIn, trace?.tokensOut)}
+                                                {formatarTokens(
+                                                    trace?.tokensIn,
+                                                    trace?.tokensCache,
+                                                    trace?.tokensOut,
+                                                )}
                                             </dd>
                                             <dt className="text-muted-foreground">hora</dt>
                                             <dd>{formatarHora(trace?.createdAt)}</dd>
@@ -560,6 +564,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 effectiveModel: res.modelo ?? null,
                 costUsd: res.costUsd,
                 tokensIn: res.tokensIn,
+                tokensCache: res.tokensCache,
                 tokensOut: res.tokensOut,
                 latencyMs: res.latencyMs,
                 sourcesCount: res.sources.length,

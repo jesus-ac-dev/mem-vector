@@ -91,7 +91,8 @@ describe('tokensDoEnvelopeClaude', () => {
             output_tokens: 117,
         };
         expect(tokensDoEnvelopeClaude(usage)).toEqual({
-            tokensIn: 9 + 11545 + 17283,
+            tokensIn: 9 + 11545 + 17283, // total (fresco + cache)
+            tokensCache: 11545 + 17283, // só a porção de cache (lido + criado)
             tokensOut: 117,
         });
     });
@@ -99,13 +100,22 @@ describe('tokensDoEnvelopeClaude', () => {
     it('funciona sem campos de cache (só input/output)', () => {
         expect(tokensDoEnvelopeClaude({ input_tokens: 50, output_tokens: 20 })).toEqual({
             tokensIn: 50,
+            tokensCache: null,
             tokensOut: 20,
         });
     });
 
     it('devolve nulls quando o envelope não traz usage', () => {
-        expect(tokensDoEnvelopeClaude(undefined)).toEqual({ tokensIn: null, tokensOut: null });
-        expect(tokensDoEnvelopeClaude({})).toEqual({ tokensIn: null, tokensOut: null });
+        expect(tokensDoEnvelopeClaude(undefined)).toEqual({
+            tokensIn: null,
+            tokensCache: null,
+            tokensOut: null,
+        });
+        expect(tokensDoEnvelopeClaude({})).toEqual({
+            tokensIn: null,
+            tokensCache: null,
+            tokensOut: null,
+        });
     });
 });
 

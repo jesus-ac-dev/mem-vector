@@ -10,7 +10,8 @@ export interface ChatTrace {
     requestedModel?: string | null;
     effectiveModel?: string | null;
     costUsd?: number | null;
-    tokensIn?: number | null;
+    tokensIn?: number | null; // total (fresco + cache no claude)
+    tokensCache?: number | null; // porção de cache (só o claude reporta)
     tokensOut?: number | null;
     latencyMs?: number | null;
     sourcesCount?: number | null;
@@ -40,15 +41,22 @@ export function traceBadgeLabel(trace: ChatTrace | null | undefined): string {
     return `${traceProviderLabel(trace.provider)} · ${model}`;
 }
 
-// Tokens in/out do turno (#65) para o inspector de trace. Nenhum reportado =
-// diz alto (como o custo/latência); só um = travessão no lado em falta.
+// Tokens do turno (#65) para o inspector de trace. Com cache (claude) parte o
+// total em fresco/cache/out — um número só engana (parece enorme, mas o grosso
+// é cache barato). Sem cache (codex/gemini/ollama) mostra só in/out. Nenhum
+// reportado = diz alto; só um = travessão no lado em falta.
 export function formatarTokens(
     tokensIn: number | null | undefined,
+    tokensCache: number | null | undefined,
     tokensOut: number | null | undefined,
 ): string {
     const semIn = tokensIn === null || tokensIn === undefined;
     const semOut = tokensOut === null || tokensOut === undefined;
     if (semIn && semOut) return 'não reportado pelo provider';
+    if (typeof tokensIn === 'number' && typeof tokensCache === 'number' && tokensCache > 0) {
+        const fresco = Math.max(0, tokensIn - tokensCache);
+        return `${fresco} fresco · ${tokensCache} cache · ${semOut ? '—' : tokensOut} out`;
+    }
     return `${semIn ? '—' : tokensIn} in · ${semOut ? '—' : tokensOut} out`;
 }
 

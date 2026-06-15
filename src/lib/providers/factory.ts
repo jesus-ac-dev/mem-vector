@@ -20,7 +20,8 @@ export interface RespostaLLM {
     costUsd: number | null;
     model?: string; // o modelo REAL que respondeu (quando o provider o reporta)
     // Tokens do turno (#65); null onde o provider não os reporta (não inventa).
-    tokensIn?: number | null;
+    tokensIn?: number | null; // total (fresco + cache no claude)
+    tokensCache?: number | null; // porção de cache; só o claude tem cache de prompt
     tokensOut?: number | null;
 }
 
@@ -132,6 +133,7 @@ async function gerarClaudeApi(cfg: AgenteServidor, prompt: string): Promise<Resp
         costUsd: null,
         model: json.model,
         tokensIn: tokens.tokensIn,
+        tokensCache: tokens.tokensCache,
         tokensOut: tokens.tokensOut,
     };
 }
@@ -244,6 +246,7 @@ async function gerarCodexApi(cfg: AgenteServidor, prompt: string): Promise<Respo
         costUsd: null,
         model: json.model,
         tokensIn: tokensOuNull(json.usage?.prompt_tokens),
+        tokensCache: null, // OpenAI não separa cache de prompt aqui
         tokensOut: tokensOuNull(json.usage?.completion_tokens),
     };
 }
@@ -323,6 +326,7 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
                 costUsd: g.costUsd,
                 model: g.model,
                 tokensIn: g.tokensIn ?? null,
+                tokensCache: g.tokensCache ?? null,
                 tokensOut: g.tokensOut ?? null,
             };
         },
@@ -395,7 +399,14 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
                 // provado por execução real (r11) — não do auto-relato.
                 const model = stdout.match(/^model:\s*(.+)$/m)?.[1]?.trim();
                 // O exec do codex não expõe contagem de tokens fiável (#65).
-                return { text, costUsd: null, model, tokensIn: null, tokensOut: null };
+                return {
+                    text,
+                    costUsd: null,
+                    model,
+                    tokensIn: null,
+                    tokensCache: null,
+                    tokensOut: null,
+                };
             } finally {
                 await rm(tempDir, { recursive: true, force: true });
             }
@@ -483,6 +494,7 @@ function providerGeminiCli(cfg: AgenteServidor): ProviderLLM {
                 costUsd: null,
                 model: Object.keys(json.stats?.models ?? {})[0],
                 tokensIn: null,
+                tokensCache: null,
                 tokensOut: null,
             };
         },
@@ -546,6 +558,7 @@ function providerGemini(cfg: AgenteServidor): ProviderLLM {
                 costUsd: null,
                 model: json.modelVersion,
                 tokensIn: tokensOuNull(json.usageMetadata?.promptTokenCount),
+                tokensCache: null,
                 tokensOut: tokensOuNull(json.usageMetadata?.candidatesTokenCount),
             };
         },
@@ -629,6 +642,7 @@ function providerOllama(cfg: AgenteServidor): ProviderLLM {
                 costUsd: null,
                 model: json.model,
                 tokensIn: tokensOuNull(json.prompt_eval_count),
+                tokensCache: null,
                 tokensOut: tokensOuNull(json.eval_count),
             };
         },

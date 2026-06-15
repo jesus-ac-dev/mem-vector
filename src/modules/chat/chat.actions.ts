@@ -75,6 +75,7 @@ export async function ask(
             content: result.answer,
             cost_usd: result.costUsd,
             tokens_in: result.tokensIn,
+            tokens_cache: result.tokensCache,
             tokens_out: result.tokensOut,
             provider: result.provider,
             model_requested: result.modeloPedido,

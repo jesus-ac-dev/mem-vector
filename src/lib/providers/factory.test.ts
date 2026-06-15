@@ -238,7 +238,8 @@ describe('tokens in/out por turno (#65)', () => {
             }),
         );
         const r = await criarProvider('claude', cfgApi({ modelo: 'claude-opus-4-8' })).gerar('x');
-        expect(r.tokensIn).toBe(210);
+        expect(r.tokensIn).toBe(210); // 10 fresco + 200 cache
+        expect(r.tokensCache).toBe(200);
         expect(r.tokensOut).toBe(42);
     });
 
@@ -252,6 +253,7 @@ describe('tokens in/out por turno (#65)', () => {
         );
         const r = await criarProvider('codex', cfgApi({ modelo: 'gpt-5.5' })).gerar('x');
         expect(r.tokensIn).toBe(30);
+        expect(r.tokensCache).toBeNull(); // OpenAI não tem o conceito de cache aqui
         expect(r.tokensOut).toBe(12);
     });
 

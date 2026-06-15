@@ -55,17 +55,24 @@ describe('chat trace', () => {
 });
 
 describe('formatarTokens (#65)', () => {
-    it('mostra in e out quando o provider reporta', () => {
-        expect(formatarTokens(9, 117)).toBe('9 in · 117 out');
+    it('com cache (claude): mostra fresco/cache/out para o total não enganar', () => {
+        // o valor que assustou o Carlos: 23962 "in" eram 6679 frescos + 17283 cache.
+        expect(formatarTokens(23962, 17283, 532)).toBe('6679 fresco · 17283 cache · 532 out');
+    });
+
+    it('sem cache (codex/gemini/ollama): mostra só in · out', () => {
+        expect(formatarTokens(30, null, 12)).toBe('30 in · 12 out');
+        // cache zero não merece breakdown
+        expect(formatarTokens(30, 0, 12)).toBe('30 in · 12 out');
     });
 
     it('diz alto quando nenhum provider reporta tokens', () => {
-        expect(formatarTokens(null, null)).toBe('não reportado pelo provider');
-        expect(formatarTokens(undefined, undefined)).toBe('não reportado pelo provider');
+        expect(formatarTokens(null, null, null)).toBe('não reportado pelo provider');
+        expect(formatarTokens(undefined, undefined, undefined)).toBe('não reportado pelo provider');
     });
 
     it('mostra travessão no lado em falta quando só um é reportado', () => {
-        expect(formatarTokens(9, null)).toBe('9 in · — out');
-        expect(formatarTokens(null, 117)).toBe('— in · 117 out');
+        expect(formatarTokens(9, null, null)).toBe('9 in · — out');
+        expect(formatarTokens(null, null, 117)).toBe('— in · 117 out');
     });
 });

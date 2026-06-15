@@ -56,7 +56,8 @@ export interface ChatResult {
     answer: string;
     sources: Source[];
     costUsd: number | null; // providers fora do claude-cli não reportam custo
-    tokensIn: number | null; // tokens de input do turno (null onde o provider não reporta)
+    tokensIn: number | null; // input total do turno (fresco + cache; null se não reportado)
+    tokensCache: number | null; // porção de cache (só o claude reporta)
     tokensOut: number | null; // tokens de output do turno
     provider: Provider; // adapter que recebeu a chamada, não auto-relato
     latencyMs: number;
@@ -264,7 +265,7 @@ export async function respond(
     // estão afinados para ele.
     const { instancia, modeloPedido } = await providerDoChatCom(db);
     const startedAt = Date.now();
-    const { text, costUsd, model, tokensIn, tokensOut } = await instancia.gerar(
+    const { text, costUsd, model, tokensIn, tokensCache, tokensOut } = await instancia.gerar(
         buildPrompt(question, contexto, classificarIntencao(question), historico, kernel),
     );
     const latencyMs = Date.now() - startedAt;
@@ -274,6 +275,7 @@ export async function respond(
         sources,
         costUsd,
         tokensIn: tokensIn ?? null,
+        tokensCache: tokensCache ?? null,
         tokensOut: tokensOut ?? null,
         provider: instancia.nome,
         latencyMs,
