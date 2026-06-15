@@ -43,16 +43,20 @@ import {
     type Provider,
 } from '@/modules/definicoes/definicoes.schema';
 import { ProviderIcon } from '@/components/layout/provider-icon';
+import { providersPorForcarTeste } from '@/components/layout/definicoes-modal.logic';
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
 // forms à direita. Aqui PARAMETRIZA-SE (Comportamento, Agentes, Módulos) com
-// botão Guardar explícito — ao guardar, providers ativos alterados que o
-// utilizador não testou são testados à força. A ESCOLHA do provider/modelo do
-// chat vive na mini-modal do link sobre o Enviar (essa sim, grava onChange).
+// botão Guardar explícito — ao guardar, só os providers LIGADOS nesta sessão e
+// não testados são testados à força (mudar modelo/key ou desativar não dispara).
+// A ESCOLHA do provider/modelo do chat vive na mini-modal do link sobre o Enviar.
 
 type Pagina = 'comportamento' | 'agentes' | 'modulos' | Modulo;
 
 export const ABRIR_DEFINICOES_EVENT = 'memvector:abrir-definicoes';
+// Emitido ao guardar com sucesso: o composer do chat lê o provider/modelo das
+// definições e re-busca sem F5.
+export const DEFINICOES_MUDARAM_EVENT = 'memvector:definicoes-mudaram';
 
 export function pedirDefinicoes(pagina: Pagina = 'comportamento') {
     window.dispatchEvent(new CustomEvent(ABRIR_DEFINICOES_EVENT, { detail: pagina }));
@@ -95,8 +99,9 @@ export function DefinicoesModal({
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
     >({});
-    // Providers mexidos desde o load; o teste manual com ✓ confirma-os.
-    const [alterados, setAlterados] = useState<Set<Provider>>(new Set());
+    // Providers LIGADOS nesta sessão (ativo→true) — o Guardar força-lhes o teste
+    // se não forem confirmados pelo botão; o ✓ do teste manual confirma-os.
+    const [ligados, setLigados] = useState<Set<Provider>>(new Set());
     const [confirmados, setConfirmados] = useState<Set<Provider>>(new Set());
     const [sujo, setSujo] = useState(false);
     const [carregado, setCarregado] = useState(false);
@@ -122,7 +127,7 @@ export function DefinicoesModal({
             setCarregado(false);
             setKeysNovas({});
             setTestes({});
-            setAlterados(new Set());
+            setLigados(new Set());
             setConfirmados(new Set());
             setSujo(false);
             setEstado('');
@@ -151,10 +156,7 @@ export function DefinicoesModal({
         setEstado('');
     }
 
-    function mudarAgente(p: Provider, campos: Partial<AgenteVista>) {
-        const atual = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
-        editar({ ...defs, agentes: { ...defs.agentes, [p]: { ...atual, ...campos } } });
-        setAlterados((s) => new Set(s).add(p));
+    function descartarConfirmacao(p: Provider) {
         setConfirmados((s) => {
             const n = new Set(s);
             n.delete(p);
@@ -162,16 +164,28 @@ export function DefinicoesModal({
         });
     }
 
+    function mudarAgente(p: Provider, campos: Partial<AgenteVista>) {
+        const atual = defs.agentes[p] ?? AGENTE_SEM_CONFIG;
+        editar({ ...defs, agentes: { ...defs.agentes, [p]: { ...atual, ...campos } } });
+        // Ligar nesta sessão marca-o para teste forçado no Guardar; desligar
+        // tira-o da lista (um provider inativo nunca é testado).
+        if (campos.ativo === true) setLigados((s) => new Set(s).add(p));
+        if (campos.ativo === false)
+            setLigados((s) => {
+                const n = new Set(s);
+                n.delete(p);
+                return n;
+            });
+        descartarConfirmacao(p);
+    }
+
     function escreverKey(p: Provider, valor: string) {
         setKeysNovas((k) => ({ ...k, [p]: valor }));
         setSujo(true);
         setEstado('');
-        setAlterados((s) => new Set(s).add(p));
-        setConfirmados((s) => {
-            const n = new Set(s);
-            n.delete(p);
-            return n;
-        });
+        // Mudar a key reseta o ✓ (a prova antiga deixa de valer) mas não força
+        // teste no Guardar — só ligar um provider o faz.
+        descartarConfirmacao(p);
     }
 
     function toggleModulo(m: Modulo, ativo: boolean) {
@@ -224,14 +238,12 @@ export function DefinicoesModal({
     }
 
     // Guardar (pedido do Carlos): persiste tudo, mas antes FORÇA o teste de
-    // ligação aos providers ativos alterados que o utilizador não confirmou
-    // ele próprio. Teste vermelho = não grava (corrige ou desativa) — sem
-    // exceções: o teste corre contra o pendente (r9), keys novas incluídas.
+    // ligação só aos providers LIGADOS nesta sessão e ainda não confirmados.
+    // Teste vermelho = não grava (corrige ou desativa) — o teste corre contra o
+    // pendente (r9), keys novas incluídas. Desativar todos passa sem testar.
     async function guardarTudo() {
         setEstado('a-guardar');
-        const porTestar = PROVIDERS.filter(
-            (p) => defs.agentes[p]?.ativo && alterados.has(p) && !confirmados.has(p),
-        );
+        const porTestar = providersPorForcarTeste(defs.agentes, ligados, confirmados);
         for (const p of porTestar) {
             const ok = await correrTeste(p);
             if (!ok) {
@@ -269,9 +281,12 @@ export function DefinicoesModal({
         }
         setDefs(r);
         setKeysNovas({});
-        setAlterados(new Set());
+        setLigados(new Set());
         setSujo(false);
         setEstado('guardado');
+        // O composer do chat lê o provider/modelo daqui — avisa-o para re-buscar
+        // sem F5 (antes ficava preso à leitura do mount).
+        window.dispatchEvent(new Event(DEFINICOES_MUDARAM_EVENT));
     }
 
     const itemMenu = (id: Pagina, label: string, grupo = false) => (
