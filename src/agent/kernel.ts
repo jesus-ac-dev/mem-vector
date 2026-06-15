@@ -83,10 +83,45 @@ export async function blocoKernelCom(db: SupabaseClient): Promise<string> {
     }
 }
 
+// Mythos Base (#44): a camada GENÉRICA do seed — a língua do produto que serve
+// qualquer utilizador, semeada ao lado do KERNEL_SEED. O glossário do produto
+// entra aqui; o glossário PESSOAL do dono (a língua que ele cunhou) importa-se
+// com o seed:user/onboarding (#40), e o relay/orquestrador entra quando o
+// módulo GitHub nascer.
+export const MYTHOS_BASE_SEED: { title: string; contentMd: string }[] = [
+    {
+        title: 'Glossário',
+        contentMd:
+            '# Glossário (a língua do mem-vector)\n\n' +
+            'A língua-base do produto — o que cada coisa significa aqui. (O teu ' +
+            'glossário pessoal e os termos de cada módulo crescem por cima.)\n\n' +
+            '- **Nota / Knowledge** — página de conhecimento escrita e atualizada ' +
+            'pelo agente; título, corpo markdown, tags e ligações [[wikilink]].\n' +
+            '- **Daily** — registo diário do que aconteceu nas conversas; a memória ' +
+            'cronológica do workspace.\n' +
+            '- **Tarefa** — item de trabalho com estado (kanban), prioridade, ' +
+            'projeto e datas; o agente cria e conclui.\n' +
+            '- **Projeto** — pasta que agrupa trabalho relacionado; "Pessoal" é o ' +
+            'projeto-vida por defeito.\n' +
+            '- **Kernel** — a pasta na raiz com identidade, prioridades e regras; o ' +
+            'agente lê-a em todos os arranques.\n' +
+            '- **Agente-autor** — o agente é o autor: tu falas, ele escreve o estado ' +
+            '(notas, tarefas, daily).\n' +
+            '- **Destilação** — depois de cada conversa o agente decide se e onde ' +
+            'registar o que vale (nota, tarefa, daily, decisão).\n' +
+            '- **RAG / pesquisa** — recuperação por significado sobre o que já foi ' +
+            'escrito ("o que decidimos?").\n' +
+            '- **Arquivo** — arquivar tira do espaço de trabalho ativo (sai do ' +
+            'explorer e da pesquisa); a memória persiste e pode voltar.\n' +
+            '- **Teia / wikilink** — [[ligações]] entre notas, dailies e conversas; ' +
+            'o grafo mostra a rede.\n',
+    },
+];
+
 // Notas iniciais do Kernel (#36, personalizadas no #39): nascem com a pasta —
 // e como vêm aí resets de BD, o conteúdo real do Carlos vive AQUI no seeder
-// (pedido dele, 2026-06-11). O onboarding de novos utilizadores preencherá
-// isto por entrevista (#40); até lá, esta é a instância do Carlos.
+// (pedido dele, 2026-06-11). É a camada PESSOAL (separar para um seed:user
+// dedicado é o #40); por agora, esta é a instância do Carlos.
 export const KERNEL_SEED: { title: string; contentMd: string }[] = [
     {
         title: 'Sobre mim',
@@ -180,7 +215,8 @@ export async function garantirKernelCom(db: SupabaseClient, userId?: string): Pr
         const { criarPastaCom } = await import('@/modules/folders/folders.service');
         const { escreverNotaEmPastaCom } = await import('@/modules/knowledge/knowledge.service');
         const pasta = await criarPastaCom(db, 'Kernel');
-        for (const seed of KERNEL_SEED) {
+        // Mythos Base (genérico) primeiro, depois o pessoal (#44).
+        for (const seed of [...MYTHOS_BASE_SEED, ...KERNEL_SEED]) {
             await escreverNotaEmPastaCom(
                 db,
                 {
