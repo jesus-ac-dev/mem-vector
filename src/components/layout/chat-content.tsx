@@ -23,7 +23,7 @@ import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
 import { gravarEscolhaChat, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
 import { ProviderIcon } from '@/components/layout/provider-icon';
-import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
+import { DEFINICOES_MUDARAM_EVENT, pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import {
     ESFORCOS,
     MODELOS_SUGERIDOS,
@@ -477,14 +477,26 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [defsChat, setDefsChat] = useState<DefinicoesVista | null>(null);
     const [traceAberto, setTraceAberto] = useState(false);
 
+    const defsCanceladoRef = useRef(false);
     useEffect(() => {
-        let cancelado = false;
-        void runClientAction({ area: 'chat', action: 'lerDefinicoes' }, lerDefinicoes).then((d) => {
-            if (cancelado || !d) return;
-            setDefsChat(d);
-        });
+        defsCanceladoRef.current = false;
+        function carregarDefs() {
+            void runClientAction({ area: 'chat', action: 'lerDefinicoes' }, lerDefinicoes).then(
+                (d) => {
+                    // ref (não closure): o cancelamento cobre também os re-fetches
+                    // do listener, não só a leitura inicial do mount.
+                    if (defsCanceladoRef.current || !d) return;
+                    setDefsChat(d);
+                },
+            );
+        }
+        carregarDefs();
+        // Guardar nas Definições muda o provider/modelo do chat — re-busca sem F5
+        // (antes os controlos do composer ficavam presos à leitura do mount).
+        window.addEventListener(DEFINICOES_MUDARAM_EVENT, carregarDefs);
         return () => {
-            cancelado = true;
+            defsCanceladoRef.current = true;
+            window.removeEventListener(DEFINICOES_MUDARAM_EVENT, carregarDefs);
         };
     }, []);
 

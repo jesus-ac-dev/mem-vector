@@ -8,9 +8,10 @@ Guarda as opções do workspace (1 linha por utilizador; **sem linha = defaults*
 utilizador novo não precisa de seed). A UI é a mega modal aberta pela dropdown do
 badge: menu lateral à esquerda (Principais: Agentes, Módulos; grupo "Módulos ativos"
 com a página de cada módulo ligado), forms à direita e **botão Guardar explícito** —
-ao guardar, providers ativos alterados que o utilizador não testou são **testados à
-força** (teste vermelho = não grava, **sem exceções** — r9 matou o bypass das keys
-novas: o teste corre contra a config PENDENTE do form, key incluída). A ESCOLHA de quem responde ao chat vive na
+ao guardar, só os providers **ligados nesta sessão** e ainda não testados são **testados à
+força** (teste vermelho = não grava; desativar ou só mudar modelo/key não dispara teste —
+o utilizador testa à mão se quiser). O teste corre contra a config PENDENTE do form, key
+incluída (r9 matou o bypass das keys novas). A ESCOLHA de quem responde ao chat vive na
 **mini-modal do link sobre o Enviar** (`escolha-modelo-modal.tsx`) — essa sim grava
 onChange, só entre providers já parametrizados.
 
