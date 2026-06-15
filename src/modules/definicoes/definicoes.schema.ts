@@ -197,16 +197,12 @@ export const DefinicoesSchema = z.object({
 
 export type Definicoes = z.infer<typeof DefinicoesSchema>;
 
-// O orquestrador de hoje: claude por cli (subscrição) — é o default vivo.
-export const AGENTE_CLAUDE_DEFAULT: AgenteVista = {
-    ativo: true,
-    modo: 'cli',
-    temApiKey: false,
-};
-
+// Sem defaults (#40, caminho a): um user novo NÃO nasce com provider ativo —
+// configura as suas ligações em Definições > Agentes. Nenhum agente herda a
+// conta/subscrição da máquina.
 export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     metodoDestilacao: 'one-shot',
     modulosAtivos: [],
     chatProvider: 'claude',
-    agentes: { claude: AGENTE_CLAUDE_DEFAULT },
+    agentes: {},
 };

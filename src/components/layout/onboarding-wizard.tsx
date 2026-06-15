@@ -14,6 +14,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { completarOnboarding } from '@/modules/onboarding/onboarding.actions';
+import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
 
 // Onboarding (#40): wizard sequencial (página por pergunta) que nasce no 1.º
 // login de um user fresh — reusa o chassis Dialog das Definições, mas linear.
@@ -64,6 +65,8 @@ export function OnboardingWizard({ precisaOnboarding }: { precisaOnboarding: boo
         setAGravar(false);
         if (ok) {
             setOpen(false);
+            // Caminho (a): a seguir ao onboarding, o user configura as ligações.
+            pedirDefinicoes('agentes');
             router.refresh();
         }
     }

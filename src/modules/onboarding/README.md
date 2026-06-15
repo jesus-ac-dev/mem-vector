@@ -13,6 +13,10 @@ Um utilizador **novo** nasce só com o Mythos Base. `precisaOnboardingCom` detet
 
 O dono (`seed:user`) já nasce com o pessoal e **não** vê o wizard. O wizard é fechável; reabre no próximo login enquanto o pessoal não existir (deteção por notas, sem flag/migration nesta fatia).
 
+### Caminho (a): sem defaults de provider
+
+Um user novo **não herda a conta/subscrição da máquina**. As Definições nascem **sem provider ativo** (`agentes: {}` — quer sem row, quer com row gravada vazia), e `providerDoChatCom` (factory) **perde o fallback** `claude/cli`: sem provider ativo, lança `Configura um provider em Definições > Agentes` (o chat mostra a mensagem). Ao concluir as 3 perguntas, o wizard abre **Definições > Agentes** (`pedirDefinicoes('agentes')`) para o user criar as suas ligações. Fecha o furo "é pra todos" das credenciais (decisão do Carlos, #40).
+
 ## Ficheiros
 
 | Ficheiro                | Responsabilidade                                                              |
