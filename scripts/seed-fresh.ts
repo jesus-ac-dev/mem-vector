@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+import { esperarAuthHealth } from './auth-health';
 
 process.loadEnvFile('.env.local');
 
@@ -9,6 +10,9 @@ const PASSWORD = 'fresh-password-123';
 // semeia só o Mythos Base e dispara o onboarding — é como smokar a experiência
 // de um utilizador novo.
 async function main(): Promise<void> {
+    // Robustez pós-reset (#71): esperar o GoTrue antes de criar o utilizador.
+    await esperarAuthHealth(process.env.NEXT_PUBLIC_SUPABASE_URL!);
+
     const admin = getSupabaseAdmin();
     const { error } = await admin.auth.admin.createUser({
         email: EMAIL,
