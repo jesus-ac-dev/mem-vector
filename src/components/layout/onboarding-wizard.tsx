@@ -66,8 +66,13 @@ export function OnboardingWizard({ precisaOnboarding }: { precisaOnboarding: boo
         if (ok) {
             setOpen(false);
             // Caminho (a): a seguir ao onboarding, o user configura as ligações.
-            pedirDefinicoes('agentes');
-            router.refresh();
+            // Abrir as Definições e refrescar só DEPOIS de este Dialog fechar —
+            // no mesmo tick, dois Dialogs Radix trocam o lock de pointer-events
+            // (e o refresh desmonta este a meio) e o overlay ficava preso.
+            setTimeout(() => {
+                pedirDefinicoes('agentes');
+                router.refresh();
+            }, 250);
         }
     }
 

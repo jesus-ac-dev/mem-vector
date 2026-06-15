@@ -23,6 +23,7 @@ import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
 import { gravarEscolhaChat, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
 import { ProviderIcon } from '@/components/layout/provider-icon';
+import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import {
     ESFORCOS,
     MODELOS_SUGERIDOS,
@@ -239,6 +240,24 @@ function ChatControls({
                 modelo: campos.modelo,
                 esforco: campos.esforco,
             }),
+        );
+    }
+
+    // Caminho (a): sem provider ativo, em vez dos dropdowns mostra-se o erro
+    // + atalho para configurar (não há default que use a conta da máquina).
+    if (defs && ativos.length === 0) {
+        return (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 text-[0.7rem] text-muted-foreground">
+                <span>Sem provider configurado.</span>
+                <Button
+                    type="button"
+                    variant="link"
+                    onClick={() => pedirDefinicoes('agentes')}
+                    className="h-auto p-0 text-[0.7rem]"
+                >
+                    Configurar em Definições &gt; Agentes
+                </Button>
+            </div>
         );
     }
 
