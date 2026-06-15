@@ -102,7 +102,8 @@ describe('garantirKernelCom (seed #36, integração RLS)', () => {
         'cria pasta + notas seed uma vez; segunda chamada é no-op; arquivada é opt-out',
         { timeout: 60_000 },
         async () => {
-            const { garantirKernelCom, lerKernelCom, KERNEL_SEED } = await import('@/agent/kernel');
+            const { garantirKernelCom, lerKernelCom, KERNEL_SEED, MYTHOS_BASE_SEED } =
+                await import('@/agent/kernel');
             const admin = getSupabaseAdmin();
             const bob = await userClient('bob-kernel-seed@test.local', 'pw-bob-123');
             const bobId = (await bob.auth.getUser()).data.user!.id;
@@ -131,7 +132,7 @@ describe('garantirKernelCom (seed #36, integração RLS)', () => {
             expect(await garantirKernelCom(bob)).toBe(true);
             const kernel = await lerKernelCom(bob);
             expect(kernel.map((n) => n.title).sort()).toEqual(
-                KERNEL_SEED.map((s) => s.title).sort(),
+                [...MYTHOS_BASE_SEED, ...KERNEL_SEED].map((s) => s.title).sort(),
             );
 
             // 2ª chamada: idempotente
