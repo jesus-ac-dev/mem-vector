@@ -69,10 +69,11 @@ export function OnboardingWizard({ precisaOnboarding }: { precisaOnboarding: boo
     }
 
     return (
-        // Fechável (o user pode adiar); reabre no próximo login enquanto o
-        // pessoal não existir no Kernel.
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent className="max-w-lg">
+        // Não-dismissable: o onboarding não fecha a meio (sem X, sem Esc/clique
+        // fora — `[&>button]:hidden` esconde o X do DialogContent). Só sai ao
+        // concluir; o objetivo é o Kernel nascer preenchido.
+        <Dialog open={open} onOpenChange={() => undefined}>
+            <DialogContent className="max-w-2xl [&>button]:hidden">
                 <DialogHeader>
                     <DialogTitle>{atual.titulo}</DialogTitle>
                     <DialogDescription>
@@ -83,7 +84,7 @@ export function OnboardingWizard({ precisaOnboarding }: { precisaOnboarding: boo
                     value={valor}
                     onChange={(e) => setRespostas((r) => ({ ...r, [atual.chave]: e.target.value }))}
                     placeholder={atual.placeholder}
-                    rows={6}
+                    rows={8}
                     autoFocus
                 />
                 <div className="flex justify-between">
