@@ -190,7 +190,14 @@ export const KERNEL_SEED: { title: string; contentMd: string }[] = [
 // Seed idempotente (#36): cria a pasta Kernel + notas iniciais quando o
 // workspace ainda não tem NENHUMA pasta Kernel na raiz — em qualquer estado:
 // arquivada conta como opt-out do utilizador e não se recria. Não-fatal.
-export async function garantirKernelCom(db: SupabaseClient, userId?: string): Promise<boolean> {
+// Por defeito semeia só o Mythos Base (genérico); `incluirPessoal` acrescenta a
+// camada pessoal — o atalho do dono via seed:user (#40). Um user novo nasce só
+// com o Mythos Base e preenche o pessoal pelo onboarding.
+export async function garantirKernelCom(
+    db: SupabaseClient,
+    userId?: string,
+    incluirPessoal = false,
+): Promise<boolean> {
     try {
         // O layout já tem o user — aceitar o id poupa um auth.getUser por
         // request no hot path (audit #36).
@@ -215,8 +222,9 @@ export async function garantirKernelCom(db: SupabaseClient, userId?: string): Pr
         const { criarPastaCom } = await import('@/modules/folders/folders.service');
         const { escreverNotaEmPastaCom } = await import('@/modules/knowledge/knowledge.service');
         const pasta = await criarPastaCom(db, 'Kernel');
-        // Mythos Base (genérico) primeiro, depois o pessoal (#44).
-        for (const seed of [...MYTHOS_BASE_SEED, ...KERNEL_SEED]) {
+        // Mythos Base sempre; o pessoal só no atalho do dono (#40).
+        const seeds = incluirPessoal ? [...MYTHOS_BASE_SEED, ...KERNEL_SEED] : MYTHOS_BASE_SEED;
+        for (const seed of seeds) {
             await escreverNotaEmPastaCom(
                 db,
                 {
@@ -232,6 +240,38 @@ export async function garantirKernelCom(db: SupabaseClient, userId?: string): Pr
         return true;
     } catch (e) {
         console.error('seed do Kernel falhou (segue sem):', e);
+        return false;
+    }
+}
+
+// Id da pasta Kernel na raiz (case-insensitive, não arquivada), ou null.
+export async function pastaKernelIdCom(db: SupabaseClient): Promise<string | null> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) return null;
+    const { data: pastas, error } = await db
+        .from('folders')
+        .select('id')
+        .eq('owner_id', user.id)
+        .is('parent_id', null)
+        .eq('archived', false)
+        .ilike('name', 'kernel');
+    if (error) throw new Error(`procurar pasta Kernel: ${error.message}`);
+    return pastas?.length ? String(pastas[0].id) : null;
+}
+
+// Onboarding (#40): um user que já tem Kernel (Mythos Base semeado) mas ainda
+// não tem a nota pessoal "Sobre mim" é novo — falta preencher o pessoal pela
+// entrevista. O dono (seed:user) nasce com o pessoal e não cai aqui. Sem Kernel
+// (opt-out / antes do seed) não força. Não-fatal: nunca bloqueia o arranque.
+export async function precisaOnboardingCom(db: SupabaseClient): Promise<boolean> {
+    try {
+        const notas = await lerKernelCom(db);
+        if (!notas.length) return false;
+        return !notas.some((n) => n.title === 'Sobre mim');
+    } catch (e) {
+        console.error('precisaOnboarding falhou (segue sem):', e);
         return false;
     }
 }
