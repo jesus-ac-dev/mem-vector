@@ -617,7 +617,8 @@ export function criarProvider(nome: Provider, cfg: AgenteServidor): ProviderLLM 
     return REGISTO[nome](cfg);
 }
 
-/** O provider do chat segundo as definições; claude/cli como rede de segurança.
+/** O provider do chat segundo as definições — sem fallback: sem provider ativo
+ *  lança erro (o user configura em Definições > Agentes, #40 caminho a).
  *  Devolve também o modelo PEDIDO (r12): a legenda compara-o com o real da
  *  metadata — é a garantia por resposta de que a escolha foi honrada. */
 export async function providerDoChatCom(
@@ -629,6 +630,7 @@ export async function providerDoChatCom(
     if (cfg?.ativo) {
         return { instancia: criarProvider(escolhido, cfg), modeloPedido: cfg.modelo };
     }
-    const fallback = defs.agentes.claude ?? { ativo: true, modo: 'cli' as const };
-    return { instancia: criarProvider('claude', fallback), modeloPedido: fallback.modelo };
+    // Sem defaults (#40, caminho a): sem provider ativo não se cai na conta da
+    // máquina — pede-se ao utilizador que configure as suas ligações.
+    throw new Error('Configura um provider em Definições > Agentes antes de conversar.');
 }

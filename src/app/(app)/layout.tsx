@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { AppHeader } from '@/components/layout/app-header';
 import { WorkspaceShell } from '@/components/layout/workspace-shell';
+import { OnboardingWizard } from '@/components/layout/onboarding-wizard';
 import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 import { listarDailies } from '@/modules/daily/daily.service';
 import { listarPastas } from '@/modules/folders/folders.service';
 import { construirArvore } from '@/modules/folders/folders.tree';
-import { garantirKernelCom } from '@/agent/kernel';
+import { garantirKernelCom, precisaOnboardingCom } from '@/agent/kernel';
 import { garantirPessoalCom, listarProjetosCom } from '@/modules/projetos/projetos.service';
 import { dataPt } from '@/lib/datas';
 
@@ -36,6 +37,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (user) {
         await Promise.all([garantirKernelCom(supabase, user.id), garantirPessoalCom(supabase)]);
     }
+    // Onboarding (#40): um user fresh nasce com o Kernel só em Mythos Base (sem
+    // "Sobre mim") e cai no wizard que preenche o pessoal; o dono (seed:user) já
+    // nasce com o pessoal e não o vê.
+    const precisaOnboarding = user ? await precisaOnboardingCom(supabase) : false;
 
     const [pastas, notas, dailies, projetos] = await Promise.all([
         listarPastas(),
@@ -70,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             >
                 {children}
             </WorkspaceShell>
+            <OnboardingWizard precisaOnboarding={precisaOnboarding} />
         </div>
     );
 }

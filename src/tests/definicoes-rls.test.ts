@@ -53,13 +53,47 @@ describe('definições (#60, integração RLS)', () => {
         await admin.from('definicoes').delete().in('owner_id', ids);
     });
 
-    it('sem linha devolve os defaults (one-shot, claude/cli)', { timeout: 30_000 }, async () => {
-        const { lerDefinicoesVistaCom } = await import('@/modules/definicoes/definicoes.service');
-        const d = await lerDefinicoesVistaCom(alice);
-        expect(d.metodoDestilacao).toBe('one-shot');
-        expect(d.chatProvider).toBe('claude');
-        expect(d.agentes.claude?.ativo).toBe(true); // o orquestrador vivo
-    });
+    it(
+        'sem linha = sem provider ativo (#40 caminho a: o user configura)',
+        { timeout: 30_000 },
+        async () => {
+            const { lerDefinicoesVistaCom } =
+                await import('@/modules/definicoes/definicoes.service');
+            const d = await lerDefinicoesVistaCom(alice);
+            expect(d.metodoDestilacao).toBe('one-shot');
+            // Sem defaults: nenhum agente herda a conta da máquina.
+            expect(Object.keys(d.agentes)).toHaveLength(0);
+        },
+    );
+
+    it(
+        'sem provider ativo, providerDoChatCom lança (não cai na conta da máquina)',
+        { timeout: 30_000 },
+        async () => {
+            const { providerDoChatCom } = await import('@/lib/providers/factory');
+            await expect(providerDoChatCom(alice)).rejects.toThrow(/Configura um provider/);
+        },
+    );
+
+    it(
+        'row gravada com agentes vazios = sem provider ativo (2.ª via fechada)',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+            const { providerDoChatCom } = await import('@/lib/providers/factory');
+            // Gravar SEM ativar provider já não re-injeta claude/cli.
+            await gravarDefinicoesCom(bruno, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                agentes: {},
+            });
+            const servidor = await lerDefinicoesServidorCom(bruno);
+            expect(Object.keys(servidor.agentes)).toHaveLength(0);
+            await expect(providerDoChatCom(bruno)).rejects.toThrow(/Configura um provider/);
+        },
+    );
 
     it(
         'grava com key: cifra at rest, mascara na vista, decifra no servidor',

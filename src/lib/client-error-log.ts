@@ -99,7 +99,14 @@ export function logClientError(context: ClientErrorContext, error: unknown): Cli
         w.__MEM_VECTOR_ERRORS__ = [entry, ...(w.__MEM_VECTOR_ERRORS__ ?? [])].slice(0, 25);
     }
 
-    console.error('[mem-vector/client-error]', entry);
+    // Mensagem legível: o overlay do Next mostra o objeto como `{}` e esconde a
+    // causa. área/ação + name + message + digest dizem se foi sessão expirada,
+    // action ID stale (dev), ou erro real. O objeto completo fica no buffer.
+    console.error(
+        `[mem-vector/client-error] ${context.area}/${context.action}: ` +
+            `${entry.error.name}: ${entry.error.message}` +
+            (entry.error.digest ? ` (digest ${entry.error.digest})` : ''),
+    );
     return entry;
 }
 

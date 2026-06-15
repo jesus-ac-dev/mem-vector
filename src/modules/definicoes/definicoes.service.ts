@@ -70,9 +70,8 @@ function agentesDaRow(row: DefinicoesRow): Partial<Record<Provider, AgenteRow>> 
         const cfg = row.agentes?.[p];
         if (cfg && typeof cfg === 'object') agentes[p] = cfg;
     }
-    // Claude/cli é o orquestrador vivo: sem nenhum provider gravado, volta ao
-    // default em vez de ficar a zero.
-    if (Object.keys(agentes).length === 0) agentes.claude = { ativo: true, modo: 'cli' };
+    // Sem defaults (#40, caminho a): agentes vazios ficam vazios — não se
+    // re-injeta claude/cli (era a 2.ª via para a conta da máquina).
     return agentes;
 }
 
@@ -101,11 +100,12 @@ export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<Definic
 export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<DefinicoesServidor> {
     const row = await lerRowCom(db);
     if (!row) {
+        // Sem defaults (#40, caminho a): sem row = nenhum provider ativo.
         return {
             metodoDestilacao: 'one-shot',
             modulosAtivos: [],
             chatProvider: 'claude',
-            agentes: { claude: { ativo: true, modo: 'cli' } },
+            agentes: {},
         };
     }
     const base = normalizar(row);
