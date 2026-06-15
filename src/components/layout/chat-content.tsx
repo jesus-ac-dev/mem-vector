@@ -526,6 +526,13 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
         const question = input.trim();
         if (!question || pending) return;
         setError(null);
+        // Caminho (a): sem provider configurado é estado ESPERADO — avisa inline
+        // (a vermelho, acima da textarea) sem chamar o servidor nem logar como
+        // erro de app. O throw no factory fica só como guarda de último recurso.
+        if (defsChat && !PROVIDERS.some((p) => defsChat.agentes[p]?.ativo)) {
+            setError('Configura um provider em Definições > Agentes antes de conversar.');
+            return;
+        }
         const userMsgId = nextIdRef.current++;
         setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: question }]);
         setInput('');
