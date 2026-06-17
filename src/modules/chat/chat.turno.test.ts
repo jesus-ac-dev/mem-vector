@@ -22,6 +22,30 @@ describe('buildTurnoPrompt com candidatos', () => {
     });
 });
 
+// #82: o agente-autor escrevia notas sem [[wikilinks]] → clusters isolados. O
+// prompt passa a mandar ligar assuntos relacionados (rede, não notas soltas).
+describe('buildTurnoPrompt: ligações entre notas (#82)', () => {
+    it('manda ligar assuntos relacionados com [[wikilinks]] — o workspace é uma rede', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt.toLowerCase()).toContain('rede');
+        expect(prompt).toContain('[[título exato]]');
+    });
+
+    it('oferece os candidatos também como alvos de ligação, não só para continuar', () => {
+        const prompt = buildTurnoPrompt('q', 'a', [
+            {
+                id: 'id-rag',
+                slug: 'rag-do-mem-vector',
+                title: 'RAG do mem-vector',
+                contentMd: 'Notas sobre o RAG.',
+            },
+        ]);
+        expect(prompt).toContain('RAG do mem-vector');
+        // a secção de candidatos instrui a LIGAR quando é assunto vizinho (não só continuar)
+        expect(prompt.toLowerCase()).toContain('assunto vizinho');
+    });
+});
+
 // Declarativa sem marcas de pergunta = facto declarado → a nota é obrigatória,
 // salvo trivialidade (#19, decisão 2026-06-10).
 describe('buildTurnoPrompt com intenção declarativa', () => {
