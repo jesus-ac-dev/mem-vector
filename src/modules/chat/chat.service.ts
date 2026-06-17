@@ -231,12 +231,13 @@ interface TurnoPreparado {
     sources: Source[];
     prompt: string;
     webHabilitada: boolean; // #45
-    braveKey?: string; // #45: key Brave das Definições (cifrada), p/ a pesquisa web
+    webKey?: string; // #45: key Tavily das Definições (cifrada), p/ a pesquisa web
 }
 
-// Fase do turno para o indicador dinâmico (#66/#45): consultar → gerar; com web
-// ON entra a fase 'web' (a internet). Tool-use de escrita vive na destilação.
-export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number } | { fase: 'web' };
+// Fase do turno para o indicador dinâmico (#66): consultar → gerar. O caminho
+// web não tem fase própria (r3): só se sabe se foi à net no fim (🌐 N fontes),
+// por isso não se anuncia "a consultar a internet" à força.
+export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number };
 
 // Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
 // pelo respond (one-shot) e pelo respondStream (#66). O histórico (janela da
@@ -249,7 +250,7 @@ async function prepararTurno(
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
-    const { instancia, modeloPedido, matchCount, webHabilitada, braveKey } =
+    const { instancia, modeloPedido, matchCount, webHabilitada, webKey } =
         await providerDoChatCom(db);
     onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
@@ -291,7 +292,7 @@ async function prepararTurno(
     );
     // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
     onFase?.({ fase: 'gerar', fontes: sources.length });
-    return { db, instancia, modeloPedido, sources, prompt, webHabilitada, braveKey };
+    return { db, instancia, modeloPedido, sources, prompt, webHabilitada, webKey };
 }
 
 function montarResultado(resp: RespostaLLM, t: TurnoPreparado, latencyMs: number): ChatResult {
@@ -331,14 +332,16 @@ export async function respondStream(
     const t = await prepararTurno(question, historico, onFase);
     const startedAt = Date.now();
 
-    // #45: web ON → a resposta corre agentic-com-web (loop de tools que pesquisa
-    // a internet de verdade). Não streama nesta fatia: o texto sai num bloco no
-    // fim. Web OFF (default) = caminho de sempre, intocado.
+    // #45: web ON → a resposta corre agentic-com-web (loop de tools que PODE
+    // pesquisar a internet — só o faz se a pergunta precisar de um facto externo;
+    // perguntas do workspace respondem do contexto, sem ir à net). Não anuncia
+    // "a consultar a internet" à força (r3, Carlos): a UI mantém "a gerar (N fontes)"
+    // da prepararTurno e o "🌐 N fontes" no fim diz se a web foi mesmo usada. Não
+    // streama: texto num bloco. Web OFF (default) = caminho de sempre, intocado.
     if (t.webHabilitada) {
-        onFase?.({ fase: 'web' });
-        // Key Brave: das Definições (cifrada, por-utilizador); env como fallback de operação.
-        const braveKey = t.braveKey || process.env.MEMVECTOR_AGENT_BRAVE_KEY;
-        const r = await responderComWebCom(t.db, t.prompt, braveKey);
+        // Key Tavily: das Definições (cifrada, por-utilizador); env como fallback de operação.
+        const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
+        const r = await responderComWebCom(t.db, t.prompt, webKey);
         onTextDelta(r.text);
         return {
             answer: r.text,

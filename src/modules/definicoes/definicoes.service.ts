@@ -34,7 +34,7 @@ interface DefinicoesRow {
     chat_provider?: string | null;
     match_count?: number | null;
     web_habilitada?: boolean | null;
-    brave_key_cifrada?: string | null;
+    web_key_cifrada?: string | null;
     agentes: Record<string, AgenteRow> | null;
 }
 
@@ -42,15 +42,15 @@ async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
         .select(
-            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, brave_key_cifrada, agentes',
+            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, agentes',
         )
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
     return data as DefinicoesRow | null;
 }
 
-function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes' | 'braveKey'> {
-    const parsed = DefinicoesSchema.omit({ agentes: true, braveKey: true }).safeParse({
+function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes' | 'webKey'> {
+    const parsed = DefinicoesSchema.omit({ agentes: true, webKey: true }).safeParse({
         metodoDestilacao: row.metodo_destilacao,
         modulosAtivos: (row.modulos_ativos ?? []).filter((m: string) =>
             (MODULOS as readonly string[]).includes(m),
@@ -105,11 +105,11 @@ export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<Definic
             apiKeySufixo: key ? sufixoKey(key) : undefined,
         };
     }
-    const braveKey = row.brave_key_cifrada ? decifrar(row.brave_key_cifrada) : undefined;
+    const webKey = row.web_key_cifrada ? decifrar(row.web_key_cifrada) : undefined;
     return {
         ...base,
-        braveTemKey: Boolean(braveKey),
-        braveKeySufixo: braveKey ? sufixoKey(braveKey) : undefined,
+        webTemKey: Boolean(webKey),
+        webKeySufixo: webKey ? sufixoKey(webKey) : undefined,
         agentes,
     };
 }
@@ -140,8 +140,8 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
             apiKey: cfg.apiKeyCifrada ? decifrar(cfg.apiKeyCifrada) : undefined,
         };
     }
-    const braveKey = row.brave_key_cifrada ? decifrar(row.brave_key_cifrada) : undefined;
-    return { ...base, braveKey, agentes };
+    const webKey = row.web_key_cifrada ? decifrar(row.web_key_cifrada) : undefined;
+    return { ...base, webKey, agentes };
 }
 
 /** Grava o input do cliente. apiKey: undefined = manter; '' = limpar; string = cifrar. */
@@ -184,16 +184,14 @@ export async function gravarDefinicoesCom(
         };
     }
 
-    // Brave key (#45): mesmo contrato das keys dos providers — undefined mantém
-    // a cifrada, '' limpa, string cifra. O upsert reescreve a linha, por isso
-    // "manter" tem de re-escrever a cifrada anterior (senão limpava-a).
-    let braveKeyCifrada: string | undefined;
-    if (definicoes.braveKey === undefined) {
-        braveKeyCifrada = row?.brave_key_cifrada
-            ? cifrar(decifrar(row.brave_key_cifrada))
-            : undefined;
-    } else if (definicoes.braveKey !== '') {
-        braveKeyCifrada = cifrar(definicoes.braveKey);
+    // Key de pesquisa web (#45, Tavily): mesmo contrato das keys dos providers —
+    // undefined mantém a cifrada, '' limpa, string cifra. O upsert reescreve a
+    // linha, por isso "manter" tem de re-escrever a cifrada anterior (senão limpava-a).
+    let webKeyCifrada: string | undefined;
+    if (definicoes.webKey === undefined) {
+        webKeyCifrada = row?.web_key_cifrada ? cifrar(decifrar(row.web_key_cifrada)) : undefined;
+    } else if (definicoes.webKey !== '') {
+        webKeyCifrada = cifrar(definicoes.webKey);
     }
 
     const { error } = await db.from('definicoes').upsert({
@@ -203,7 +201,7 @@ export async function gravarDefinicoesCom(
         chat_provider: definicoes.chatProvider,
         match_count: definicoes.matchCount,
         web_habilitada: definicoes.webHabilitada,
-        brave_key_cifrada: braveKeyCifrada ?? null,
+        web_key_cifrada: webKeyCifrada ?? null,
         agentes,
         updated_at: new Date().toISOString(),
     });

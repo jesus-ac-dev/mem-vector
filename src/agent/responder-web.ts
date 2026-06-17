@@ -14,12 +14,22 @@ import { lerWebConsultado } from './resultado';
 // por isso a web é uma tool MCP nossa (HTTP real, com proveniência).
 const TOOLS_WEB = ['mcp__memvector__procurar_web', 'mcp__memvector__ler_url'];
 
+// Discrição de tools (#45 r3, feedback do Carlos: "não deveria estar sempre a ir
+// à web"): o workspace é a fonte primária; a web é o ÚLTIMO recurso, só para
+// factos do mundo que o workspace não pode conter. Sem isto, o agente ia à net
+// até para "como correm os devs" (pergunta do próprio workspace).
 const SYSTEM_WEB =
     'És o assistente deste workspace. Respondes em português de Portugal, conciso e direto. ' +
-    'Tens acesso à INTERNET pelas tools procurar_web e ler_url: usa-as quando a pergunta precisar ' +
-    'de informação ATUAL, externa, ou que não esteja no contexto do workspace dado abaixo. Cita ' +
-    'SEMPRE os URLs que consultaste (como links markdown). Se uma pesquisa devolver LIMITE_WEB, ' +
-    'avisa o utilizador na resposta. Não inventes — se não encontrares, di-lo claramente. O ' +
+    'REGRA DE TOOLS — primeiro o workspace, a web só em último recurso:\n' +
+    '1. Responde SEMPRE primeiro com o contexto do workspace dado abaixo. Para perguntas sobre ' +
+    'o trabalho do utilizador (notas, projetos, dailies, tarefas, decisões, "como vão os devs", ' +
+    '"o que ficou decidido") NUNCA vás à internet — a resposta está no workspace.\n' +
+    '2. Usa procurar_web/ler_url SÓ quando a pergunta precisa de um facto do MUNDO, atual ou ' +
+    'externo, que o workspace não pode ter: notícias, resultados/horários de desporto, preços, ' +
+    'cotações, versões de software, meteorologia, factos públicos. Na dúvida, se o contexto ' +
+    'responde, não pesquises.\n' +
+    'Quando usares a web, cita SEMPRE os URLs (links markdown). Se uma pesquisa devolver ' +
+    'LIMITE_WEB, avisa o utilizador na resposta. Não inventes — se não encontrares, di-lo. O ' +
     'workspace regista sozinho os factos duráveis, por isso não peças licença para guardar.';
 
 export interface RespostaWeb {
@@ -35,7 +45,7 @@ export interface RespostaWeb {
 export async function responderComWebCom(
     db: SupabaseClient,
     prompt: string,
-    braveKey?: string,
+    webKey?: string,
 ): Promise<RespostaWeb> {
     const {
         data: { session },
@@ -68,7 +78,7 @@ export async function responderComWebCom(
                 MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
                 MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,
                 MEMVECTOR_AGENT_RESULT_FILE: resultFile,
-                ...(braveKey ? { MEMVECTOR_AGENT_BRAVE_KEY: braveKey } : {}),
+                ...(webKey ? { MEMVECTOR_AGENT_WEB_KEY: webKey } : {}),
             },
         });
         const webSources = lerWebConsultado(resultFile).map((r) => ({

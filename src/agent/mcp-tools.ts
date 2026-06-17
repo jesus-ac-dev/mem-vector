@@ -27,9 +27,9 @@ import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
 // serviços `...Com` (mesmo caminho do one-shot: RPCs transacionais + projeção
 // de índices), e ficam registadas no ficheiro de resultado para o job.
 const RESULT_FILE = process.env.MEMVECTOR_AGENT_RESULT_FILE ?? '';
-// #45: key Brave opcional (cifrada nas Definições, passada por env). Sem ela, o
+// #45: key Tavily opcional (cifrada nas Definições, passada por env). Sem ela, o
 // procurar_web cai no DuckDuckGo sem-key (flaky → avisa para configurar a key).
-const BRAVE_KEY = process.env.MEMVECTOR_AGENT_BRAVE_KEY || undefined;
+const WEB_KEY = process.env.MEMVECTOR_AGENT_WEB_KEY || undefined;
 
 // A nota escrita neste turno entra na entrada do daily (paridade com o formato
 // do caminho one-shot: "Estado escrito: [[slug]]"). Vive num contexto por
@@ -361,7 +361,7 @@ async function executarTool(
         }
         case 'procurar_web': {
             try {
-                const resultados = await procurarWeb(texto(args, 'query'), { braveKey: BRAVE_KEY });
+                const resultados = await procurarWeb(texto(args, 'query'), { webKey: WEB_KEY });
                 if (RESULT_FILE) {
                     for (const r of resultados) {
                         registarWeb(RESULT_FILE, { tipo: 'web', url: r.url, titulo: r.titulo });
@@ -372,7 +372,7 @@ async function executarTool(
                 // Limite/bloqueio do provider sem-key: devolve uma instrução para o
                 // agente AVISAR o utilizador a configurar a key (regra do Carlos).
                 if (e instanceof LimiteWebError) {
-                    return `LIMITE_WEB: ${e.message} Diz ao utilizador, na resposta, que a pesquisa web atingiu o limite e que pode configurar uma key Brave em Definições > Agentes para continuar.`;
+                    return `LIMITE_WEB: ${e.message} Diz ao utilizador, na resposta, que a pesquisa web atingiu o limite e que pode configurar uma key Tavily (grátis) em Definições > Comportamento para continuar.`;
                 }
                 return `Erro na pesquisa web: ${e instanceof Error ? e.message : 'desconhecido'}`;
             }

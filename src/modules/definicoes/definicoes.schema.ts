@@ -148,9 +148,9 @@ export interface DefinicoesVista {
     chatProvider: Provider;
     matchCount: number;
     webHabilitada: boolean;
-    // #45: key Brave Search da pesquisa web — máscara (a key nunca volta ao browser).
-    braveTemKey: boolean;
-    braveKeySufixo?: string;
+    // #45: key Tavily da pesquisa web — máscara (a key nunca volta ao browser).
+    webTemKey: boolean;
+    webKeySufixo?: string;
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -170,7 +170,7 @@ export interface DefinicoesServidor {
     chatProvider: Provider;
     matchCount: number;
     webHabilitada: boolean;
-    braveKey?: string; // #45: decifrada, p/ a pesquisa web; nunca serializada p/ fora
+    webKey?: string; // #45: decifrada, p/ a pesquisa web; nunca serializada p/ fora
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -206,9 +206,9 @@ export const DefinicoesSchema = z.object({
     // #45: quando ON, a resposta do chat corre agentic-com-web (pesquisa a
     // internet). OFF (default) = comportamento de sempre.
     webHabilitada: z.boolean().default(false),
-    // #45: key Brave Search (opcional). undefined = manter a cifrada; '' = limpar;
-    // string = cifrar. Mesmo contrato das keys dos providers.
-    braveKey: z.string().optional(),
+    // #45: key de pesquisa web (Tavily por omissão; opcional). undefined = manter
+    // a cifrada; '' = limpar; string = cifrar. Mesmo contrato das keys dos providers.
+    webKey: z.string().optional(),
     agentes: AgentesSchema,
 });
 
@@ -223,6 +223,6 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     chatProvider: 'claude',
     matchCount: 5,
     webHabilitada: false,
-    braveTemKey: false,
+    webTemKey: false,
     agentes: {},
 };

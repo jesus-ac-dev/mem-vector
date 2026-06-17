@@ -5,7 +5,7 @@ export interface ResultadoWeb {
 }
 
 // Limite atingido / bloqueio do provider sem-key — sinaliza ao agente e à UI
-// para sugerir configurar uma key (Brave) nas Definições (#45, regra do Carlos).
+// para sugerir configurar uma key (Tavily, grátis) nas Definições (#45).
 export class LimiteWebError extends Error {
     constructor(mensagem = 'limite de pesquisa web atingido') {
         super(mensagem);
@@ -81,47 +81,70 @@ async function procurarDdg(query: string, limite: number): Promise<ResultadoWeb[
     }
     if (res.status === 429 || res.status === 202 || res.status === 403) {
         throw new LimiteWebError(
-            'a DuckDuckGo bloqueou a pesquisa (limite). Configura uma key Brave em Definições.',
+            'a DuckDuckGo bloqueou a pesquisa (limite). Configura uma key Tavily (grátis) em Definições.',
         );
     }
     const r = parseDdgHtml(await res.text());
     if (!r.length) {
         throw new LimiteWebError(
-            'sem resultados (possível bloqueio da DuckDuckGo). Configura uma key Brave em Definições.',
+            'sem resultados (possível bloqueio da DuckDuckGo). Configura uma key Tavily (grátis) em Definições.',
         );
     }
     return r.slice(0, limite);
 }
 
-const BRAVE_BASE = 'https://api.search.brave.com/res/v1/web/search';
+const TAVILY_BASE = 'https://api.tavily.com/search';
 
-async function procurarBrave(query: string, key: string, limite: number): Promise<ResultadoWeb[]> {
-    const res = await fetch(`${BRAVE_BASE}?q=${encodeURIComponent(query)}&count=${limite}`, {
-        headers: { 'x-subscription-token': key, accept: 'application/json' },
-    });
-    if (res.status === 429) throw new LimiteWebError('quota da Brave Search esgotada.');
-    if (!res.ok) throw new LimiteWebError(`Brave Search HTTP ${res.status}`);
-    const json = (await res.json()) as {
-        web?: { results?: { title?: string; url?: string; description?: string }[] };
-    };
-    return (json.web?.results ?? [])
+interface TavilyResult {
+    title?: string;
+    url?: string;
+    content?: string;
+}
+
+// Mapeia a resposta do Tavily → ResultadoWeb (puro/testável). Filtra URLs
+// inválidos/internos (anti-SSRF, mesma guarda do DDG).
+export function mapTavily(results: TavilyResult[], limite: number): ResultadoWeb[] {
+    return results
         .filter((r) => r.url && urlHttpValido(r.url))
         .slice(0, limite)
         .map((r) => ({
             titulo: limparHtml(r.title ?? ''),
             url: r.url as string,
-            snippet: limparHtml(r.description ?? ''),
+            snippet: limparHtml(r.content ?? ''),
         }));
 }
 
-// Pesquisa web (#45): Brave se houver key (robusto), senão DuckDuckGo sem-key
-// (flaky → LimiteWebError quando bloqueia, para a UI lembrar a key).
+// Tavily Search (api.tavily.com/search, Bearer): feito para agentes LLM —
+// devolve conteúdo já resumido (campo `content`), não SERP cru. Tier grátis
+// 1k/mês sem cartão. Contrato verificado nas docs oficiais (r1, #45 fatia 3).
+async function procurarTavily(query: string, key: string, limite: number): Promise<ResultadoWeb[]> {
+    let res: Response;
+    try {
+        res = await fetch(TAVILY_BASE, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ query, max_results: limite, search_depth: 'basic' }),
+        });
+    } catch (e) {
+        throw new LimiteWebError(`pesquisa web falhou: ${e instanceof Error ? e.message : 'rede'}`);
+    }
+    if (res.status === 429)
+        throw new LimiteWebError('quota da Tavily esgotada (1k/mês no grátis).');
+    if (res.status === 401 || res.status === 403)
+        throw new LimiteWebError('key Tavily inválida — confirma-a em Definições.');
+    if (!res.ok) throw new LimiteWebError(`Tavily HTTP ${res.status}`);
+    const json = (await res.json()) as { results?: TavilyResult[] };
+    return mapTavily(json.results ?? [], limite);
+}
+
+// Pesquisa web (#45): Tavily se houver key (robusto, feito p/ LLM), senão
+// DuckDuckGo sem-key (flaky → LimiteWebError quando bloqueia, p/ a UI lembrar a key).
 export async function procurarWeb(
     query: string,
-    opts: { braveKey?: string; limite?: number } = {},
+    opts: { webKey?: string; limite?: number } = {},
 ): Promise<ResultadoWeb[]> {
     const limite = opts.limite ?? 5;
-    return opts.braveKey ? procurarBrave(query, opts.braveKey, limite) : procurarDdg(query, limite);
+    return opts.webKey ? procurarTavily(query, opts.webKey, limite) : procurarDdg(query, limite);
 }
 
 // Lê um URL e devolve o texto (HTML limpo, truncado). Sem key.

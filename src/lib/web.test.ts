@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { lerUrl, parseDdgHtml } from './web';
+import { lerUrl, mapTavily, parseDdgHtml } from './web';
 
 // Fixture com a forma REAL do SERP HTML da DDG (capturado do endpoint
 // html.duckduckgo.com): o href real vem urlencoded no parâmetro `uddg`.
@@ -45,6 +45,31 @@ describe('parseDdgHtml (#45)', () => {
     it('descarta uddg com esquema não-http (anti javascript:)', () => {
         const html = `<a class="result__a" href="//duckduckgo.com/l/?uddg=javascript%3Aalert(1)&amp;rut=x">xss</a>`;
         expect(parseDdgHtml(html)).toEqual([]);
+    });
+});
+
+describe('mapTavily (#45 fatia 3)', () => {
+    it('mapeia title/url/content → titulo/url/snippet e respeita o limite', () => {
+        const r = mapTavily(
+            [
+                { title: 'React', url: 'https://react.dev/', content: 'A library' },
+                { title: 'Next', url: 'https://nextjs.org/', content: 'A framework' },
+            ],
+            1,
+        );
+        expect(r).toEqual([{ titulo: 'React', url: 'https://react.dev/', snippet: 'A library' }]);
+    });
+
+    it('descarta resultados de rede interna ou sem URL (anti-SSRF)', () => {
+        const r = mapTavily(
+            [
+                { title: 'meta', url: 'http://169.254.169.254/latest', content: 'x' },
+                { title: 'sem url', content: 'y' },
+                { title: 'bom', url: 'https://exemplo.pt/', content: 'z' },
+            ],
+            10,
+        );
+        expect(r).toEqual([{ titulo: 'bom', url: 'https://exemplo.pt/', snippet: 'z' }]);
     });
 });
 

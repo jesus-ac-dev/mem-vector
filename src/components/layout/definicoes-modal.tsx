@@ -93,8 +93,8 @@ export function DefinicoesModal({
     const [defs, setDefs] = useState<DefinicoesVista>(DEFINICOES_VISTA_DEFAULT);
     // Keys escritas nesta sessão da modal ('' = limpar; só seguem no Guardar).
     const [keysNovas, setKeysNovas] = useState<Partial<Record<Provider, string>>>({});
-    // #45: key Brave escrita nesta sessão da modal (undefined=manter; ''=limpar).
-    const [braveKeyNova, setBraveKeyNova] = useState<string | undefined>(undefined);
+    // #45: key Tavily escrita nesta sessão da modal (undefined=manter; ''=limpar).
+    const [webKeyNova, setWebKeyNova] = useState<string | undefined>(undefined);
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
     >({});
@@ -125,7 +125,7 @@ export function DefinicoesModal({
         if (open) {
             setCarregado(false);
             setKeysNovas({});
-            setBraveKeyNova(undefined);
+            setWebKeyNova(undefined);
             setTestes({});
             setLigados(new Set());
             setConfirmados(new Set());
@@ -259,7 +259,7 @@ export function DefinicoesModal({
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
             // undefined = manter a key cifrada; '' = limpar; string = cifrar.
-            braveKey: braveKeyNova,
+            webKey: webKeyNova,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -285,7 +285,7 @@ export function DefinicoesModal({
         }
         setDefs(r);
         setKeysNovas({});
-        setBraveKeyNova(undefined);
+        setWebKeyNova(undefined);
         setLigados(new Set());
         setSujo(false);
         setEstado('guardado');
@@ -407,8 +407,8 @@ export function DefinicoesModal({
                                             (mais lenta e cara; sem streaming).{' '}
                                             <strong>Sem key</strong> usa o DuckDuckGo — grátis, mas
                                             bloqueia com uso e dá erro. Mete uma{' '}
-                                            <strong>key Brave Search</strong> para resultados
-                                            fiáveis.
+                                            <strong>key Tavily</strong> (grátis, 1k/mês, sem cartão;
+                                            feita para agentes) para resultados fiáveis.
                                         </p>
                                     </div>
                                     <Switch
@@ -425,22 +425,22 @@ export function DefinicoesModal({
                                             <Input
                                                 type="password"
                                                 autoComplete="new-password"
-                                                value={braveKeyNova ?? ''}
-                                                onChange={(e) => setBraveKeyNova(e.target.value)}
+                                                value={webKeyNova ?? ''}
+                                                onChange={(e) => setWebKeyNova(e.target.value)}
                                                 placeholder={
-                                                    braveKeyNova === ''
+                                                    webKeyNova === ''
                                                         ? 'key será removida ao guardar'
-                                                        : defs.braveTemKey
-                                                          ? `key configurada (····${defs.braveKeySufixo})`
-                                                          : 'Brave Search API key (opcional)'
+                                                        : defs.webTemKey
+                                                          ? `key configurada (····${defs.webKeySufixo})`
+                                                          : 'Tavily API key (opcional)'
                                                 }
                                                 className="h-8 flex-1 text-xs"
                                             />
-                                            {defs.braveTemKey && (
+                                            {defs.webTemKey && (
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => setBraveKeyNova('')}
+                                                    onClick={() => setWebKeyNova('')}
                                                     className="h-8 text-xs text-muted-foreground hover:text-destructive"
                                                 >
                                                     Limpar
@@ -448,12 +448,12 @@ export function DefinicoesModal({
                                             )}
                                         </div>
                                         <a
-                                            href="https://brave.com/search/api/"
+                                            href="https://app.tavily.com/home"
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-xs text-primary hover:underline"
                                         >
-                                            Obter uma key Brave Search →
+                                            Obter uma key Tavily (grátis) →
                                         </a>
                                     </div>
                                 )}
