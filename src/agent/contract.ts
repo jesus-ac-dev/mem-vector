@@ -51,7 +51,11 @@ export const AGENT_CONTRACT = [
     '- summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA como fica depois ' +
         'desta escrita — não o que mudou neste turno.',
     '- Escreve factos autocontidos: resolve pronomes em nomes usando a conversa recente.',
-    '- Podes ligar notas com [[wikilinks]] no corpo (e os slugs no campo links).',
+    '- LIGAÇÕES (o workspace é uma REDE, não notas soltas): sempre que a nota referir outra nota ' +
+        'ou um tema existente, LIGA-O com [[título exato]] no corpo (e o slug no campo links) em vez ' +
+        'de o escreveres em texto simples. Liga liberalmente entre assuntos relacionados — tudo ' +
+        'ligado a tudo, sem clusters isolados; usa o título EXATO das notas candidatas (copia-o ' +
+        'letra a letra) como alvo dos [[...]], senão a ligação fica pendente.',
     '- Se uma escrita falhar com "no arquivo", o nome pertence a uma nota arquivada: NÃO insistas ' +
         'nem escrevas por cima — cria a nota com um título ligeiramente diferente e menciona na ' +
         'resposta final que existe uma arquivada homónima.',

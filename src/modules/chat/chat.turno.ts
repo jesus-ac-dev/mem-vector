@@ -40,7 +40,10 @@ function blocoCandidatos(candidatos: NotaCandidata[]): string {
         'conteúdo sobre o MESMO assunto): usa EXATAMENTE o mesmo "title" e devolve o ' +
         '"content_md" COMPLETO com o facto novo integrado (não percas o que já lá está). ' +
         'Uma nota de teste, quase vazia ou com título genérico NÃO captura factos novos — ' +
-        'nesse caso cria nota nova com o título do assunto (pessoas → os nomes delas).\n\n'
+        'nesse caso cria nota nova com o título do assunto (pessoas → os nomes delas).\n' +
+        'Se o facto NÃO continua nenhuma destas mas é um ASSUNTO VIZINHO (relacionado, não o ' +
+        'mesmo), cria nota nova E LIGA-A à nota candidata com [[título exato]] (copia o título tal ' +
+        'como listado acima) no content_md — assim a rede fica ligada em vez de ilhas separadas.\n\n'
     );
 }
 
@@ -118,7 +121,7 @@ export function buildTurnoPrompt(
         'NOTA POR ASSUNTO — cada facto no seu ficheiro, nunca tudo amontoado numa só nota. ' +
         'Só "notas": [] para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
         'facto novo. Cada nota é ' +
-        '{"title": "...", "content_md": "markdown, podes ligar com [[wikilinks]]", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase"}.\n' +
+        '{"title": "...", "content_md": "markdown — liga assuntos relacionados com [[wikilinks]] (ver REGRA PARA LIGAÇÕES)", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase"}.\n' +
         'REGRA PARA summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA ' +
         'como fica depois desta escrita — não o que mudou neste turno. Ao continuar uma nota, ' +
         're-resume o todo (conteúdo antigo + facto novo).\n' +
@@ -133,6 +136,11 @@ export function buildTurnoPrompt(
         '<data>)", "o utilizador disse" ou datas de registo: a proveniência fica no versionamento, ' +
         'fora do texto. Ao continuar uma nota, INTEGRA o facto novo na prosa existente ' +
         '(reescreve a frase certa se preciso), não acrescentes linhas-log no fim.\n' +
+        'REGRA PARA LIGAÇÕES (o workspace é uma REDE, não notas soltas): sempre que a nota referir ' +
+        'outra nota ou um tema que já exista no workspace, LIGA-O no content_md com [[título exato]] ' +
+        'em vez de o escreveres em texto simples. Liga liberalmente entre assuntos relacionados — o ' +
+        'objetivo é tudo ligado a tudo, sem clusters isolados. Usa os títulos EXATOS das notas ' +
+        'candidatas listadas abaixo quando os referires.\n' +
         '3) "tarefas": array (pode ser vazio) de AÇÕES do utilizador — coisas a fazer, lembretes, ' +
         'coisas a acompanhar (ex.: "ligar ao contabilista", "rever proposta"). Na dúvida entre ' +
         'criar e não criar, CRIA — apagar é barato. Cada uma: {"titulo": "verbo + objeto, curto", ' +
