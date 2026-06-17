@@ -24,6 +24,11 @@ onChange, só entre providers já parametrizados.
   E `match_count` (#67): nº de fontes do retrieval do chat (1..50, default 5;
   antes fixo no código), lido no `respond` via `providerDoChatCom`. A rede de
   candidatos do agente-autor é separada (`CANDIDATOS_DESTILACAO`, interna).
+  E `web_habilitada` (#45, default false): liga a **pesquisa na internet** na
+  resposta do chat — o turno passa a correr o agente-web (`src/agent/responder-web.ts`,
+  tools `procurar_web`/`ler_url`) em vez do caminho normal. Sem key = DuckDuckGo
+  (flaky → erro lembra a key); key Brave por env `MEMVECTOR_AGENT_BRAVE_KEY` na
+  fatia 1, por Definições cifrada na fatia 2.
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
   vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.

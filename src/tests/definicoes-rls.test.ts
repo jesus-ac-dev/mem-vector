@@ -88,6 +88,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: [],
                 chatProvider: 'claude',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: {},
             });
             const servidor = await lerDefinicoesServidorCom(bruno);
@@ -108,6 +109,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: ['github'],
                 chatProvider: 'gemini',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: AGENTES,
             });
             // Vista (cliente): a key NUNCA aparece — só a máscara.
@@ -133,6 +135,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: [],
                 chatProvider: 'claude',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: { ...AGENTES, gemini: { ...AGENTES.gemini, apiKey: undefined } },
             });
             const depois = await lerDefinicoesVistaCom(alice);
@@ -161,6 +164,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: [],
                 chatProvider: 'claude',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: {
                     ...AGENTES,
                     gemini: {

@@ -33,13 +33,16 @@ interface DefinicoesRow {
     modulos_ativos: string[] | null;
     chat_provider?: string | null;
     match_count?: number | null;
+    web_habilitada?: boolean | null;
     agentes: Record<string, AgenteRow> | null;
 }
 
 async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
-        .select('metodo_destilacao, modulos_ativos, chat_provider, match_count, agentes')
+        .select(
+            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, agentes',
+        )
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
     return data as DefinicoesRow | null;
@@ -58,6 +61,7 @@ function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes'> {
         // pela check da BD (1..50); se ocorresse, o safeParse falha e cai no
         // fallback abaixo (linha toda, não só este campo).
         matchCount: row.match_count ?? undefined,
+        webHabilitada: row.web_habilitada ?? undefined,
     });
     if (!parsed.success) {
         return {
@@ -65,6 +69,7 @@ function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes'> {
             modulosAtivos: [],
             chatProvider: 'claude',
             matchCount: 5,
+            webHabilitada: false,
         };
     }
     return parsed.data;
@@ -112,6 +117,7 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
             modulosAtivos: [],
             chatProvider: 'claude',
             matchCount: 5,
+            webHabilitada: false,
             agentes: {},
         };
     }
@@ -176,6 +182,7 @@ export async function gravarDefinicoesCom(
         modulos_ativos: definicoes.modulosAtivos,
         chat_provider: definicoes.chatProvider,
         match_count: definicoes.matchCount,
+        web_habilitada: definicoes.webHabilitada,
         agentes,
         updated_at: new Date().toISOString(),
     });

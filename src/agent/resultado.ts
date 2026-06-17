@@ -26,8 +26,46 @@ export interface RegistoTarefa {
 
 export type RegistoEscrita = RegistoNota | RegistoDaily | RegistoTarefa;
 
+// #45: URL consultado pelas tools de web (procurar_web/ler_url) — não é uma
+// escrita, é proveniência: o pai mostra-os como fontes 🌐 distintas do workspace.
+export interface RegistoWeb {
+    tipo: 'web';
+    url: string;
+    titulo: string;
+}
+
 export function registarEscrita(file: string, registo: RegistoEscrita): void {
     appendFileSync(file, `${JSON.stringify(registo)}\n`, 'utf8');
+}
+
+export function registarWeb(file: string, registo: RegistoWeb): void {
+    appendFileSync(file, `${JSON.stringify(registo)}\n`, 'utf8');
+}
+
+// Lê os URLs de web consultados (dedup por url, ordem de consulta) — proveniência
+// do turno com web. Ignora os registos de escrita da destilação.
+export function lerWebConsultado(file: string): RegistoWeb[] {
+    let raw = '';
+    try {
+        raw = readFileSync(file, 'utf8');
+    } catch {
+        return [];
+    }
+    const vistos = new Set<string>();
+    const web: RegistoWeb[] = [];
+    for (const linha of raw.split('\n')) {
+        if (!linha.trim()) continue;
+        try {
+            const r = JSON.parse(linha) as RegistoWeb;
+            if (r?.tipo === 'web' && r.url && !vistos.has(r.url)) {
+                vistos.add(r.url);
+                web.push({ tipo: 'web', url: r.url, titulo: r.titulo ?? r.url });
+            }
+        } catch {
+            // linha corrompida não custa o resto
+        }
+    }
+    return web;
 }
 
 export function lerEscritas(file: string): RegistoEscrita[] {

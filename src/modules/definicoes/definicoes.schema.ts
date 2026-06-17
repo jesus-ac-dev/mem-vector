@@ -147,6 +147,7 @@ export interface DefinicoesVista {
     modulosAtivos: Modulo[];
     chatProvider: Provider;
     matchCount: number;
+    webHabilitada: boolean;
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -165,6 +166,7 @@ export interface DefinicoesServidor {
     modulosAtivos: Modulo[];
     chatProvider: Provider;
     matchCount: number;
+    webHabilitada: boolean;
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -197,6 +199,9 @@ export const DefinicoesSchema = z.object({
     // #67: nº de fontes do retrieval do chat (antes fixo em 5). Limites sãos —
     // poucas perde contexto, muitas enchem o prompt de ruído e custo.
     matchCount: z.number().int().min(1).max(50).default(5),
+    // #45: quando ON, a resposta do chat corre agentic-com-web (pesquisa a
+    // internet). OFF (default) = comportamento de sempre.
+    webHabilitada: z.boolean().default(false),
     agentes: AgentesSchema,
 });
 
@@ -210,5 +215,6 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     modulosAtivos: [],
     chatProvider: 'claude',
     matchCount: 5,
+    webHabilitada: false,
     agentes: {},
 };

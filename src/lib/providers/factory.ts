@@ -706,18 +706,22 @@ export function criarProvider(nome: Provider, cfg: AgenteServidor): ProviderLLM 
  *  lança erro (o user configura em Definições > Agentes, #40 caminho a).
  *  Devolve também o modelo PEDIDO (r12): a legenda compara-o com o real da
  *  metadata — é a garantia por resposta de que a escolha foi honrada. */
-export async function providerDoChatCom(
-    db: SupabaseClient,
-): Promise<{ instancia: ProviderLLM; modeloPedido?: string; matchCount: number }> {
+export async function providerDoChatCom(db: SupabaseClient): Promise<{
+    instancia: ProviderLLM;
+    modeloPedido?: string;
+    matchCount: number;
+    webHabilitada: boolean;
+}> {
     const defs = await lerDefinicoesServidorCom(db);
     const escolhido = defs.chatProvider;
     const cfg = defs.agentes[escolhido];
-    // #67: o nº de fontes do retrieval vem da mesma leitura de definições.
+    // #67/#45: nº de fontes + toggle web vêm da mesma leitura de definições.
     if (cfg?.ativo) {
         return {
             instancia: criarProvider(escolhido, cfg),
             modeloPedido: cfg.modelo,
             matchCount: defs.matchCount,
+            webHabilitada: defs.webHabilitada,
         };
     }
     // Sem defaults (#40, caminho a): sem provider ativo não se cai na conta da

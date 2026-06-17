@@ -254,6 +254,7 @@ export function DefinicoesModal({
             modulosAtivos: defs.modulosAtivos,
             chatProvider: defs.chatProvider,
             matchCount: defs.matchCount,
+            webHabilitada: defs.webHabilitada,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -388,6 +389,25 @@ export function DefinicoesModal({
                                                 editar({ ...defs, matchCount: n });
                                         }}
                                         className="mt-2 h-8 w-24 text-xs"
+                                    />
+                                </div>
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <h3 className="text-sm font-medium">
+                                            Pesquisa na internet
+                                        </h3>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Quando ligado, a resposta do chat pode consultar a web
+                                            (mais lenta e cara; sem streaming). Usa DuckDuckGo; uma
+                                            key Brave fica para mais robustez.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={defs.webHabilitada}
+                                        onCheckedChange={(webHabilitada) =>
+                                            editar({ ...defs, webHabilitada })
+                                        }
+                                        aria-label="Ligar pesquisa na internet"
                                     />
                                 </div>
                                 <p className="text-xs text-muted-foreground">

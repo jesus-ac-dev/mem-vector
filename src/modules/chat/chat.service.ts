@@ -12,6 +12,7 @@ import {
 import { classificarIntencao } from './chat.intencao';
 import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
+import { responderComWebCom } from '@/agent/responder-web';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
     escreverNota as escreverNotaReal,
@@ -63,6 +64,7 @@ export interface ChatResult {
     latencyMs: number;
     modelo?: string; // o modelo REAL que respondeu (prova, não auto-relato)
     modeloPedido?: string; // o que foi ENVIADO ao provider — a legenda compara (r12)
+    webSources?: { url: string; titulo: string }[]; // #45: fontes 🌐 quando web ON
 }
 
 interface DestilDeps {
@@ -223,16 +225,17 @@ export async function aplicarDailyTurno(
 }
 
 interface TurnoPreparado {
+    db: Awaited<ReturnType<typeof createClient>>;
     instancia: ProviderLLM;
     modeloPedido?: string;
     sources: Source[];
     prompt: string;
+    webHabilitada: boolean; // #45
 }
 
-// Fase do turno para o indicador dinâmico (#66): o turno do chat não usa tools
-// (geração one-shot), por isso as fases reais são consultar→gerar; tool-use vive
-// na destilação de fundo (outro indicador).
-export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number };
+// Fase do turno para o indicador dinâmico (#66/#45): consultar → gerar; com web
+// ON entra a fase 'web' (a internet). Tool-use de escrita vive na destilação.
+export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number } | { fase: 'web' };
 
 // Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
 // pelo respond (one-shot) e pelo respondStream (#66). O histórico (janela da
@@ -245,7 +248,7 @@ async function prepararTurno(
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
-    const { instancia, modeloPedido, matchCount } = await providerDoChatCom(db);
+    const { instancia, modeloPedido, matchCount, webHabilitada } = await providerDoChatCom(db);
     onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
 
@@ -286,7 +289,7 @@ async function prepararTurno(
     );
     // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
     onFase?.({ fase: 'gerar', fontes: sources.length });
-    return { instancia, modeloPedido, sources, prompt };
+    return { db, instancia, modeloPedido, sources, prompt, webHabilitada };
 }
 
 function montarResultado(resp: RespostaLLM, t: TurnoPreparado, latencyMs: number): ChatResult {
@@ -325,6 +328,30 @@ export async function respondStream(
 ): Promise<ChatResult> {
     const t = await prepararTurno(question, historico, onFase);
     const startedAt = Date.now();
+
+    // #45: web ON → a resposta corre agentic-com-web (loop de tools que pesquisa
+    // a internet de verdade). Não streama nesta fatia: o texto sai num bloco no
+    // fim. Web OFF (default) = caminho de sempre, intocado.
+    if (t.webHabilitada) {
+        onFase?.({ fase: 'web' });
+        // Fatia 1: key Brave por env (global). Fatia 2 troca por defs cifrada (por-utilizador).
+        const r = await responderComWebCom(t.db, t.prompt, process.env.MEMVECTOR_AGENT_BRAVE_KEY);
+        onTextDelta(r.text);
+        return {
+            answer: r.text,
+            sources: t.sources,
+            costUsd: r.costUsd,
+            tokensIn: r.tokensIn ?? null,
+            tokensCache: r.tokensCache ?? null,
+            tokensOut: r.tokensOut ?? null,
+            provider: t.instancia.nome,
+            latencyMs: Date.now() - startedAt,
+            modelo: r.model,
+            modeloPedido: t.modeloPedido,
+            webSources: r.webSources,
+        };
+    }
+
     const resp = t.instancia.gerarStream
         ? await t.instancia.gerarStream(t.prompt, onTextDelta)
         : await t.instancia.gerar(t.prompt).then((r) => {

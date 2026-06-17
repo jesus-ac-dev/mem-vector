@@ -65,6 +65,7 @@ interface Message {
     destilando?: boolean;
     destilacaoErro?: boolean;
     trace?: ChatTrace | null;
+    webSources?: { url: string; titulo: string }[]; // #45: fontes 🌐
 }
 
 // Eventos do stream do chat (#66, ndjson de POST /api/chat/stream).
@@ -81,18 +82,22 @@ interface EventoDone {
     tokensOut: number | null;
     latencyMs: number;
     sources: Source[];
+    webSources?: { url: string; titulo: string }[];
 }
+
+type FaseEvento = 'consultar' | 'gerar' | 'web';
 
 type EventoStreamCliente =
     | { tipo: 'inicio'; conversationId: string }
-    | { tipo: 'fase'; fase: 'consultar' | 'gerar'; fontes?: number }
+    | { tipo: 'fase'; fase: FaseEvento; fontes?: number }
     | { tipo: 'delta'; texto: string }
     | EventoDone
     | { tipo: 'erro'; mensagem: string };
 
-// Label da fase do turno para o indicador dinâmico (#66).
-function labelFase(fase: 'consultar' | 'gerar', fontes?: number): string {
+// Label da fase do turno para o indicador dinâmico (#66/#45).
+function labelFase(fase: FaseEvento, fontes?: number): string {
     if (fase === 'consultar') return 'a consultar o workspace';
+    if (fase === 'web') return 'a consultar a internet';
     return fontes ? `a gerar (${fontes} ${fontes === 1 ? 'fonte' : 'fontes'})` : 'a gerar';
 }
 
@@ -709,6 +714,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                 const patch = {
                     content: acumulado,
                     sources: doneFinal.sources,
+                    webSources: doneFinal.webSources,
                     distillationJobId: doneFinal.distillationJobId,
                     destilando: true,
                     trace,
@@ -812,6 +818,36 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                             )}
                             {m.role === 'assistant' && m.sources && (
                                 <ProvenanceLine sources={m.sources} />
+                            )}
+                            {m.role === 'assistant' && !!m.webSources?.length && (
+                                <details className="mt-1 text-xs text-muted-foreground">
+                                    <summary className="cursor-pointer">
+                                        🌐 {m.webSources.length}{' '}
+                                        {m.webSources.length === 1 ? 'fonte web' : 'fontes web'}
+                                    </summary>
+                                    <ul className="mt-1 space-y-1 pl-4">
+                                        {m.webSources.map((w, i) => {
+                                            // só http(s) é clicável (defesa contra javascript: etc.)
+                                            const seguro = /^https?:\/\//i.test(w.url);
+                                            return (
+                                                <li key={i}>
+                                                    {seguro ? (
+                                                        <a
+                                                            href={w.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="font-medium text-primary"
+                                                        >
+                                                            {w.titulo || w.url}
+                                                        </a>
+                                                    ) : (
+                                                        <span>{w.titulo || w.url}</span>
+                                                    )}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </details>
                             )}
                             {m.role === 'assistant' && m.destilando && (
                                 <p className="mt-1 text-xs text-muted-foreground">
