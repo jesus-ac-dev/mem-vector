@@ -148,6 +148,56 @@ describe('definições (#60, integração RLS)', () => {
         },
     );
 
+    // #45: a key Brave da pesquisa web segue o MESMO contrato das keys dos
+    // providers — cifra at rest, mascara na vista, decifra no servidor.
+    it(
+        'brave key (#45): cifra at rest, mascara na vista, decifra no servidor',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, lerDefinicoesVistaCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+
+            const vista = await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: true,
+                braveKey: 'brave-key-de-teste-1234',
+                agentes: {},
+            });
+            // Vista: a key nunca aparece — só a máscara.
+            expect(vista.braveTemKey).toBe(true);
+            expect(vista.braveKeySufixo).toBe('1234');
+            expect(JSON.stringify(vista)).not.toContain('brave-key-de-teste');
+
+            // At rest: cifrada (gcm:), nunca plaintext.
+            const { data: row } = await alice
+                .from('definicoes')
+                .select('brave_key_cifrada')
+                .single();
+            const cifrada = (row as { brave_key_cifrada: string }).brave_key_cifrada;
+            expect(cifrada.startsWith('gcm:')).toBe(true);
+            expect(cifrada).not.toContain('brave-key-de-teste');
+
+            // Servidor: decifra.
+            const servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.braveKey).toBe('brave-key-de-teste-1234');
+
+            // Regravar sem braveKey (undefined) mantém a key.
+            await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: true,
+                agentes: {},
+            });
+            const depois = await lerDefinicoesVistaCom(alice);
+            expect(depois.braveTemKey).toBe(true);
+        },
+    );
+
     // r13: o bug do gemini do Carlos — a config tem de ser respeitada de
     // ponta a ponta (gravar → ler → runtime), e a escolha do chat é
     // CIRÚRGICA (nunca toca em modo/keys que não editou).

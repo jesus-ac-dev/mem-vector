@@ -231,6 +231,7 @@ interface TurnoPreparado {
     sources: Source[];
     prompt: string;
     webHabilitada: boolean; // #45
+    braveKey?: string; // #45: key Brave das Definições (cifrada), p/ a pesquisa web
 }
 
 // Fase do turno para o indicador dinâmico (#66/#45): consultar → gerar; com web
@@ -248,7 +249,8 @@ async function prepararTurno(
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
-    const { instancia, modeloPedido, matchCount, webHabilitada } = await providerDoChatCom(db);
+    const { instancia, modeloPedido, matchCount, webHabilitada, braveKey } =
+        await providerDoChatCom(db);
     onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
 
@@ -289,7 +291,7 @@ async function prepararTurno(
     );
     // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
     onFase?.({ fase: 'gerar', fontes: sources.length });
-    return { db, instancia, modeloPedido, sources, prompt, webHabilitada };
+    return { db, instancia, modeloPedido, sources, prompt, webHabilitada, braveKey };
 }
 
 function montarResultado(resp: RespostaLLM, t: TurnoPreparado, latencyMs: number): ChatResult {
@@ -334,8 +336,9 @@ export async function respondStream(
     // fim. Web OFF (default) = caminho de sempre, intocado.
     if (t.webHabilitada) {
         onFase?.({ fase: 'web' });
-        // Fatia 1: key Brave por env (global). Fatia 2 troca por defs cifrada (por-utilizador).
-        const r = await responderComWebCom(t.db, t.prompt, process.env.MEMVECTOR_AGENT_BRAVE_KEY);
+        // Key Brave: das Definições (cifrada, por-utilizador); env como fallback de operação.
+        const braveKey = t.braveKey || process.env.MEMVECTOR_AGENT_BRAVE_KEY;
+        const r = await responderComWebCom(t.db, t.prompt, braveKey);
         onTextDelta(r.text);
         return {
             answer: r.text,

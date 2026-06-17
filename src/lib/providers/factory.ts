@@ -711,17 +711,19 @@ export async function providerDoChatCom(db: SupabaseClient): Promise<{
     modeloPedido?: string;
     matchCount: number;
     webHabilitada: boolean;
+    braveKey?: string;
 }> {
     const defs = await lerDefinicoesServidorCom(db);
     const escolhido = defs.chatProvider;
     const cfg = defs.agentes[escolhido];
-    // #67/#45: nº de fontes + toggle web vêm da mesma leitura de definições.
+    // #67/#45: nº de fontes + toggle web + key Brave vêm da mesma leitura de definições.
     if (cfg?.ativo) {
         return {
             instancia: criarProvider(escolhido, cfg),
             modeloPedido: cfg.modelo,
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
+            braveKey: defs.braveKey,
         };
     }
     // Sem defaults (#40, caminho a): sem provider ativo não se cai na conta da
