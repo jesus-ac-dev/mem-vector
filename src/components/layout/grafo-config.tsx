@@ -7,11 +7,10 @@ import { Button } from '@/components/ui/button';
 import { runClientAction } from '@/lib/client-error-log';
 import { PALETA } from '@/lib/cores';
 import {
-    listarPastasAction,
     definirCorPastaAction,
     definirCorDailyAction,
-    corDailyAction,
 } from '@/modules/workspace/workspace.actions';
+import { getJson } from '@/lib/api-get';
 import type { Pasta } from '@/modules/folders/folders.tree';
 
 // Linha de paleta: as cores + um "limpar" (default). Marca a cor ativa.
@@ -59,7 +58,10 @@ export function GrafoConfig({ onFechar, onMudou }: { onFechar: () => void; onMud
 
     useEffect(() => {
         void runClientAction({ area: 'grafo-config', action: 'carregarCores' }, () =>
-            Promise.all([listarPastasAction(), corDailyAction()]),
+            Promise.all([
+                getJson<Pasta[]>('/api/pastas'),
+                getJson<string | null>('/api/cor-daily'),
+            ]),
         ).then((res) => {
             if (!res) return;
             const [ps, cd] = res;

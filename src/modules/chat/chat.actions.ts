@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { respond, type ChatResult, type TurnoDestilado } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { executarDestilacaoTurnoCom } from './chat.postturno';
-import { listarConversas, carregarConversa, ultimasMensagensCom } from './chat.conversas';
+import { listarConversas, ultimasMensagensCom } from './chat.conversas';
 import { indexarMensagensChatCom } from './chat.indexing';
 import { tituloInicialConversa } from './chat.titulo';
 import {
@@ -19,9 +19,7 @@ export async function listarConversasAction() {
     return listarConversas();
 }
 
-export async function carregarConversaAction(id: string) {
-    return carregarConversa(id);
-}
+// carregarConversaAction migrou para `GET /api/conversa` (#73).
 
 const askSchema = z.object({
     question: z.string().min(1).max(4000),

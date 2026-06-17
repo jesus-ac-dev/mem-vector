@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
-import { ask, processarDestilacaoJob, carregarConversaAction } from '@/modules/chat/chat.actions';
+import { ask, processarDestilacaoJob } from '@/modules/chat/chat.actions';
+import { getJson } from '@/lib/api-get';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/chat.service';
@@ -23,7 +24,7 @@ import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
-import { gravarEscolhaChat, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
+import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
 import { ProviderIcon } from '@/components/layout/provider-icon';
 import { DEFINICOES_MUDARAM_EVENT, pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import {
@@ -511,14 +512,14 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     useEffect(() => {
         defsCanceladoRef.current = false;
         function carregarDefs() {
-            void runClientAction({ area: 'chat', action: 'lerDefinicoes' }, lerDefinicoes).then(
-                (d) => {
-                    // ref (não closure): o cancelamento cobre também os re-fetches
-                    // do listener, não só a leitura inicial do mount.
-                    if (defsCanceladoRef.current || !d) return;
-                    setDefsChat(d);
-                },
-            );
+            void runClientAction({ area: 'chat', action: 'lerDefinicoes' }, () =>
+                getJson<DefinicoesVista>('/api/definicoes'),
+            ).then((d) => {
+                // ref (não closure): o cancelamento cobre também os re-fetches
+                // do listener, não só a leitura inicial do mount.
+                if (defsCanceladoRef.current || !d) return;
+                setDefsChat(d);
+            });
         }
         carregarDefs();
         // Guardar nas Definições muda o provider/modelo do chat — re-busca sem F5
@@ -539,7 +540,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
         const alvo = conversaAberta; // string | null
         if (alvo === conversaCarregadaRef.current) return;
         let cancelled = false;
-        const p = alvo ? carregarConversaAction(alvo) : Promise.resolve([] as MensagemHist[]);
+        const p = alvo
+            ? getJson<MensagemHist[]>(`/api/conversa?id=${encodeURIComponent(alvo)}`)
+            : Promise.resolve([] as MensagemHist[]);
         p.then((msgs) => {
             if (cancelled) return;
             conversaCarregadaRef.current = alvo;

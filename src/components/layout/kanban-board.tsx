@@ -24,12 +24,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useWorkspace } from '@/components/layout/workspace-context';
-import {
-    apagarTarefa,
-    concluirTarefa,
-    listarTarefasPainel,
-    mudarEstadoTarefa,
-} from '@/modules/tarefas/tarefas.actions';
+import { apagarTarefa, concluirTarefa, mudarEstadoTarefa } from '@/modules/tarefas/tarefas.actions';
+import { getJson } from '@/lib/api-get';
+import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
 import {
     agruparPorEstado,
     ESTADOS_TAREFA,
@@ -163,7 +160,7 @@ export function KanbanBoard() {
     const carregarTarefas = useCallback(() => {
         const seq = ++loadSeqRef.current;
         void runClientAction({ area: 'kanban', action: 'listarTarefasPainel', meta: {} }, () =>
-            listarTarefasPainel(),
+            getJson<PainelTarefas>('/api/tarefas-painel'),
         ).then((r) => {
             if (seq !== loadSeqRef.current || !r) return;
             setAbertas(r.abertas);

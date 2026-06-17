@@ -21,11 +21,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import {
-    gravarDefinicoes,
-    lerDefinicoes,
-    testarProvider,
-} from '@/modules/definicoes/definicoes.actions';
+import { gravarDefinicoes, testarProvider } from '@/modules/definicoes/definicoes.actions';
+import { getJson } from '@/lib/api-get';
 import {
     DEFINICOES_VISTA_DEFAULT,
     MODOS_POR_PROVIDER,
@@ -137,13 +134,13 @@ export function DefinicoesModal({
     useEffect(() => {
         if (!open) return;
         let cancelado = false;
-        void runClientAction({ area: 'definicoes', action: 'lerDefinicoes' }, lerDefinicoes).then(
-            (d) => {
-                if (cancelado || !d) return;
-                setDefs(d);
-                setCarregado(true);
-            },
-        );
+        void runClientAction({ area: 'definicoes', action: 'lerDefinicoes' }, () =>
+            getJson<DefinicoesVista>('/api/definicoes'),
+        ).then((d) => {
+            if (cancelado || !d) return;
+            setDefs(d);
+            setCarregado(true);
+        });
         return () => {
             cancelado = true;
         };

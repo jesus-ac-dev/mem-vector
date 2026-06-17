@@ -32,6 +32,7 @@ flowchart TD
 ## Stack
 
 - **Next.js 16** (App Router, Server Components, server actions) — UI + porta de servidor.
+    - **Leituras automáticas (useEffect) → rotas GET, não server actions (#73).** Os IDs das server actions rodam a cada HMR/build; um load automático num tab aberto fica com ID morto → "unexpected response". Reads chamados em `useEffect` usam `getJson` (`@/lib/api-get`) contra uma rota `GET /api/...` (URL estável). As actions ficam para escritas e para chamadas de clique.
 - **Supabase local** — Postgres + **pgvector** (RAG) + **RLS** (isolamento) + Auth. Portas `560xx`.
 - **Embeddings:** `multilingual-e5-small` local, CPU, via `@xenova/transformers` (384 dims; prefixos `passage:`/`query:`).
 - **Geração:** `claude` CLI (subscrição), invocado por `@/lib/claude`.
@@ -39,25 +40,25 @@ flowchart TD
 
 ## Camadas
 
-| Camada | Onde | Responsabilidade |
-| --- | --- | --- |
-| **App shell / UI** | `src/app/(app)/` | Workspace de 2 colunas: **file explorer global** (`layout.tsx` + `components/layout/file-explorer.tsx`) + conteúdo (chat / ficheiro). Rotas protegidas pelo middleware. |
-| **Módulos** | `src/modules/<feature>/` | Arquitetura **por feature**: `schema` (Zod) + `service` (dados+regras) + `actions` (porta servidor, valida Zod) [+ UI]. |
-| **Lib partilhada** | `src/lib/` | `supabase/` (server client + middleware), `embeddings` (e5-small), `claude` (`generate`). |
-| **Dados** | `supabase/migrations/` | Tabelas tipadas + genéricas + RLS + RPCs (`match_chunks`, `meus_grupos`). |
+| Camada             | Onde                     | Responsabilidade                                                                                                                                                        |
+| ------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App shell / UI** | `src/app/(app)/`         | Workspace de 2 colunas: **file explorer global** (`layout.tsx` + `components/layout/file-explorer.tsx`) + conteúdo (chat / ficheiro). Rotas protegidas pelo middleware. |
+| **Módulos**        | `src/modules/<feature>/` | Arquitetura **por feature**: `schema` (Zod) + `service` (dados+regras) + `actions` (porta servidor, valida Zod) [+ UI].                                                 |
+| **Lib partilhada** | `src/lib/`               | `supabase/` (server client + middleware), `embeddings` (e5-small), `claude` (`generate`).                                                                               |
+| **Dados**          | `supabase/migrations/`   | Tabelas tipadas + genéricas + RLS + RPCs (`match_chunks`, `meus_grupos`).                                                                                               |
 
 ## Mapa dos módulos
 
-| Módulo | O que faz | Doc |
-|---|---|---|
-| **knowledge** | O kernel de ficheiros — o agente escreve notas tipadas, versionadas, ligadas por `[[wikilinks]]`, pesquisáveis | [README](../src/modules/knowledge/README.md) |
-| **daily** | Notas diárias — a destilação acumula o recap do dia | [README](../src/modules/daily/README.md) |
-| **chat** | Pipeline RAG + a destilação proativa (assíncrona) que faz o agente escrever | [README](../src/modules/chat/README.md) |
-| **tarefas** | Tarefas do utilizador; o exemplo vivo do padrão feature-first | [README](../src/modules/tarefas/README.md) |
-| **projetos** | Projetos reais — toda a tarefa ancora a um; "Pessoal" = projeto-vida | [README](../src/modules/projetos/README.md) |
-| **definicoes** | Opções por utilizador (mega modal): método de destilação + módulos ativos | [README](../src/modules/definicoes/README.md) |
-| **grupos** | Grupos de pares — a base da visibilidade `protected` | [README](../src/modules/grupos/README.md) |
-| **auth** | Supabase Auth — a fundação do `auth.uid()` / RLS | [README](../src/modules/auth/README.md) |
+| Módulo         | O que faz                                                                                                      | Doc                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **knowledge**  | O kernel de ficheiros — o agente escreve notas tipadas, versionadas, ligadas por `[[wikilinks]]`, pesquisáveis | [README](../src/modules/knowledge/README.md)  |
+| **daily**      | Notas diárias — a destilação acumula o recap do dia                                                            | [README](../src/modules/daily/README.md)      |
+| **chat**       | Pipeline RAG + a destilação proativa (assíncrona) que faz o agente escrever                                    | [README](../src/modules/chat/README.md)       |
+| **tarefas**    | Tarefas do utilizador; o exemplo vivo do padrão feature-first                                                  | [README](../src/modules/tarefas/README.md)    |
+| **projetos**   | Projetos reais — toda a tarefa ancora a um; "Pessoal" = projeto-vida                                           | [README](../src/modules/projetos/README.md)   |
+| **definicoes** | Opções por utilizador (mega modal): método de destilação + módulos ativos                                      | [README](../src/modules/definicoes/README.md) |
+| **grupos**     | Grupos de pares — a base da visibilidade `protected`                                                           | [README](../src/modules/grupos/README.md)     |
+| **auth**       | Supabase Auth — a fundação do `auth.uid()` / RLS                                                               | [README](../src/modules/auth/README.md)       |
 
 ## Modelo de dados
 
@@ -75,7 +76,7 @@ A decisão central ([decisions/log](../../MythosEngine/decisions/log.md) 2026-06
 - `edges` — wikilinks/grafo; liga uma linha a outra (`to_slug` resolve `to_id` quando o alvo existe).
 - `chunks` — pgvector; a **pesquisa só corre aqui**. Cada chunk aponta o seu objeto via `metadata.entity_id`.
 
-> Tipado para o domínio, genérico para a auditoria/grafo/pesquisa. Foi só no *conteúdo de domínio* que o genérico era o erro.
+> Tipado para o domínio, genérico para a auditoria/grafo/pesquisa. Foi só no _conteúdo de domínio_ que o genérico era o erro.
 
 ```mermaid
 erDiagram
@@ -143,8 +144,8 @@ Toda a tabela de domínio segue o mesmo padrão (de `auth`):
 **Agente-autor (o coração):**
 
 ```md
-respond(pergunta)  → embedQuery → match_chunks → threshold(0.78) → buildPrompt → claude  → resposta JÁ
-destilarTurno(...)  → (async) o CLI decide se há nota durável → escreverNota (versionada) → append ao daily → chip "📝 nota"
+respond(pergunta) → embedQuery → match_chunks → threshold(0.78) → buildPrompt → claude → resposta JÁ
+destilarTurno(...) → (async) o CLI decide se há nota durável → escreverNota (versionada) → append ao daily → chip "📝 nota"
 ```
 
 A resposta não espera pela destilação (evita dobrar a latência).
@@ -318,4 +319,4 @@ sequenceDiagram
 
 - **Módulos:** os `README.md` em `src/modules/*/`.
 - **docs/:** [`VISAO-PRODUTO`](VISAO-PRODUTO.md) · [`VISAO-UX`](VISAO-UX.md) · [`RAG-EMBEDDINGS`](RAG-EMBEDDINGS.md) · [`AUTH-E-SHELL`](AUTH-E-SHELL.md) · [`GRUPOS-PROTECTED`](GRUPOS-PROTECTED.md) · [`plans/`](plans/).
-- **Porquê (decisões):** o vault MythosEngine `decisions/log.md` (a fonte do *porquê* de cada escolha).
+- **Porquê (decisões):** o vault MythosEngine `decisions/log.md` (a fonte do _porquê_ de cada escolha).

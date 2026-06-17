@@ -31,9 +31,10 @@ import {
     atualizarTarefa,
     concluirTarefa,
     criarTarefa,
-    listarTarefasPainel,
     mudarEstadoTarefa,
 } from '@/modules/tarefas/tarefas.actions';
+import { getJson } from '@/lib/api-get';
+import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
 import {
     detetarGatilhoTarefa,
     faltaObrigatorios,
@@ -113,7 +114,7 @@ export function TarefasPanel({
         const seq = ++loadSeqRef.current;
         void runClientAction(
             { area: 'left-sidebar', action: 'listarTarefasPainel', meta: {} },
-            () => listarTarefasPainel(),
+            () => getJson<PainelTarefas>('/api/tarefas-painel'),
         ).then((r) => {
             if (seq !== loadSeqRef.current || !r) return;
             setAbertas(r.abertas);

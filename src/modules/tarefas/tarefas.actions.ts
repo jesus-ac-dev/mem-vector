@@ -10,16 +10,12 @@ import {
 } from './tarefas.schema';
 import {
     criarTarefa as criarTarefaService,
-    listarTarefasAbertasCom,
-    listarTarefasConcluidasCom,
     atualizarTarefaCom,
     mudarEstadoTarefaCom,
     concluirTarefaCom,
     apagarTarefaCom,
 } from './tarefas.service';
 import { createClient } from '@/lib/supabase/server';
-import { listarProjetosCom } from '@/modules/projetos/projetos.service';
-import type { Projeto } from '@/modules/projetos/projetos.schema';
 
 // A porta do servidor: valida SEMPRE o que vem do browser antes de tocar nos dados.
 export async function criarTarefa(input: unknown) {
@@ -27,21 +23,8 @@ export async function criarTarefa(input: unknown) {
     await criarTarefaService(dados);
 }
 
-// Painel de tarefas (#21): abertas + concluídas + projetos (#47) numa chamada
-// — os filtros e o autocomplete # usam projetos REAIS, não tags derivadas.
-export async function listarTarefasPainel(): Promise<{
-    abertas: Tarefa[];
-    concluidas: Tarefa[];
-    projetos: Projeto[];
-}> {
-    const db = await createClient();
-    const [abertas, concluidas, projetos] = await Promise.all([
-        listarTarefasAbertasCom(db),
-        listarTarefasConcluidasCom(db),
-        listarProjetosCom(db),
-    ]);
-    return { abertas, concluidas, projetos };
-}
+// Painel de tarefas (#21) migrou para `GET /api/tarefas-painel` (#73):
+// abertas + concluídas + projetos (#47), chamando os serviços planos.
 
 const idSchema = z.string().uuid();
 const estadoSchema = z.enum(
