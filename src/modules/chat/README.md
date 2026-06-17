@@ -12,10 +12,11 @@
 
 | Ficheiro             | Responsabilidade                                                                                                                                                 |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chat.service.ts`    | `respond(question)` — pipeline RAG+geração; `aplicarDestilacao(question, answer)` — destilar→escrever; tipos `ChatResult`, `NotaEscrita`                         |
+| `chat.service.ts`    | `prepararTurno` (retrieval+prompt, partilhado); `respond(question)` one-shot e `respondStream(question, historico, onTextDelta)` (#66, token-a-token); `aplicarDestilacao` — destilar→escrever; tipos `ChatResult`, `NotaEscrita`                         |
 | `chat.jobs.ts`       | Criação/claim/conclusão/falha dos jobs duráveis de destilação em `agent_jobs`                                                                                    |
 | `chat.indexing.ts`   | Indexação dos turnos de chat em `chunks`, com metadata de conversa/mensagem e pruning por conversa                                                               |
-| `chat.actions.ts`    | Server actions: `ask(input)` — responde e cria job; `processarDestilacaoJob(jobId)` — processa/retry de destilação; `destilarTurno` fica só para compatibilidade |
+| `chat.actions.ts`    | Server actions: `processarDestilacaoJob(jobId)` — processa/retry de destilação; `ask(input)` — caminho one-shot (não-streaming, legado); `destilarTurno` fica só para compatibilidade |
+| `app/api/chat/stream/route.ts` | **Caminho principal do turno (#66):** ndjson token-a-token (`respondStream`) — server actions não fazem stream. Persiste user/assistant + cria o job, igual ao `ask` |
 | `chat.prompt.ts`     | `buildPrompt(question, sources)`, `relevantSources(sources, threshold?)`, `RELEVANCE_THRESHOLD` (0.78)                                                           |
 | `chat.provenance.ts` | `provenance(sources)` → `Provenance` (`fromWorkspace`, `label`), `sourceHref`, `linkCitations` — tradução do retrieval para a UI                                 |
 | `chat.trace.ts`      | `ChatTrace`, `traceBadgeLabel`, `traceModelEvidence` — tradução da prova técnica de provider/modelo para UI                                                     |

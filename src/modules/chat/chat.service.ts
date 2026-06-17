@@ -1,5 +1,5 @@
 import { embedQuery } from '@/lib/embeddings';
-import { providerDoChatCom } from '@/lib/providers/factory';
+import { providerDoChatCom, type ProviderLLM, type RespostaLLM } from '@/lib/providers/factory';
 import { createClient } from '@/lib/supabase/server';
 import type { Provider } from '@/modules/definicoes/definicoes.schema';
 import {
@@ -222,16 +222,31 @@ export async function aplicarDailyTurno(
     return { dia: resultado.dia, criado: resultado.criado };
 }
 
-// Pipeline do ping-pong: embed(query) → match_chunks → prompt → claude.
-// O histórico (janela da conversa) entra no prompt para resolver anáforas.
-export async function respond(
+interface TurnoPreparado {
+    instancia: ProviderLLM;
+    modeloPedido?: string;
+    sources: Source[];
+    prompt: string;
+}
+
+// Fase do turno para o indicador dinâmico (#66): o turno do chat não usa tools
+// (geração one-shot), por isso as fases reais são consultar→gerar; tool-use vive
+// na destilação de fundo (outro indicador).
+export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number };
+
+// Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
+// pelo respond (one-shot) e pelo respondStream (#66). O histórico (janela da
+// conversa) entra no prompt para resolver anáforas. `onFase` narra o progresso.
+async function prepararTurno(
     question: string,
-    historico: MensagemConversa[] = [],
-): Promise<ChatResult> {
+    historico: MensagemConversa[],
+    onFase?: (f: FaseTurno) => void,
+): Promise<TurnoPreparado> {
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
     const { instancia, modeloPedido, matchCount } = await providerDoChatCom(db);
+    onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
 
     const { data, error } = await db.rpc('match_chunks_hybrid', {
@@ -262,24 +277,59 @@ export async function respond(
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
     // da resposta (não-fatal: sem Kernel, prompt igual ao de sempre).
     const kernel = await blocoKernelCom(db);
-    // A resposta sai do provider escolhido (#60 r3, lido no topo); o agente-autor
-    // (destilação) continua claude — as tools e o envelope estão afinados para ele.
-    const startedAt = Date.now();
-    const { text, costUsd, model, tokensIn, tokensCache, tokensOut } = await instancia.gerar(
-        buildPrompt(question, contexto, classificarIntencao(question), historico, kernel),
+    const prompt = buildPrompt(
+        question,
+        contexto,
+        classificarIntencao(question),
+        historico,
+        kernel,
     );
-    const latencyMs = Date.now() - startedAt;
+    // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
+    onFase?.({ fase: 'gerar', fontes: sources.length });
+    return { instancia, modeloPedido, sources, prompt };
+}
 
+function montarResultado(resp: RespostaLLM, t: TurnoPreparado, latencyMs: number): ChatResult {
     return {
-        answer: text,
-        sources,
-        costUsd,
-        tokensIn: tokensIn ?? null,
-        tokensCache: tokensCache ?? null,
-        tokensOut: tokensOut ?? null,
-        provider: instancia.nome,
+        answer: resp.text,
+        sources: t.sources,
+        costUsd: resp.costUsd,
+        tokensIn: resp.tokensIn ?? null,
+        tokensCache: resp.tokensCache ?? null,
+        tokensOut: resp.tokensOut ?? null,
+        provider: t.instancia.nome,
         latencyMs,
-        modelo: model,
-        modeloPedido,
+        modelo: resp.model,
+        modeloPedido: t.modeloPedido,
     };
+}
+
+// Pipeline one-shot: prepara o turno e gera de uma vez.
+export async function respond(
+    question: string,
+    historico: MensagemConversa[] = [],
+): Promise<ChatResult> {
+    const t = await prepararTurno(question, historico);
+    const startedAt = Date.now();
+    const resp = await t.instancia.gerar(t.prompt);
+    return montarResultado(resp, t, Date.now() - startedAt);
+}
+
+// Pipeline streaming (#66): igual, mas a resposta sai por `onTextDelta` à medida
+// que é gerada. Provider sem streaming → cai no gerar (texto num bloco só).
+export async function respondStream(
+    question: string,
+    historico: MensagemConversa[],
+    onTextDelta: (texto: string) => void,
+    onFase?: (f: FaseTurno) => void,
+): Promise<ChatResult> {
+    const t = await prepararTurno(question, historico, onFase);
+    const startedAt = Date.now();
+    const resp = t.instancia.gerarStream
+        ? await t.instancia.gerarStream(t.prompt, onTextDelta)
+        : await t.instancia.gerar(t.prompt).then((r) => {
+              onTextDelta(r.text);
+              return r;
+          });
+    return montarResultado(resp, t, Date.now() - startedAt);
 }
