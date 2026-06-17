@@ -18,7 +18,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { gravarEscolhaChat, lerDefinicoes } from '@/modules/definicoes/definicoes.actions';
+import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
+import { getJson } from '@/lib/api-get';
 import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import { ProviderIcon } from '@/components/layout/provider-icon';
 import {
@@ -53,9 +54,8 @@ export function EscolhaModeloModal({
     useEffect(() => {
         if (!open) return;
         let cancelado = false;
-        void runClientAction(
-            { area: 'escolha-modelo', action: 'lerDefinicoes' },
-            lerDefinicoes,
+        void runClientAction({ area: 'escolha-modelo', action: 'lerDefinicoes' }, () =>
+            getJson<DefinicoesVista>('/api/definicoes'),
         ).then((d) => {
             if (!cancelado && d) setDefs(d);
         });

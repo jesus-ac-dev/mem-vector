@@ -6,11 +6,7 @@ import {
     escreverNota,
     escreverNotaEmPasta,
     atualizarNotaPorId,
-    listarVersoes,
     listarKnowledge,
-    backlinksDe,
-    forwardLinksDe,
-    grafoDados as lerGrafo,
     moverNota,
     moverNotaPorId,
     renomearNota,
@@ -20,19 +16,13 @@ import {
     reporNota,
     listarArquivados,
     atualizarPropriedadesNota,
-    type LinkNota,
-    type ForwardLink,
-    type GrafoDados,
 } from '@/modules/knowledge/knowledge.service';
 import {
     getDaily,
-    getDailyPorId,
     substituirDaily,
     substituirDailyPorId,
-    listarVersoesDaily,
     listarDailies,
     definirCorDaily,
-    corDaily,
 } from '@/modules/daily/daily.service';
 import {
     criarPasta,
@@ -43,12 +33,7 @@ import {
     listarPastas,
 } from '@/modules/folders/folders.service';
 import type { Pasta } from '@/modules/folders/folders.tree';
-import { extrairOutline, type OutlineItem } from '@/lib/outline';
-import type {
-    Versao,
-    NotaKnowledge,
-    AtualizarPropriedades,
-} from '@/modules/knowledge/knowledge.schema';
+import type { NotaKnowledge, AtualizarPropriedades } from '@/modules/knowledge/knowledge.schema';
 import type { PropriedadesNota } from '@/modules/knowledge/knowledge.props';
 import {
     primeiroTituloMarkdown,
@@ -262,49 +247,8 @@ export async function criarNotaNaPasta(folderId: string | null): Promise<{
     return { tipo: 'knowledge', id: res.id, chave: res.slug, titulo: res.title };
 }
 
-export interface DadosBarraDireita {
-    outline: OutlineItem[];
-    backlinks: LinkNota[];
-    forwardLinks: ForwardLink[];
-}
-
-/**
- * Dados da barra da direita para o ficheiro ativo: outline (headings) sempre, e
- * backlinks/forward links para knowledge. Daily mostra outline + forward links
- * (a daily também escreve edges — ex.: a destilação liga [[carlos-e-sofia]]).
- */
-export async function dadosBarraDireita(
-    tipo: 'knowledge' | 'daily',
-    chave: string,
-    id?: string,
-): Promise<DadosBarraDireita> {
-    const vazio: DadosBarraDireita = { outline: [], backlinks: [], forwardLinks: [] };
-
-    if (tipo === 'knowledge') {
-        const nota = id ? await getNotaPorId(id) : await getNota(chave);
-        if (!nota) return vazio;
-        const [backlinks, forwardLinks] = await Promise.all([
-            backlinksDe(nota.slug, nota.id),
-            forwardLinksDe(nota.id),
-        ]);
-        return { outline: extrairOutline(nota.contentMd), backlinks, forwardLinks };
-    }
-
-    const daily = id ? await getDailyPorId(id) : await getDaily(chave);
-    if (!daily) return vazio;
-    // Simetria completa: a daily mostra os links que faz E quem aponta para ela
-    // (o alvo de um wikilink para daily é o próprio dia).
-    const [backlinks, forwardLinks] = await Promise.all([
-        backlinksDe(daily.dia, daily.id),
-        forwardLinksDe(daily.id, 'daily'),
-    ]);
-    return { outline: extrairOutline(daily.contentMd), backlinks, forwardLinks };
-}
-
-/** Dados do grafo do conhecimento (nós = notas, arestas = wikilinks). */
-export async function dadosGrafo(): Promise<GrafoDados> {
-    return lerGrafo();
-}
+// dadosBarraDireita/dadosGrafo migraram para rotas GET (#73): ver
+// workspace.leituras.ts (`dadosDaBarraDireita`) e `/api/grafo` (grafoDados).
 
 function humanizarSlug(slug: string): string {
     const t = slug.replace(/-/g, ' ').trim();
@@ -406,26 +350,8 @@ export async function abrirOuCriarNota(
     };
 }
 
-/**
- * Devolve as versões de um ficheiro (knowledge ou daily), da mais recente para a mais antiga.
- * Devolve [] se o ficheiro não existir ou não tiver versões.
- */
-export async function versoesFicheiro(
-    tipo: 'knowledge' | 'daily',
-    chave: string,
-    id?: string,
-): Promise<Versao[]> {
-    if (tipo === 'knowledge') {
-        const nota = id ? await getNotaPorId(id) : await getNota(chave);
-        if (!nota) return [];
-        return listarVersoes(nota.id);
-    }
-
-    // tipo === 'daily'
-    const daily = id ? await getDailyPorId(id) : await getDaily(chave);
-    if (!daily) return [];
-    return listarVersoesDaily(daily.id);
-}
+// versoesFicheiro migrou para `GET /api/versoes` (#73): ver
+// workspace.leituras.ts (`versoesDoFicheiro`).
 
 /**
  * Notas linkáveis por [[ ]]: knowledge (já filtra arquivadas via listarKnowledge)
@@ -493,15 +419,8 @@ export async function reporNotaAction(slug: string): Promise<void> {
     await reporNota(slug);
 }
 
-/** Lista as notas arquivadas (para a vista de arquivados do explorer). */
-export async function listarArquivadosAction(): Promise<NotaKnowledge[]> {
-    return listarArquivados();
-}
-
-/** Lista as pastas do utilizador (para o modal de cores do grafo). */
-export async function listarPastasAction(): Promise<Pasta[]> {
-    return listarPastas();
-}
+// listarArquivadosAction/listarPastasAction migraram para `GET /api/arquivados`
+// e `GET /api/pastas` (#73) — chamam direto os serviços planos.
 
 /** Define a cor (hex) de uma pasta. */
 export async function definirCorPastaAction(folderId: string, cor: string | null): Promise<void> {
@@ -513,10 +432,7 @@ export async function definirCorDailyAction(cor: string | null): Promise<void> {
     await definirCorDaily(cor);
 }
 
-/** Cor atual do grupo daily (ou null). */
-export async function corDailyAction(): Promise<string | null> {
-    return corDaily();
-}
+// corDailyAction migrou para `GET /api/cor-daily` (#73).
 
 /** Atualiza propriedades de uma nota (tags/summary no frontmatter, visibility). */
 export async function atualizarPropriedadesAction(

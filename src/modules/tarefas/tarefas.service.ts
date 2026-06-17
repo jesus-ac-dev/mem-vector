@@ -6,6 +6,15 @@ import { createClient } from '@/lib/supabase/server';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import { horaLisboa } from '@/modules/daily/daily.capture';
 import { resolverProjetoCom } from '@/modules/projetos/projetos.service';
+import type { Projeto } from '@/modules/projetos/projetos.schema';
+
+// Payload do painel de tarefas (sidebar esquerda + kanban), servido por
+// `GET /api/tarefas-painel` (#73) e consumido pelos dois clientes.
+export interface PainelTarefas {
+    abertas: Tarefa[];
+    concluidas: Tarefa[];
+    projetos: Projeto[];
+}
 
 // O "serviço" da feature: dados + regras numa peça. Liga ao Supabase com o
 // cliente autenticado → a RLS garante que cada user só vê/cria as suas tarefas.

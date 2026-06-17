@@ -20,7 +20,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/layout/workspace-context';
 import { GrafoConfig } from '@/components/layout/grafo-config';
-import { dadosGrafo } from '@/modules/workspace/workspace.actions';
+import { getJson } from '@/lib/api-get';
+import type { GrafoDados } from '@/modules/knowledge/knowledge.service';
 import type {
     ForceGraphMethods as Metodos2D,
     ForceGraphProps as Props2D,
@@ -105,12 +106,11 @@ export function WorkspaceGraph() {
 
     useEffect(() => {
         let cancelado = false;
-        void runClientAction({ area: 'workspace-graph', action: 'dadosGrafo' }, dadosGrafo).then(
-            (d) => {
-                if (!cancelado && d)
-                    setGraphData((prev) => construirGraphData(d, prev ?? undefined));
-            },
-        );
+        void runClientAction({ area: 'workspace-graph', action: 'dadosGrafo' }, () =>
+            getJson<GrafoDados>('/api/grafo'),
+        ).then((d) => {
+            if (!cancelado && d) setGraphData((prev) => construirGraphData(d, prev ?? undefined));
+        });
         return () => {
             cancelado = true;
         };

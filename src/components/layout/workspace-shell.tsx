@@ -47,13 +47,12 @@ import {
     criarNotaNaPasta,
     novaPasta,
     abrirOuCriarNota,
-    dadosBarraDireita,
     arquivarNotaAction,
     arquivarPastaAction,
-    listarArquivadosAction,
-    type DadosBarraDireita,
     type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
+import { getJson } from '@/lib/api-get';
+import { type DadosBarraDireita } from '@/modules/workspace/workspace.leituras';
 import { tabKey } from '@/components/layout/workspace-context';
 import {
     tagsComNotasDaArvore,
@@ -279,9 +278,8 @@ function LeftSidebar({
     useEffect(() => {
         if (!verArquivados) return;
         let cancelado = false;
-        void runClientAction(
-            { area: 'left-sidebar', action: 'listarArquivados' },
-            listarArquivadosAction,
+        void runClientAction({ area: 'left-sidebar', action: 'listarArquivados' }, () =>
+            getJson<NotaKnowledge[]>('/api/arquivados'),
         ).then((notas) => {
             if (!cancelado && notas) setArquivados(notas);
         });
@@ -293,7 +291,7 @@ function LeftSidebar({
     async function carregarArquivados() {
         const notas = await runClientAction(
             { area: 'left-sidebar', action: 'carregarArquivados' },
-            listarArquivadosAction,
+            () => getJson<NotaKnowledge[]>('/api/arquivados'),
         );
         if (notas) setArquivados(notas);
     }
@@ -690,13 +688,15 @@ function RightSidebar({
         if (!ativoTipo || !ativoChave) return;
         const key = tabKey({ tipo: ativoTipo, chave: ativoChave, id: ativoId ?? undefined });
         let cancelado = false;
+        const params = new URLSearchParams({ tipo: ativoTipo, chave: ativoChave });
+        if (ativoId) params.set('id', ativoId);
         void runClientAction(
             {
                 area: 'right-sidebar',
                 action: 'dadosBarraDireita',
                 meta: { ativoTipo, ativoChave, ativoId },
             },
-            () => dadosBarraDireita(ativoTipo, ativoChave, ativoId ?? undefined),
+            () => getJson<DadosBarraDireita>(`/api/barra-direita?${params.toString()}`),
         ).then((d) => {
             if (!cancelado && d) setDados({ key, d });
         });

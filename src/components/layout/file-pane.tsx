@@ -19,12 +19,12 @@ import {
 } from '@/components/ui/select';
 import { useWorkspace, tabKey, type FicheiroAberto } from '@/components/layout/workspace-context';
 import {
-    versoesFicheiro,
     guardarFicheiro,
     abrirOuCriarNota,
     arquivarNotaAction,
     type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
+import { getJson } from '@/lib/api-get';
 import type { ConteudoFicheiro } from '@/modules/workspace/workspace.files';
 import { DiffView } from '@/modules/knowledge/diff-view';
 import { rotuloAutor } from '@/modules/knowledge/versao-autor';
@@ -211,9 +211,12 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     useEffect(() => {
         if (vista !== 'history') return;
         let cancelled = false;
-        versoesFicheiro(ficheiro.tipo, ficheiro.chave, ficheiro.id)
-            .then((versoes) => {
+        const params = new URLSearchParams({ tipo: ficheiro.tipo, chave: ficheiro.chave });
+        if (ficheiro.id) params.set('id', ficheiro.id);
+        getJson<Versao[]>(`/api/versoes?${params.toString()}`)
+            .then((res) => {
                 if (cancelled) return;
+                const versoes = res ?? []; // getJson devolve null em 404; aqui é sempre lista
                 setHistoryEstado({ tipo: 'ok', versoes });
                 setBaseId(versoes[1]?.id ?? null);
             })

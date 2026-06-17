@@ -12,17 +12,13 @@ import {
     gravarDefinicoesCom,
     gravarEscolhaChatCom,
     lerDefinicoesServidorCom,
-    lerDefinicoesVistaCom,
 } from './definicoes.service';
 import { criarProvider } from '@/lib/providers/factory';
 import { createClient } from '@/lib/supabase/server';
 
 // As actions devolvem SEMPRE a vista (keys mascaradas) — a key real nunca
-// atravessa a fronteira do servidor.
-
-export async function lerDefinicoes(): Promise<DefinicoesVista> {
-    return lerDefinicoesVistaCom(await createClient());
-}
+// atravessa a fronteira do servidor. lerDefinicoes migrou para
+// `GET /api/definicoes` (#73).
 
 export async function gravarDefinicoes(input: unknown): Promise<DefinicoesVista> {
     const dados = DefinicoesSchema.parse(input);
