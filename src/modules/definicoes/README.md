@@ -24,6 +24,16 @@ onChange, só entre providers já parametrizados.
   E `match_count` (#67): nº de fontes do retrieval do chat (1..50, default 5;
   antes fixo no código), lido no `respond` via `providerDoChatCom`. A rede de
   candidatos do agente-autor é separada (`CANDIDATOS_DESTILACAO`, interna).
+  E `web_habilitada` (#45, default false): liga a **pesquisa na internet** na
+  resposta do chat — o turno passa a correr o agente-web (`src/agent/responder-web.ts`,
+  tools `procurar_web`/`ler_url`) em vez do caminho normal. O agente é instruído a
+  responder **primeiro do workspace** e só ir à net para factos do mundo (notícias,
+  desporto, versões) — não pesquisa para perguntas do próprio workspace (r3). **Sem
+  key = DuckDuckGo** (grátis, flaky → erro lembra a key). A **key Tavily** (grátis 1k/mês,
+  sem cartão, feita p/ agentes; campo neutro `web_key_cifrada`, cifrada at rest como as
+  keys dos providers, máscara na vista) configura-se aqui no toggle, com link para a
+  obter; `MEMVECTOR_AGENT_WEB_KEY` no env fica como fallback de operação. A key segue ao
+  `responderComWebCom` via `providerDoChatCom`.
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
   vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.

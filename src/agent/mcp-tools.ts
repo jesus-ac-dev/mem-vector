@@ -17,7 +17,8 @@ import {
     concluirTarefaCom,
 } from '../modules/tarefas/tarefas.service';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
-import { registarEscrita } from './resultado';
+import { registarEscrita, registarWeb } from './resultado';
+import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
 // o kernel (procurar/ler/criar/continuar nota, daily). Lançado pelo claude CLI
@@ -26,6 +27,9 @@ import { registarEscrita } from './resultado';
 // serviços `...Com` (mesmo caminho do one-shot: RPCs transacionais + projeção
 // de índices), e ficam registadas no ficheiro de resultado para o job.
 const RESULT_FILE = process.env.MEMVECTOR_AGENT_RESULT_FILE ?? '';
+// #45: key Tavily opcional (cifrada nas Definições, passada por env). Sem ela, o
+// procurar_web cai no DuckDuckGo sem-key (flaky → avisa para configurar a key).
+const WEB_KEY = process.env.MEMVECTOR_AGENT_WEB_KEY || undefined;
 
 // A nota escrita neste turno entra na entrada do daily (paridade com o formato
 // do caminho one-shot: "Estado escrito: [[slug]]"). Vive num contexto por
@@ -184,6 +188,26 @@ const TOOLS = [
             required: ['id'],
         },
     },
+    {
+        name: 'procurar_web',
+        description:
+            'Pesquisa na INTERNET e devolve os melhores resultados (título, URL, snippet). Usa para informação externa, atual, ou que não esteja no workspace. Cita os URLs na resposta.',
+        inputSchema: {
+            type: 'object',
+            properties: { query: { type: 'string', description: 'O que procurar' } },
+            required: ['query'],
+        },
+    },
+    {
+        name: 'ler_url',
+        description:
+            'Lê o texto de uma página web a partir do URL (para aprofundar um resultado de procurar_web).',
+        inputSchema: {
+            type: 'object',
+            properties: { url: { type: 'string', description: 'URL http(s) a ler' } },
+            required: ['url'],
+        },
+    },
 ];
 
 type Args = Record<string, unknown>;
@@ -334,6 +358,34 @@ async function executarTool(
                 });
             }
             return `Tarefa concluída: "${t.titulo}" (registada no daily).`;
+        }
+        case 'procurar_web': {
+            try {
+                const resultados = await procurarWeb(texto(args, 'query'), { webKey: WEB_KEY });
+                if (RESULT_FILE) {
+                    for (const r of resultados) {
+                        registarWeb(RESULT_FILE, { tipo: 'web', url: r.url, titulo: r.titulo });
+                    }
+                }
+                return JSON.stringify(resultados, null, 2);
+            } catch (e) {
+                // Limite/bloqueio do provider sem-key: devolve uma instrução para o
+                // agente AVISAR o utilizador a configurar a key (regra do Carlos).
+                if (e instanceof LimiteWebError) {
+                    return `LIMITE_WEB: ${e.message} Diz ao utilizador, na resposta, que a pesquisa web atingiu o limite e que pode configurar uma key Tavily (grátis) em Definições > Comportamento para continuar.`;
+                }
+                return `Erro na pesquisa web: ${e instanceof Error ? e.message : 'desconhecido'}`;
+            }
+        }
+        case 'ler_url': {
+            const url = texto(args, 'url');
+            try {
+                const conteudo = await lerUrl(url);
+                if (RESULT_FILE) registarWeb(RESULT_FILE, { tipo: 'web', url, titulo: url });
+                return conteudo || '(página sem texto)';
+            } catch (e) {
+                return `Erro ao ler ${url}: ${e instanceof Error ? e.message : 'desconhecido'}`;
+            }
         }
         default:
             throw new Error(`tool desconhecida: ${name}`);

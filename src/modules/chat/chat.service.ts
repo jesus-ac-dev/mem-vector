@@ -12,6 +12,7 @@ import {
 import { classificarIntencao } from './chat.intencao';
 import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
+import { responderComWebCom } from '@/agent/responder-web';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
     escreverNota as escreverNotaReal,
@@ -63,6 +64,7 @@ export interface ChatResult {
     latencyMs: number;
     modelo?: string; // o modelo REAL que respondeu (prova, não auto-relato)
     modeloPedido?: string; // o que foi ENVIADO ao provider — a legenda compara (r12)
+    webSources?: { url: string; titulo: string }[]; // #45: fontes 🌐 quando web ON
 }
 
 interface DestilDeps {
@@ -223,15 +225,18 @@ export async function aplicarDailyTurno(
 }
 
 interface TurnoPreparado {
+    db: Awaited<ReturnType<typeof createClient>>;
     instancia: ProviderLLM;
     modeloPedido?: string;
     sources: Source[];
     prompt: string;
+    webHabilitada: boolean; // #45
+    webKey?: string; // #45: key Tavily das Definições (cifrada), p/ a pesquisa web
 }
 
-// Fase do turno para o indicador dinâmico (#66): o turno do chat não usa tools
-// (geração one-shot), por isso as fases reais são consultar→gerar; tool-use vive
-// na destilação de fundo (outro indicador).
+// Fase do turno para o indicador dinâmico (#66): consultar → gerar. O caminho
+// web não tem fase própria (r3): só se sabe se foi à net no fim (🌐 N fontes),
+// por isso não se anuncia "a consultar a internet" à força.
 export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number };
 
 // Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
@@ -245,7 +250,8 @@ async function prepararTurno(
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
-    const { instancia, modeloPedido, matchCount } = await providerDoChatCom(db);
+    const { instancia, modeloPedido, matchCount, webHabilitada, webKey } =
+        await providerDoChatCom(db);
     onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
 
@@ -286,7 +292,7 @@ async function prepararTurno(
     );
     // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
     onFase?.({ fase: 'gerar', fontes: sources.length });
-    return { instancia, modeloPedido, sources, prompt };
+    return { db, instancia, modeloPedido, sources, prompt, webHabilitada, webKey };
 }
 
 function montarResultado(resp: RespostaLLM, t: TurnoPreparado, latencyMs: number): ChatResult {
@@ -325,6 +331,33 @@ export async function respondStream(
 ): Promise<ChatResult> {
     const t = await prepararTurno(question, historico, onFase);
     const startedAt = Date.now();
+
+    // #45: web ON → a resposta corre agentic-com-web (loop de tools que PODE
+    // pesquisar a internet — só o faz se a pergunta precisar de um facto externo;
+    // perguntas do workspace respondem do contexto, sem ir à net). Não anuncia
+    // "a consultar a internet" à força (r3, Carlos): a UI mantém "a gerar (N fontes)"
+    // da prepararTurno e o "🌐 N fontes" no fim diz se a web foi mesmo usada. Não
+    // streama: texto num bloco. Web OFF (default) = caminho de sempre, intocado.
+    if (t.webHabilitada) {
+        // Key Tavily: das Definições (cifrada, por-utilizador); env como fallback de operação.
+        const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
+        const r = await responderComWebCom(t.db, t.prompt, webKey);
+        onTextDelta(r.text);
+        return {
+            answer: r.text,
+            sources: t.sources,
+            costUsd: r.costUsd,
+            tokensIn: r.tokensIn ?? null,
+            tokensCache: r.tokensCache ?? null,
+            tokensOut: r.tokensOut ?? null,
+            provider: t.instancia.nome,
+            latencyMs: Date.now() - startedAt,
+            modelo: r.model,
+            modeloPedido: t.modeloPedido,
+            webSources: r.webSources,
+        };
+    }
+
     const resp = t.instancia.gerarStream
         ? await t.instancia.gerarStream(t.prompt, onTextDelta)
         : await t.instancia.gerar(t.prompt).then((r) => {

@@ -121,6 +121,7 @@ export async function POST(request: Request) {
                     tokensOut: result.tokensOut,
                     latencyMs: result.latencyMs,
                     sources: result.sources,
+                    webSources: result.webSources ?? [],
                 });
             } catch (e) {
                 enviar({ tipo: 'erro', mensagem: e instanceof Error ? e.message : 'erro' });

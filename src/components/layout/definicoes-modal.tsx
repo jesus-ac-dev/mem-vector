@@ -93,6 +93,8 @@ export function DefinicoesModal({
     const [defs, setDefs] = useState<DefinicoesVista>(DEFINICOES_VISTA_DEFAULT);
     // Keys escritas nesta sessão da modal ('' = limpar; só seguem no Guardar).
     const [keysNovas, setKeysNovas] = useState<Partial<Record<Provider, string>>>({});
+    // #45: key Tavily escrita nesta sessão da modal (undefined=manter; ''=limpar).
+    const [webKeyNova, setWebKeyNova] = useState<string | undefined>(undefined);
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
     >({});
@@ -123,6 +125,7 @@ export function DefinicoesModal({
         if (open) {
             setCarregado(false);
             setKeysNovas({});
+            setWebKeyNova(undefined);
             setTestes({});
             setLigados(new Set());
             setConfirmados(new Set());
@@ -254,6 +257,9 @@ export function DefinicoesModal({
             modulosAtivos: defs.modulosAtivos,
             chatProvider: defs.chatProvider,
             matchCount: defs.matchCount,
+            webHabilitada: defs.webHabilitada,
+            // undefined = manter a key cifrada; '' = limpar; string = cifrar.
+            webKey: webKeyNova,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -279,6 +285,7 @@ export function DefinicoesModal({
         }
         setDefs(r);
         setKeysNovas({});
+        setWebKeyNova(undefined);
         setLigados(new Set());
         setSujo(false);
         setEstado('guardado');
@@ -390,6 +397,66 @@ export function DefinicoesModal({
                                         className="mt-2 h-8 w-24 text-xs"
                                     />
                                 </div>
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <h3 className="text-sm font-medium">
+                                            Pesquisa na internet
+                                        </h3>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Quando ligado, a resposta do chat pode consultar a web
+                                            (mais lenta e cara; sem streaming).{' '}
+                                            <strong>Sem key</strong> usa o DuckDuckGo — grátis, mas
+                                            bloqueia com uso e dá erro. Mete uma{' '}
+                                            <strong>key Tavily</strong> (grátis, 1k/mês, sem cartão;
+                                            feita para agentes) para resultados fiáveis.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={defs.webHabilitada}
+                                        onCheckedChange={(webHabilitada) =>
+                                            editar({ ...defs, webHabilitada })
+                                        }
+                                        aria-label="Ligar pesquisa na internet"
+                                    />
+                                </div>
+                                {defs.webHabilitada && (
+                                    <div className="mt-2 space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="password"
+                                                autoComplete="new-password"
+                                                value={webKeyNova ?? ''}
+                                                onChange={(e) => setWebKeyNova(e.target.value)}
+                                                placeholder={
+                                                    webKeyNova === ''
+                                                        ? 'key será removida ao guardar'
+                                                        : defs.webTemKey
+                                                          ? `key configurada (····${defs.webKeySufixo})`
+                                                          : 'Tavily API key (opcional)'
+                                                }
+                                                className="h-8 flex-1 text-xs"
+                                            />
+                                            {defs.webTemKey && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setWebKeyNova('')}
+                                                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                                                >
+                                                    Limpar
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <a
+                                            href="https://app.tavily.com/home"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-primary hover:underline"
+                                        >
+                                            Obter uma key Tavily (grátis) →
+                                        </a>
+                                    </div>
+                                )}
                                 <p className="text-xs text-muted-foreground">
                                     Proatividade, estilo e personalidade do agente vão acumulando
                                     aqui.

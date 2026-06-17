@@ -88,6 +88,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: [],
                 chatProvider: 'claude',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: {},
             });
             const servidor = await lerDefinicoesServidorCom(bruno);
@@ -108,6 +109,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: ['github'],
                 chatProvider: 'gemini',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: AGENTES,
             });
             // Vista (cliente): a key NUNCA aparece — só a máscara.
@@ -133,6 +135,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: [],
                 chatProvider: 'claude',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: { ...AGENTES, gemini: { ...AGENTES.gemini, apiKey: undefined } },
             });
             const depois = await lerDefinicoesVistaCom(alice);
@@ -142,6 +145,53 @@ describe('definições (#60, integração RLS)', () => {
             const doBruno = await lerDefinicoesVistaCom(bruno);
             expect(doBruno.chatProvider).toBe('claude');
             expect(doBruno.agentes.gemini).toBeUndefined();
+        },
+    );
+
+    // #45: a key de pesquisa web (Tavily) segue o MESMO contrato das keys dos
+    // providers — cifra at rest, mascara na vista, decifra no servidor.
+    it(
+        'web key (#45): cifra at rest, mascara na vista, decifra no servidor',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, lerDefinicoesVistaCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+
+            const vista = await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: true,
+                webKey: 'tavily-key-de-teste-1234',
+                agentes: {},
+            });
+            // Vista: a key nunca aparece — só a máscara.
+            expect(vista.webTemKey).toBe(true);
+            expect(vista.webKeySufixo).toBe('1234');
+            expect(JSON.stringify(vista)).not.toContain('tavily-key-de-teste');
+
+            // At rest: cifrada (gcm:), nunca plaintext.
+            const { data: row } = await alice.from('definicoes').select('web_key_cifrada').single();
+            const cifrada = (row as { web_key_cifrada: string }).web_key_cifrada;
+            expect(cifrada.startsWith('gcm:')).toBe(true);
+            expect(cifrada).not.toContain('tavily-key-de-teste');
+
+            // Servidor: decifra.
+            const servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.webKey).toBe('tavily-key-de-teste-1234');
+
+            // Regravar sem webKey (undefined) mantém a key.
+            await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: true,
+                agentes: {},
+            });
+            const depois = await lerDefinicoesVistaCom(alice);
+            expect(depois.webTemKey).toBe(true);
         },
     );
 
@@ -161,6 +211,7 @@ describe('definições (#60, integração RLS)', () => {
                 modulosAtivos: [],
                 chatProvider: 'claude',
                 matchCount: 5,
+                webHabilitada: false,
                 agentes: {
                     ...AGENTES,
                     gemini: {
