@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
-import { destilarTurnoAgenticCom } from '../src/agent/destilar-agentic';
-import { candidatosParaFactoCom } from '../src/modules/knowledge/knowledge.service';
-import { classificarIntencao } from '../src/modules/chat/chat.intencao';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
+import { destilarTurnoAgenticCom } from '../../src/agent/destilar-agentic';
+import { candidatosParaFactoCom } from '../../src/modules/knowledge/knowledge.service';
+import { classificarIntencao } from '../../src/modules/chat/chat.intencao';
 
 process.loadEnvFile('.env.local');
 

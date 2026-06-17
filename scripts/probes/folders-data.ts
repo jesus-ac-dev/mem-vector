@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { criarPastaCom, listarPastasCom } from '../src/modules/folders/folders.service';
-import { construirArvore } from '../src/modules/folders/folders.tree';
-import { escreverNotaCom, listarKnowledgeCom } from '../src/modules/knowledge/knowledge.service';
-import { slugify } from '../src/modules/knowledge/knowledge.links';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+import { criarPastaCom, listarPastasCom } from '../../src/modules/folders/folders.service';
+import { construirArvore } from '../../src/modules/folders/folders.tree';
+import { escreverNotaCom, listarKnowledgeCom } from '../../src/modules/knowledge/knowledge.service';
+import { slugify } from '../../src/modules/knowledge/knowledge.links';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 

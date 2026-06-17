@@ -29,7 +29,7 @@ job de destilação ─ MEMVECTOR_AGENTIC_DISTILL=1 ─► destilarTurnoAgenticC
 
 ## Prova
 
-`npm run destilar-agentic` (precisa do Supabase local + claude CLI): trivial sem
+`npx tsx scripts/probes/destilar-agentic.ts` (precisa do Supabase local + claude CLI): trivial sem
 escritas; facto durável cria nota+daily; facto seguinte sobre o mesmo assunto
 **continua** a nota (mesmo slug, `criada=false`). Os smokes da Sofia (#19) são a
 suite de aceitação; o critério de promoção da flag está na #27.

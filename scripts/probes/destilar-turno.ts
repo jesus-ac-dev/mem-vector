@@ -1,4 +1,4 @@
-import { destilarResumirTurno } from '../src/modules/chat/chat.turno';
+import { destilarResumirTurno } from '../../src/modules/chat/chat.turno';
 
 process.loadEnvFile('.env.local');
 

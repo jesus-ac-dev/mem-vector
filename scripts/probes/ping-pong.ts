@@ -1,6 +1,6 @@
-import { embedQuery } from '../src/lib/embeddings';
-import { generate } from '../src/lib/claude';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+import { embedQuery } from '../../src/lib/embeddings';
+import { generate } from '../../src/lib/claude';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 

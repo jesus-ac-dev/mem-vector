@@ -4,14 +4,14 @@ import {
     criarPastaCom,
     listarPastasCom,
     renomearPastaCom,
-} from '../src/modules/folders/folders.service';
+} from '../../src/modules/folders/folders.service';
 import {
     escreverNotaCom,
     listarKnowledgeCom,
     moverNotaCom,
-} from '../src/modules/knowledge/knowledge.service';
-import { slugify } from '../src/modules/knowledge/knowledge.links';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+} from '../../src/modules/knowledge/knowledge.service';
+import { slugify } from '../../src/modules/knowledge/knowledge.links';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 
