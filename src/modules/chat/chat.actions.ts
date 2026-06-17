@@ -4,9 +4,8 @@ import { z } from 'zod';
 import { respond, type ChatResult, type TurnoDestilado } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
 import { executarDestilacaoTurnoCom } from './chat.postturno';
-import { listarConversas, ultimasMensagensCom } from './chat.conversas';
+import { garantirConversaCom, listarConversas, ultimasMensagensCom } from './chat.conversas';
 import { indexarMensagensChatCom } from './chat.indexing';
-import { tituloInicialConversa } from './chat.titulo';
 import {
     concluirDestilacaoJobCom,
     criarDestilacaoJobCom,
@@ -37,17 +36,9 @@ export async function ask(
     } = await db.auth.getUser();
     if (!user) throw new Error('sem sessão');
 
-    // Garante uma conversa (cria uma se a UI ainda não tem id).
-    const convId: string = await (async () => {
-        if (conversationId) return conversationId;
-        const { data, error } = await db
-            .from('conversations')
-            .insert({ title: tituloInicialConversa(question), owner_id: user.id })
-            .select('id')
-            .single();
-        if (error || !data) throw new Error(`criar conversa falhou: ${error?.message ?? 'sem id'}`);
-        return data.id as string;
-    })();
+    // Garante uma conversa: reutiliza a recebida (após confirmar a posse, #68)
+    // ou cria uma nova se a UI ainda não tem id.
+    const convId = await garantirConversaCom(db, user.id, question, conversationId);
 
     // Janela de conversa ANTES de inserir a mensagem atual (anáfora: "eles",
     // "deles" resolvem-se pelo fio; a mensagem atual vai explícita no prompt).
