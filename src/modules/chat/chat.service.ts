@@ -13,6 +13,7 @@ import { classificarIntencao } from './chat.intencao';
 import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
 import { responderComWebCom } from '@/agent/responder-web';
+import { criarDetetorEscalada, INSTRUCAO_ESCALADA, SENTINELA_ESCALAR } from './escalada';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
     escreverNota as escreverNotaReal,
@@ -332,24 +333,41 @@ export async function respondStream(
     const t = await prepararTurno(question, historico, onFase);
     const startedAt = Date.now();
 
-    // #45: web ON → a resposta corre agentic-com-web (loop de tools que PODE
-    // pesquisar a internet — só o faz se a pergunta precisar de um facto externo;
-    // perguntas do workspace respondem do contexto, sem ir à net). Não anuncia
-    // "a consultar a internet" à força (r3, Carlos): a UI mantém "a gerar (N fontes)"
-    // da prepararTurno e o "🌐 N fontes" no fim diz se a web foi mesmo usada. Não
-    // streama: texto num bloco. Web OFF (default) = caminho de sempre, intocado.
+    // #85 two-phase: web ON → corre PRIMEIRO o caminho rápido (streaming, com RAG).
+    // O modelo responde sozinho quando o contexto chega, ou emite o sentinela
+    // [[ESCALAR]] para pedir o agente-com-tools (internet). Só nesse caso se paga o
+    // cold-start agentic — perguntas do workspace respondem rápido, sem escalar. O
+    // detetor segura os primeiros chars do stream para decidir sem deixar passar o
+    // marcador. Web OFF (default) = caminho de sempre, intocado.
     if (t.webHabilitada) {
-        // Key Tavily: das Definições (cifrada, por-utilizador); env como fallback de operação.
+        const detetor = criarDetetorEscalada(SENTINELA_ESCALAR, onTextDelta);
+        const promptRapido = `${t.prompt}\n\n${INSTRUCAO_ESCALADA}`;
+        const respRapida = t.instancia.gerarStream
+            ? await t.instancia.gerarStream(promptRapido, (d) => detetor.processar(d))
+            : await t.instancia.gerar(promptRapido).then((r) => {
+                  detetor.processar(r.text);
+                  return r;
+              });
+        if (!detetor.finalizar().escalou) {
+            // O caminho rápido respondeu (já streamou); sem ida à net.
+            return montarResultado(respRapida, t, Date.now() - startedAt);
+        }
+        // Escalou: o agente-com-tools trata (loop agentic; pesquisa a internet de
+        // verdade). Key Tavily das Definições; env como fallback de operação.
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
         const r = await responderComWebCom(t.db, t.prompt, webKey);
         onTextDelta(r.text);
+        // Custo honesto (#65): a fase rápida só emitiu [[ESCALAR]], mas recebeu o
+        // prompt todo — esse input paga-se. Soma-se ao custo do agente.
+        const soma = (a?: number | null, b?: number | null) =>
+            a == null && b == null ? null : (a ?? 0) + (b ?? 0);
         return {
             answer: r.text,
             sources: t.sources,
-            costUsd: r.costUsd,
-            tokensIn: r.tokensIn ?? null,
-            tokensCache: r.tokensCache ?? null,
-            tokensOut: r.tokensOut ?? null,
+            costUsd: (respRapida.costUsd ?? 0) + r.costUsd,
+            tokensIn: soma(respRapida.tokensIn, r.tokensIn),
+            tokensCache: soma(respRapida.tokensCache, r.tokensCache),
+            tokensOut: soma(respRapida.tokensOut, r.tokensOut),
             provider: t.instancia.nome,
             latencyMs: Date.now() - startedAt,
             modelo: r.model,
