@@ -1,9 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { embedPassage, embedQuery } from '../src/lib/embeddings';
-import { generate } from '../src/lib/claude';
-import { buildPrompt, relevantSources, type Source } from '../src/modules/chat/chat.prompt';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+import { embedPassage, embedQuery } from '../../src/lib/embeddings';
+import { generate } from '../../src/lib/claude';
+import { buildPrompt, relevantSources, type Source } from '../../src/modules/chat/chat.prompt';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 

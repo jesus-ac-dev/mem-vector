@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { escreverNotaCom } from '../src/modules/knowledge/knowledge.service';
-import { relevantSources, type Source } from '../src/modules/chat/chat.prompt';
-import { embedQuery } from '../src/lib/embeddings';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+import { escreverNotaCom } from '../../src/modules/knowledge/knowledge.service';
+import { relevantSources, type Source } from '../../src/modules/chat/chat.prompt';
+import { embedQuery } from '../../src/lib/embeddings';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 

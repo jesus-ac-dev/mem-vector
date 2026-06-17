@@ -4,11 +4,11 @@ import {
     escreverNotaCom,
     moverNotaCom,
     grafoDadosCom,
-} from '../src/modules/knowledge/knowledge.service';
-import { criarPastaCom, definirCorPastaCom } from '../src/modules/folders/folders.service';
-import { substituirDailyCom, definirCorDailyCom } from '../src/modules/daily/daily.service';
-import { slugify } from '../src/modules/knowledge/knowledge.links';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+} from '../../src/modules/knowledge/knowledge.service';
+import { criarPastaCom, definirCorPastaCom } from '../../src/modules/folders/folders.service';
+import { substituirDailyCom, definirCorDailyCom } from '../../src/modules/daily/daily.service';
+import { slugify } from '../../src/modules/knowledge/knowledge.links';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 

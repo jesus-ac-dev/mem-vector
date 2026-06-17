@@ -43,7 +43,7 @@ abre um dropdown que filtra notas enquanto escreves.
   `listarKnowledge` filtra `archived=false` (explorer + dropdown do `[[`);
   `listarArquivados` traz só as arquivadas. Versões e edges mantêm-se (auditoria).
 - **UI:** botão Arquivar no `file-pane.tsx` (arquiva + fecha a tab); toggle no header do explorer (`workspace-shell.tsx`) troca a árvore pela `ArquivadosLista` (cada nota com **Repor**). Arrastar uma pasta para o ícone Archive arquiva logicamente pasta/subpastas e notas descendentes; a UI remove a subárvore sem mover ficheiros para a raiz.
-- **Prova:** `npm run arquivo` (headless, 6 eixos).
+- **Prova:** `npx tsx scripts/probes/arquivo.ts` (headless, 6 eixos).
 - **Esconder do grafo:** `grafoDadosCom` filtra `.eq('archived', false)` — aplicado
   na integração da stack (branch `integra/file-explorer-stack`), onde o grafo (#16)
   e o arquivar (#17) coexistem. As arestas para arquivadas caem pelo filtro
@@ -86,7 +86,7 @@ Dar significado visual aos nós do grafo por categoria. Spec:
 - **Modal** `grafo-config.tsx` (ícone Palette no grafo): paleta por pasta + "Daily
   Notes"; grava via `definirCorPastaAction`/`definirCorDailyAction`.
 - **Explorer:** a pasta com cor aplica a cor ao texto da pasta.
-- **Prova:** `npm run cores` (headless, 3 eixos).
+- **Prova:** `npx tsx scripts/probes/cores.ts` (headless, 3 eixos).
 
 ## Estado
 

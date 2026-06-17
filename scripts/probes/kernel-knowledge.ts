@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { escreverNotaCom, getNotaCom } from '../src/modules/knowledge/knowledge.service';
-import { embedQuery } from '../src/lib/embeddings';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+import { escreverNotaCom, getNotaCom } from '../../src/modules/knowledge/knowledge.service';
+import { embedQuery } from '../../src/lib/embeddings';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 

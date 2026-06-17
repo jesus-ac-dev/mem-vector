@@ -52,7 +52,7 @@ Quatro peças, cada uma num ficheiro:
 
 - **Supabase local** em Docker, portas **560xx** (`project_id mem-vector`, não colide com o crmcredito em 542xx). Após reboot o stack cai → `supabase start` antes de usar o `/chat` ([[2026-06-03]]).
 - **Ingestão:** `npm run ingest` (`scripts/ingest.ts`, `tsx`) — idempotente (limpa `source='seed'` e reindexa 6 factos-semente). Usa **service-role**.
-- **Ping-pong headless:** `npm run pingpong` (driver de custo/retrieval).
+- **Ping-pong headless:** `npx tsx scripts/probes/ping-pong.ts` (driver de custo/retrieval).
 
 ## Nota de auth (muda na slice 1 de auth)
 

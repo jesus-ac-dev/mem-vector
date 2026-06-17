@@ -4,10 +4,10 @@ import {
     escreverNotaCom,
     candidatosParaFactoCom,
     getNotaCom,
-} from '../src/modules/knowledge/knowledge.service';
-import { destilarResumirTurno } from '../src/modules/chat/chat.turno';
-import { slugify } from '../src/modules/knowledge/knowledge.links';
-import { getSupabaseAdmin } from '../src/lib/supabase-admin';
+} from '../../src/modules/knowledge/knowledge.service';
+import { destilarResumirTurno } from '../../src/modules/chat/chat.turno';
+import { slugify } from '../../src/modules/knowledge/knowledge.links';
+import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 
