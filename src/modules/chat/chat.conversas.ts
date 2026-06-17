@@ -2,6 +2,37 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import type { ChatTrace } from './chat.trace';
 import type { Source } from './chat.prompt';
+import { tituloInicialConversa } from './chat.titulo';
+
+// Resolve a conversa de um turno do chat: reutiliza a recebida (depois de
+// confirmar a posse) ou cria uma nova. Defense-in-depth (#68): o conversationId
+// vem do browser — a RLS já barra o caso real, mas verificar a posse antes de o
+// usar evita um oracle de existência de UUID. Erro genérico (não distingue
+// "não existe" de "não é tua").
+export async function garantirConversaCom(
+    db: SupabaseClient,
+    userId: string,
+    question: string,
+    conversationId?: string,
+): Promise<string> {
+    if (conversationId) {
+        const { data, error } = await db
+            .from('conversations')
+            .select('id')
+            .eq('id', conversationId)
+            .eq('owner_id', userId)
+            .maybeSingle();
+        if (error || !data) throw new Error('conversa não encontrada');
+        return conversationId;
+    }
+    const { data, error } = await db
+        .from('conversations')
+        .insert({ title: tituloInicialConversa(question), owner_id: userId })
+        .select('id')
+        .single();
+    if (error || !data) throw new Error(`criar conversa falhou: ${error?.message ?? 'sem id'}`);
+    return data.id as string;
+}
 
 export interface ConversaResumo {
     id: string;
