@@ -85,9 +85,16 @@ interface EventoDone {
 
 type EventoStreamCliente =
     | { tipo: 'inicio'; conversationId: string }
+    | { tipo: 'fase'; fase: 'consultar' | 'gerar'; fontes?: number }
     | { tipo: 'delta'; texto: string }
     | EventoDone
     | { tipo: 'erro'; mensagem: string };
+
+// Label da fase do turno para o indicador dinâmico (#66).
+function labelFase(fase: 'consultar' | 'gerar', fontes?: number): string {
+    if (fase === 'consultar') return 'a consultar o workspace';
+    return fontes ? `a gerar (${fontes} ${fontes === 1 ? 'fonte' : 'fontes'})` : 'a gerar';
+}
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
 // conhecimento geral do modelo (quando o threshold cortou tudo).
@@ -519,9 +526,10 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [pending, setPending] = useState(false);
-    // #66: true assim que o 1.º token chega — esconde o "a pensar" e deixa a
-    // resposta aparecer a streamar.
+    // #66: true assim que o 1.º token chega — esconde o indicador e deixa a
+    // resposta aparecer a streamar. `faseAtual` narra o turno (consultar→gerar).
     const [respostaIniciada, setRespostaIniciada] = useState(false);
+    const [faseAtual, setFaseAtual] = useState<string | null>(null);
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastTrace, setLastTrace] = useState<ChatTrace | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -608,6 +616,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
         setInput('');
         setPending(true);
         setRespostaIniciada(false);
+        setFaseAtual(null);
 
         // Streaming (#66): a resposta aparece token-a-token via ndjson. A bolha do
         // assistente nasce no 1.º delta (até lá fica o indicador "a pensar").
@@ -664,6 +673,8 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                             conversaCarregadaRef.current = ev.conversationId;
                             abrirConversa(ev.conversationId);
                         }
+                    } else if (ev.tipo === 'fase') {
+                        setFaseAtual(labelFase(ev.fase, ev.fontes));
                     } else if (ev.tipo === 'delta') {
                         aplicarDelta(ev.texto);
                     } else if (ev.tipo === 'done') {
@@ -839,7 +850,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                         </div>
                     ))}
                     {pending && !respostaIniciada && (
-                        <p className="animate-pulse text-sm text-muted-foreground">a pensar...</p>
+                        <p className="animate-pulse text-sm text-muted-foreground">
+                            {faseAtual ?? 'a pensar'}…
+                        </p>
                     )}
                     <div ref={bottomRef} />
                 </div>

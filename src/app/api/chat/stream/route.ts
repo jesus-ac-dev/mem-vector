@@ -48,8 +48,11 @@ export async function POST(request: Request) {
                 }
                 enviar({ tipo: 'inicio', conversationId: convId });
 
-                const result = await respondStream(question, historico, (texto) =>
-                    enviar({ tipo: 'delta', texto }),
+                const result = await respondStream(
+                    question,
+                    historico,
+                    (texto) => enviar({ tipo: 'delta', texto }),
+                    (f) => enviar({ tipo: 'fase', ...f }),
                 );
 
                 const asstMsg = await db

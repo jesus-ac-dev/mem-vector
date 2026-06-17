@@ -229,17 +229,24 @@ interface TurnoPreparado {
     prompt: string;
 }
 
+// Fase do turno para o indicador dinâmico (#66): o turno do chat não usa tools
+// (geração one-shot), por isso as fases reais são consultar→gerar; tool-use vive
+// na destilação de fundo (outro indicador).
+export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number };
+
 // Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
 // pelo respond (one-shot) e pelo respondStream (#66). O histórico (janela da
-// conversa) entra no prompt para resolver anáforas.
+// conversa) entra no prompt para resolver anáforas. `onFase` narra o progresso.
 async function prepararTurno(
     question: string,
     historico: MensagemConversa[],
+    onFase?: (f: FaseTurno) => void,
 ): Promise<TurnoPreparado> {
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
     const { instancia, modeloPedido, matchCount } = await providerDoChatCom(db);
+    onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
 
     const { data, error } = await db.rpc('match_chunks_hybrid', {
@@ -277,6 +284,8 @@ async function prepararTurno(
         historico,
         kernel,
     );
+    // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
+    onFase?.({ fase: 'gerar', fontes: sources.length });
     return { instancia, modeloPedido, sources, prompt };
 }
 
@@ -312,8 +321,9 @@ export async function respondStream(
     question: string,
     historico: MensagemConversa[],
     onTextDelta: (texto: string) => void,
+    onFase?: (f: FaseTurno) => void,
 ): Promise<ChatResult> {
-    const t = await prepararTurno(question, historico);
+    const t = await prepararTurno(question, historico, onFase);
     const startedAt = Date.now();
     const resp = t.instancia.gerarStream
         ? await t.instancia.gerarStream(t.prompt, onTextDelta)
