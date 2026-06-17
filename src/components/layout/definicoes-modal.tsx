@@ -253,6 +253,7 @@ export function DefinicoesModal({
             metodoDestilacao: defs.metodoDestilacao,
             modulosAtivos: defs.modulosAtivos,
             chatProvider: defs.chatProvider,
+            matchCount: defs.matchCount,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -369,6 +370,26 @@ export function DefinicoesModal({
                                         </SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <div>
+                                    <h3 className="text-sm font-medium">Fontes no retrieval</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Quantas notas/excertos o chat consulta por pergunta (antes
+                                        era fixo em 5). Mais apanha contexto; demasiadas enchem o
+                                        prompt de ruído e custo.
+                                    </p>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={50}
+                                        value={defs.matchCount}
+                                        onChange={(e) => {
+                                            const n = Number(e.target.value);
+                                            if (Number.isInteger(n) && n >= 1 && n <= 50)
+                                                editar({ ...defs, matchCount: n });
+                                        }}
+                                        className="mt-2 h-8 w-24 text-xs"
+                                    />
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                     Proatividade, estilo e personalidade do agente vão acumulando
                                     aqui.

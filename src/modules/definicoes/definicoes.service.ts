@@ -32,13 +32,14 @@ interface DefinicoesRow {
     metodo_destilacao: string;
     modulos_ativos: string[] | null;
     chat_provider?: string | null;
+    match_count?: number | null;
     agentes: Record<string, AgenteRow> | null;
 }
 
 async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
-        .select('metodo_destilacao, modulos_ativos, chat_provider, agentes')
+        .select('metodo_destilacao, modulos_ativos, chat_provider, match_count, agentes')
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
     return data as DefinicoesRow | null;
@@ -53,12 +54,17 @@ function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes'> {
         chatProvider: (PROVIDERS as readonly string[]).includes(row.chat_provider ?? '')
             ? row.chat_provider
             : 'claude',
+        // null/ausente → o default do schema (5). Fora dos limites é impossível
+        // pela check da BD (1..50); se ocorresse, o safeParse falha e cai no
+        // fallback abaixo (linha toda, não só este campo).
+        matchCount: row.match_count ?? undefined,
     });
     if (!parsed.success) {
         return {
             metodoDestilacao: 'one-shot',
             modulosAtivos: [],
             chatProvider: 'claude',
+            matchCount: 5,
         };
     }
     return parsed.data;
@@ -105,6 +111,7 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
             metodoDestilacao: 'one-shot',
             modulosAtivos: [],
             chatProvider: 'claude',
+            matchCount: 5,
             agentes: {},
         };
     }
@@ -168,6 +175,7 @@ export async function gravarDefinicoesCom(
         metodo_destilacao: definicoes.metodoDestilacao,
         modulos_ativos: definicoes.modulosAtivos,
         chat_provider: definicoes.chatProvider,
+        match_count: definicoes.matchCount,
         agentes,
         updated_at: new Date().toISOString(),
     });
