@@ -146,6 +146,7 @@ export interface DefinicoesVista {
     metodoDestilacao: MetodoDestilacao;
     modulosAtivos: Modulo[];
     chatProvider: Provider;
+    matchCount: number;
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -163,6 +164,7 @@ export interface DefinicoesServidor {
     metodoDestilacao: MetodoDestilacao;
     modulosAtivos: Modulo[];
     chatProvider: Provider;
+    matchCount: number;
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -192,6 +194,9 @@ export const DefinicoesSchema = z.object({
     metodoDestilacao: z.enum(METODOS_DESTILACAO).default('one-shot'),
     modulosAtivos: z.array(z.enum(MODULOS)).default([]),
     chatProvider: z.enum(PROVIDERS).default('claude'),
+    // #67: nº de fontes do retrieval do chat (antes fixo em 5). Limites sãos —
+    // poucas perde contexto, muitas enchem o prompt de ruído e custo.
+    matchCount: z.number().int().min(1).max(50).default(5),
     agentes: AgentesSchema,
 });
 
@@ -204,5 +209,6 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     metodoDestilacao: 'one-shot',
     modulosAtivos: [],
     chatProvider: 'claude',
+    matchCount: 5,
     agentes: {},
 };

@@ -666,6 +666,11 @@ export const renomearNotaPorId = async (
     slugAnteriorParaBacklinks?: string,
 ) => renomearNotaPorIdCom(await createClient(), id, novoTitulo, slugAnteriorParaBacklinks);
 
+// Rede de candidatos do agente-autor (#67): pool propositadamente mais largo que
+// o retrieval do chat — apanha mais notas para o UPDATE-bias escolher onde
+// CONTINUAR; é interno (não setting do utilizador, propósito diferente).
+const CANDIDATOS_DESTILACAO = 8;
+
 // UPDATE-bias: dado o texto de um facto, devolve as notas knowledge existentes
 // mais relacionadas (via busca híbrida), para o agente-autor CONTINUAR a certa
 // em vez de criar uma nova. Ordenadas por relevância, distintas, top `limite`.
@@ -678,7 +683,7 @@ export async function candidatosParaFactoCom(
     const { data, error } = await db.rpc('match_chunks_hybrid', {
         query_embedding: JSON.stringify(emb),
         query_text: texto,
-        match_count: 8,
+        match_count: CANDIDATOS_DESTILACAO,
     });
     if (error) throw new Error(`candidatos match_chunks_hybrid: ${error.message}`);
 

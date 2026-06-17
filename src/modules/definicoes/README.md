@@ -21,6 +21,9 @@ onChange, só entre providers já parametrizados.
   `definicoes-comportamento-acumula`): hoje `metodo_destilacao` (`one-shot`
   default, decisão #38 — ¼ do custo / `agentic`), lido por `chat.postturno.ts`;
   a env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals).
+  E `match_count` (#67): nº de fontes do retrieval do chat (1..50, default 5;
+  antes fixo no código), lido no `respond` via `providerDoChatCom`. A rede de
+  candidatos do agente-autor é separada (`CANDIDATOS_DESTILACAO`, interna).
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
   vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.

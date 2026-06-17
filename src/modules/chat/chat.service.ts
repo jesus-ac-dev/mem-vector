@@ -229,12 +229,15 @@ export async function respond(
     historico: MensagemConversa[] = [],
 ): Promise<ChatResult> {
     const db = await createClient();
+    // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
+    // provider e o match_count (configurável) vem da mesma leitura de definições.
+    const { instancia, modeloPedido, matchCount } = await providerDoChatCom(db);
     const queryEmbedding = await embedQuery(question);
 
     const { data, error } = await db.rpc('match_chunks_hybrid', {
         query_embedding: JSON.stringify(queryEmbedding),
         query_text: question,
-        match_count: 5,
+        match_count: matchCount,
     });
     if (error) throw new Error(`match_chunks_hybrid falhou: ${error.message}`);
 
@@ -259,11 +262,8 @@ export async function respond(
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
     // da resposta (não-fatal: sem Kernel, prompt igual ao de sempre).
     const kernel = await blocoKernelCom(db);
-    // A mudança que a interface provoca (#60 r3): a resposta do chat sai do
-    // provider/modelo escolhido nas definições (FactoryProvider); o agente-
-    // autor (destilação/contrato) continua claude — as tools e o envelope
-    // estão afinados para ele.
-    const { instancia, modeloPedido } = await providerDoChatCom(db);
+    // A resposta sai do provider escolhido (#60 r3, lido no topo); o agente-autor
+    // (destilação) continua claude — as tools e o envelope estão afinados para ele.
     const startedAt = Date.now();
     const { text, costUsd, model, tokensIn, tokensCache, tokensOut } = await instancia.gerar(
         buildPrompt(question, contexto, classificarIntencao(question), historico, kernel),

@@ -694,12 +694,17 @@ export function criarProvider(nome: Provider, cfg: AgenteServidor): ProviderLLM 
  *  metadata — é a garantia por resposta de que a escolha foi honrada. */
 export async function providerDoChatCom(
     db: SupabaseClient,
-): Promise<{ instancia: ProviderLLM; modeloPedido?: string }> {
+): Promise<{ instancia: ProviderLLM; modeloPedido?: string; matchCount: number }> {
     const defs = await lerDefinicoesServidorCom(db);
     const escolhido = defs.chatProvider;
     const cfg = defs.agentes[escolhido];
+    // #67: o nº de fontes do retrieval vem da mesma leitura de definições.
     if (cfg?.ativo) {
-        return { instancia: criarProvider(escolhido, cfg), modeloPedido: cfg.modelo };
+        return {
+            instancia: criarProvider(escolhido, cfg),
+            modeloPedido: cfg.modelo,
+            matchCount: defs.matchCount,
+        };
     }
     // Sem defaults (#40, caminho a): sem provider ativo não se cai na conta da
     // máquina — pede-se ao utilizador que configure as suas ligações.
