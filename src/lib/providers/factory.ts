@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { generate, tokensDoEnvelopeClaude, type Generation } from '@/lib/claude';
+import { generate, generateStream, tokensDoEnvelopeClaude, type Generation } from '@/lib/claude';
 import { lerDefinicoesServidorCom } from '@/modules/definicoes/definicoes.service';
 import type { AgenteServidor, Provider } from '@/modules/definicoes/definicoes.schema';
 
@@ -33,6 +33,9 @@ function tokensOuNull(value: unknown): number | null {
 export interface ProviderLLM {
     nome: Provider;
     gerar(prompt: string): Promise<RespostaLLM>;
+    // Geração em streaming (#66): só o claude/cli a implementa por agora —
+    // quem não a tiver, o servidor cai no `gerar` (texto num bloco só).
+    gerarStream?(prompt: string, onTextDelta: (texto: string) => void): Promise<RespostaLLM>;
     testar(): Promise<{ ok: boolean; detalhe: string }>;
     // Descoberta de modelos (#60 r5, ideia do Carlos): após o teste de ligação
     // com sucesso, a lista alimenta as dropdowns — gemini/ollama dão lista
@@ -321,6 +324,17 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
         nome: 'claude',
         async gerar(prompt) {
             const g: Generation = await generate(prompt, { model: cfg.modelo });
+            return {
+                text: g.text,
+                costUsd: g.costUsd,
+                model: g.model,
+                tokensIn: g.tokensIn ?? null,
+                tokensCache: g.tokensCache ?? null,
+                tokensOut: g.tokensOut ?? null,
+            };
+        },
+        async gerarStream(prompt, onTextDelta) {
+            const g = await generateStream(prompt, { model: cfg.modelo }, onTextDelta);
             return {
                 text: g.text,
                 costUsd: g.costUsd,

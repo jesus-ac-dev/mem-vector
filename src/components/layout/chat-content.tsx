@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
-import { ask, processarDestilacaoJob } from '@/modules/chat/chat.actions';
+import { processarDestilacaoJob } from '@/modules/chat/chat.actions';
 import { getJson } from '@/lib/api-get';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
@@ -19,7 +19,7 @@ import {
     type ChatTrace,
 } from '@/modules/chat/chat.trace';
 import { Button } from '@/components/ui/button';
-import { isUnexpectedServerActionResponse, logClientError } from '@/lib/client-error-log';
+import { logClientError } from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
@@ -66,6 +66,28 @@ interface Message {
     destilacaoErro?: boolean;
     trace?: ChatTrace | null;
 }
+
+// Eventos do stream do chat (#66, ndjson de POST /api/chat/stream).
+interface EventoDone {
+    tipo: 'done';
+    conversationId: string;
+    distillationJobId: string;
+    provider: Provider;
+    modelo?: string | null;
+    modeloPedido?: string | null;
+    costUsd: number | null;
+    tokensIn: number | null;
+    tokensCache: number | null;
+    tokensOut: number | null;
+    latencyMs: number;
+    sources: Source[];
+}
+
+type EventoStreamCliente =
+    | { tipo: 'inicio'; conversationId: string }
+    | { tipo: 'delta'; texto: string }
+    | EventoDone
+    | { tipo: 'erro'; mensagem: string };
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
 // conhecimento geral do modelo (quando o threshold cortou tudo).
@@ -497,6 +519,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [pending, setPending] = useState(false);
+    // #66: true assim que o 1.º token chega — esconde o "a pensar" e deixa a
+    // resposta aparecer a streamar.
+    const [respostaIniciada, setRespostaIniciada] = useState(false);
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastTrace, setLastTrace] = useState<ChatTrace | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -582,48 +607,109 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
         setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: question }]);
         setInput('');
         setPending(true);
+        setRespostaIniciada(false);
 
-        let asstMsgId: number;
-        try {
-            // Step 1: get the answer and render it immediately. Sem retry: ask() é
-            // escrita (não idempotente) e num action ID morto o retry bate no mesmo ID.
-            const res = await ask({ question, conversationId });
-            setConversationId(res.conversationId);
-            if (conversaAberta === null) {
-                conversaCarregadaRef.current = res.conversationId;
-                abrirConversa(res.conversationId);
+        // Streaming (#66): a resposta aparece token-a-token via ndjson. A bolha do
+        // assistente nasce no 1.º delta (até lá fica o indicador "a pensar").
+        const asstMsgId = nextIdRef.current++;
+        let acumulado = '';
+        let criada = false;
+        const aplicarDelta = (texto: string) => {
+            acumulado += texto;
+            if (!criada) {
+                criada = true;
+                setRespostaIniciada(true);
             }
-            asstMsgId = nextIdRef.current++;
+            setMessages((prev) =>
+                prev.some((m) => m.id === asstMsgId)
+                    ? prev.map((m) => (m.id === asstMsgId ? { ...m, content: acumulado } : m))
+                    : [...prev, { id: asstMsgId, role: 'assistant', content: acumulado }],
+            );
+        };
+
+        try {
+            const res = await fetch('/api/chat/stream', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ question, conversationId }),
+            });
+            if (res.status === 401)
+                throw new Error('A sessão expirou — recarrega e volta a entrar.');
+            if (!res.ok || !res.body) throw new Error(`stream do chat: HTTP ${res.status}`);
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let done: EventoDone | null = null;
+            let erro: string | null = null;
+
+            for (;;) {
+                const { value, done: terminou } = await reader.read();
+                if (terminou) break;
+                buffer += decoder.decode(value, { stream: true });
+                let nl: number;
+                while ((nl = buffer.indexOf('\n')) >= 0) {
+                    const linha = buffer.slice(0, nl).trim();
+                    buffer = buffer.slice(nl + 1);
+                    if (!linha) continue;
+                    let ev: EventoStreamCliente;
+                    try {
+                        ev = JSON.parse(linha) as EventoStreamCliente;
+                    } catch {
+                        continue; // linha malformada → ignorar (como o servidor faz)
+                    }
+                    if (ev.tipo === 'inicio') {
+                        setConversationId(ev.conversationId);
+                        if (conversaAberta === null) {
+                            conversaCarregadaRef.current = ev.conversationId;
+                            abrirConversa(ev.conversationId);
+                        }
+                    } else if (ev.tipo === 'delta') {
+                        aplicarDelta(ev.texto);
+                    } else if (ev.tipo === 'done') {
+                        done = ev;
+                    } else if (ev.tipo === 'erro') {
+                        erro = ev.mensagem;
+                    }
+                }
+            }
+
+            if (erro) throw new Error(erro);
+            if (!done) throw new Error('o stream terminou sem resposta');
+
             const trace: ChatTrace = {
-                provider: res.provider,
-                requestedModel: res.modeloPedido ?? null,
-                effectiveModel: res.modelo ?? null,
-                costUsd: res.costUsd,
-                tokensIn: res.tokensIn,
-                tokensCache: res.tokensCache,
-                tokensOut: res.tokensOut,
-                latencyMs: res.latencyMs,
-                sourcesCount: res.sources.length,
+                provider: done.provider,
+                requestedModel: done.modeloPedido ?? null,
+                effectiveModel: done.modelo ?? null,
+                costUsd: done.costUsd,
+                tokensIn: done.tokensIn,
+                tokensCache: done.tokensCache,
+                tokensOut: done.tokensOut,
+                latencyMs: done.latencyMs,
+                sourcesCount: done.sources?.length ?? 0,
                 createdAt: new Date().toISOString(),
-                distillationJobId: res.distillationJobId,
+                distillationJobId: done.distillationJobId,
             };
             setLastTrace(trace);
-            setMessages((prev) => [
-                ...prev,
-                {
-                    id: asstMsgId,
-                    role: 'assistant',
-                    content: res.answer,
-                    sources: res.sources,
-                    distillationJobId: res.distillationJobId,
+            // Finaliza a bolha: fontes + trace + estado de destilação (cria-a se a
+            // resposta veio vazia e nenhum delta a tinha criado).
+            const doneFinal = done;
+            setMessages((prev) => {
+                const patch = {
+                    content: acumulado,
+                    sources: doneFinal.sources,
+                    distillationJobId: doneFinal.distillationJobId,
                     destilando: true,
                     trace,
-                },
-            ]);
+                };
+                return prev.some((m) => m.id === asstMsgId)
+                    ? prev.map((m) => (m.id === asstMsgId ? { ...m, ...patch } : m))
+                    : [...prev, { id: asstMsgId, role: 'assistant' as const, ...patch }];
+            });
             setPending(false);
 
-            // Step 2: process the already-persisted distillation job in the background.
-            processarDestilacaoJob(res.distillationJobId)
+            // Processa o job de destilação (já persistido) em segundo plano.
+            processarDestilacaoJob(done.distillationJobId)
                 .then(({ notas, daily, tarefas }) => {
                     setMessages((prev) =>
                         prev.map((m) =>
@@ -652,16 +738,18 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                     );
                 });
         } catch (e) {
-            logClientError({ area: 'chat', action: 'ask' }, e);
-            // Caso conhecido: o dev server recompilou (edição ou commit com lint-staged)
-            // e este tab ficou com IDs de server actions mortos — só o reload resolve.
-            setError(
-                isUnexpectedServerActionResponse(e)
-                    ? 'O servidor recompilou e este tab ficou desatualizado. Faz hard reload (Ctrl+Shift+R), volta a entrar e reenvia a mensagem.'
-                    : e instanceof Error
-                      ? e.message
-                      : 'Erro desconhecido',
-            );
+            logClientError({ area: 'chat', action: 'chat-stream' }, e);
+            setError(e instanceof Error ? e.message : 'Erro desconhecido');
+            // Erro DEPOIS de já ter saído texto: a bolha existe mas está
+            // incompleta — marca-a (reusa o estado que a UI já sabe mostrar) em
+            // vez de a deixar pendurada como se fosse resposta completa.
+            if (criada) {
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === asstMsgId ? { ...m, destilando: false, destilacaoErro: true } : m,
+                    ),
+                );
+            }
             setPending(false);
         }
     }
@@ -750,7 +838,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                                 ))}
                         </div>
                     ))}
-                    {pending && <p className="text-sm text-muted-foreground">a pensar...</p>}
+                    {pending && !respostaIniciada && (
+                        <p className="animate-pulse text-sm text-muted-foreground">a pensar...</p>
+                    )}
                     <div ref={bottomRef} />
                 </div>
             </div>

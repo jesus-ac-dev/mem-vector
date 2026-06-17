@@ -73,6 +73,57 @@ export function tokensDoEnvelopeClaude(usage: unknown): TokenUsage {
     };
 }
 
+// Streaming (#66): uma linha do `--output-format stream-json --include-partial-
+// messages` (JSONL). Só interessa o texto da resposta (text_delta) e o envelope
+// final (result). Thinking, system, assistant-completo e ruído → ignorar.
+export type EventoStream =
+    | { tipo: 'texto'; texto: string }
+    | {
+          tipo: 'final';
+          costUsd: number;
+          model?: string;
+          tokensIn: number | null;
+          tokensCache: number | null;
+          tokensOut: number | null;
+      }
+    | { tipo: 'ignorar' };
+
+export function interpretarLinhaStream(linha: string): EventoStream {
+    const t = linha.trim();
+    if (!t) return { tipo: 'ignorar' };
+    let d: {
+        type?: string;
+        event?: { type?: string; delta?: { type?: string; text?: string } };
+        total_cost_usd?: number;
+        modelUsage?: Record<string, unknown>;
+        usage?: unknown;
+    };
+    try {
+        d = JSON.parse(t);
+    } catch {
+        return { tipo: 'ignorar' };
+    }
+    if (d.type === 'stream_event' && d.event?.type === 'content_block_delta') {
+        const delta = d.event.delta;
+        if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+            return { tipo: 'texto', texto: delta.text };
+        }
+        return { tipo: 'ignorar' };
+    }
+    if (d.type === 'result') {
+        const tokens = tokensDoEnvelopeClaude(d.usage);
+        return {
+            tipo: 'final',
+            costUsd: Number(d.total_cost_usd ?? 0),
+            model: Object.keys(d.modelUsage ?? {})[0],
+            tokensIn: tokens.tokensIn,
+            tokensCache: tokens.tokensCache,
+            tokensOut: tokens.tokensOut,
+        };
+    }
+    return { tipo: 'ignorar' };
+}
+
 export function claudeTimeoutMs(envValue = process.env.CLAUDE_TIMEOUT_MS): number {
     const parsed = Number(envValue);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLAUDE_TIMEOUT_MS;
@@ -125,6 +176,28 @@ export function buildClaudeArgs(model?: string): string[] {
         SYSTEM_PROMPT,
         '--exclude-dynamic-system-prompt-sections',
         // Modelo escolhido nas definições (#60); sem ele, o default da conta.
+        ...(model ? ['--model', model] : []),
+        '--disallowedTools',
+        ...DISALLOWED_TOOLS,
+    ];
+}
+
+// Variante streaming (#66): a resposta vem token-a-token (text_delta). Exige
+// `--verbose` (stream-json em -p) e `--include-partial-messages` (sem ela o
+// texto chega num bloco só). O resto é igual ao generate normal.
+export function buildClaudeStreamArgs(model?: string): string[] {
+    return [
+        '-p',
+        '--input-format',
+        'text',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--include-partial-messages',
+        '--strict-mcp-config',
+        '--system-prompt',
+        SYSTEM_PROMPT,
+        '--exclude-dynamic-system-prompt-sections',
         ...(model ? ['--model', model] : []),
         '--disallowedTools',
         ...DISALLOWED_TOOLS,
@@ -196,6 +269,17 @@ export function generateAgentic(prompt: string, cfg: AgenticConfig): Promise<Gen
             timeoutMs: cfg.timeoutMs ?? claudeAgenticTimeoutMs(),
         }),
     );
+}
+
+// Geração em streaming (#66): chama `onTextDelta` para cada pedaço de texto à
+// medida que sai, e resolve com a Generation completa (custo/modelo/tokens do
+// evento final). Mesma fila/contexto-mínimo do generate normal.
+export function generateStream(
+    prompt: string,
+    opts: { model?: string } | undefined,
+    onTextDelta: (texto: string) => void,
+): Promise<Generation> {
+    return claudeQueue.run(() => runClaudeStream(prompt, opts?.model, onTextDelta));
 }
 
 function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
@@ -273,6 +357,96 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                     reject(new Error(`resposta do claude não é JSON: ${stdout.slice(0, 200)}`)),
                 );
             }
+        });
+        child.stdin?.end(prompt);
+    });
+}
+
+// Como runClaudeCli, mas lê o stream-json linha a linha: cada text_delta sai por
+// `onTextDelta` na hora; o evento final (result) traz custo/modelo/tokens.
+function runClaudeStream(
+    prompt: string,
+    model: string | undefined,
+    onTextDelta: (texto: string) => void,
+): Promise<Generation> {
+    return new Promise<Generation>((resolve, reject) => {
+        let settled = false;
+        const timeoutMs = claudeTimeoutMs();
+        const child = spawn(CLAUDE_BIN, buildClaudeStreamArgs(model), {
+            cwd: tmpdir(),
+            stdio: ['pipe', 'pipe', 'pipe'],
+            detached: true,
+        });
+
+        const timeout = setTimeout(() => {
+            if (child.pid) {
+                try {
+                    process.kill(-child.pid, 'SIGTERM');
+                } catch {
+                    child.kill('SIGTERM');
+                }
+            } else {
+                child.kill('SIGTERM');
+            }
+            finish(() => reject(new Error(`claude excedeu timeout (${timeoutMs}ms)`)));
+        }, timeoutMs);
+
+        function finish(fn: () => void) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            fn();
+        }
+
+        let buffer = '';
+        let stderr = '';
+        let texto = '';
+        let final: Extract<EventoStream, { tipo: 'final' }> | null = null;
+
+        function processarLinha(linha: string) {
+            const ev = interpretarLinhaStream(linha);
+            if (ev.tipo === 'texto') {
+                texto += ev.texto;
+                onTextDelta(ev.texto);
+            } else if (ev.tipo === 'final') {
+                final = ev;
+            }
+        }
+
+        child.stdin?.on('error', (error) => finish(() => reject(error)));
+        child.stdout?.on('data', (chunk: Buffer) => {
+            buffer += chunk.toString();
+            let nl: number;
+            while ((nl = buffer.indexOf('\n')) >= 0) {
+                processarLinha(buffer.slice(0, nl));
+                buffer = buffer.slice(nl + 1);
+            }
+        });
+        child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+        child.on('error', (error) => finish(() => reject(error)));
+        child.on('close', (code) => {
+            if (buffer.trim()) processarLinha(buffer); // última linha sem \n
+            const fin = final;
+            if (code !== 0) {
+                finish(() =>
+                    reject(new Error(`claude saiu com código ${code}: ${stderr.slice(0, 300)}`)),
+                );
+                return;
+            }
+            if (!fin) {
+                finish(() => reject(new Error('stream do claude sem evento final (result)')));
+                return;
+            }
+            finish(() =>
+                resolve({
+                    text: texto,
+                    costUsd: fin.costUsd,
+                    model: fin.model,
+                    tokensIn: fin.tokensIn,
+                    tokensCache: fin.tokensCache,
+                    tokensOut: fin.tokensOut,
+                }),
+            );
         });
         child.stdin?.end(prompt);
     });

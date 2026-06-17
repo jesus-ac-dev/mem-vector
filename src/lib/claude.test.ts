@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-    buildClaudeAgenticArgs,
     buildClaudeArgs,
+    buildClaudeAgenticArgs,
+    buildClaudeStreamArgs,
     claudeAgenticTimeoutMs,
     claudeConcurrency,
     claudeTimeoutMs,
     createAsyncSemaphore,
+    interpretarLinhaStream,
     tokensDoEnvelopeClaude,
 } from './claude';
 
@@ -116,6 +118,75 @@ describe('tokensDoEnvelopeClaude', () => {
             tokensCache: null,
             tokensOut: null,
         });
+    });
+});
+
+describe('buildClaudeStreamArgs (#66)', () => {
+    it('pede stream-json com parciais (texto token-a-token)', () => {
+        const args = buildClaudeStreamArgs();
+        expect(args).toContain('--output-format');
+        expect(args).toContain('stream-json');
+        expect(args).toContain('--verbose'); // stream-json em -p exige verbose
+        expect(args).toContain('--include-partial-messages');
+        // built-ins continuam proibidas, como no generate normal
+        expect(args).toContain('--disallowedTools');
+        expect(args).not.toContain('json'); // não o one-shot 'json'
+    });
+});
+
+describe('interpretarLinhaStream (#66)', () => {
+    it('extrai o texto de um content_block_delta/text_delta', () => {
+        const linha = JSON.stringify({
+            type: 'stream_event',
+            event: {
+                type: 'content_block_delta',
+                index: 1,
+                delta: { type: 'text_delta', text: 'olá' },
+            },
+        });
+        expect(interpretarLinhaStream(linha)).toEqual({ tipo: 'texto', texto: 'olá' });
+    });
+
+    it('ignora o thinking_delta (raciocínio interno, não é a resposta)', () => {
+        const linha = JSON.stringify({
+            type: 'stream_event',
+            event: {
+                type: 'content_block_delta',
+                delta: { type: 'thinking_delta', thinking: 'hmm' },
+            },
+        });
+        expect(interpretarLinhaStream(linha)).toEqual({ tipo: 'ignorar' });
+    });
+
+    it('do result final tira custo, modelo e tokens (cache somado)', () => {
+        const linha = JSON.stringify({
+            type: 'result',
+            subtype: 'success',
+            total_cost_usd: 0.0035,
+            usage: {
+                input_tokens: 10,
+                cache_read_input_tokens: 200,
+                cache_creation_input_tokens: 0,
+                output_tokens: 5,
+            },
+            modelUsage: { 'claude-haiku-4-5-20251001': { inputTokens: 10 } },
+        });
+        expect(interpretarLinhaStream(linha)).toEqual({
+            tipo: 'final',
+            costUsd: 0.0035,
+            model: 'claude-haiku-4-5-20251001',
+            tokensIn: 210,
+            tokensCache: 200,
+            tokensOut: 5,
+        });
+    });
+
+    it('ignora eventos de sistema, linhas vazias e JSON inválido', () => {
+        expect(interpretarLinhaStream('{"type":"system","subtype":"init"}')).toEqual({
+            tipo: 'ignorar',
+        });
+        expect(interpretarLinhaStream('')).toEqual({ tipo: 'ignorar' });
+        expect(interpretarLinhaStream('não-é-json {')).toEqual({ tipo: 'ignorar' });
     });
 });
 
