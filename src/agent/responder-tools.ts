@@ -49,6 +49,7 @@ export async function responderComToolsCom(
     db: SupabaseClient,
     prompt: string,
     webKey?: string,
+    model?: string,
 ): Promise<RespostaTools> {
     const {
         data: { session },
@@ -77,6 +78,7 @@ export async function responderComToolsCom(
             mcpConfig,
             allowedTools: TOOLS_RESPOSTA,
             systemPrompt: SYSTEM_RESPOSTA,
+            model,
             env: {
                 MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
                 MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,
