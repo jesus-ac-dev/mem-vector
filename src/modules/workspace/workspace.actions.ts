@@ -33,7 +33,7 @@ import {
     listarPastas,
 } from '@/modules/folders/folders.service';
 import type { Pasta } from '@/modules/folders/folders.tree';
-import type { NotaKnowledge, AtualizarPropriedades } from '@/modules/knowledge/knowledge.schema';
+import type { NotaResumo, AtualizarPropriedades } from '@/modules/knowledge/knowledge.schema';
 import type { PropriedadesNota } from '@/modules/knowledge/knowledge.props';
 import {
     primeiroTituloMarkdown,
@@ -300,7 +300,7 @@ export async function abrirOuCriarNota(
     const matches = notas.filter((n) => n.slug === slug);
     const pathPorPasta = caminhoDasPastas(pastas);
 
-    function mapNota(n: NotaKnowledge): NotaResolvidaWikilink {
+    function mapNota(n: NotaResumo): NotaResolvidaWikilink {
         const pasta = n.folderId ? (pathPorPasta.get(n.folderId) ?? 'Pasta') : 'Raiz';
         return {
             id: n.id,

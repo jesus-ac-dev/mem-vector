@@ -8,6 +8,10 @@
 2. **Destilação durável** — `ask()` cria um job `chat_turn_distillation` em `agent_jobs` antes de devolver ao cliente. A UI processa esse `jobId` em background; se a tab/rede falhar, o trabalho fica registado para retry.
 3. **Proveniência e trace** — indica na UI se a resposta veio do workspace ou do conhecimento geral, e guarda por mensagem `provider`, modelo pedido, modelo efetivo, latência e custo. O trace vem do adapter/provider, não do auto-relato do modelo. No composer, o chip do trace e os dropdowns de provider/modelo/esforço ficam inline por baixo da textarea.
 
+Nota de fronteira: o provider de chat é agnóstico; o caminho agentic com tools
+continua Claude CLI + MCP. Ver `docs/ORQUESTRADORES.md` antes de assumir que um
+novo provider também consegue destilar/escalar com tools.
+
 ## Ficheiros
 
 | Ficheiro             | Responsabilidade                                                                                                                                                 |

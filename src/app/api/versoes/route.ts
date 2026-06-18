@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { sessaoOu401 } from '@/lib/api-auth';
 import { versoesDoFicheiro } from '@/modules/workspace/workspace.leituras';
 
 // Rota GET (#73): versões do ficheiro ativo (histórico), antes em useEffect.
@@ -14,6 +15,9 @@ export async function GET(request: Request) {
     if (!chave) {
         return NextResponse.json({ error: 'chave vazia' }, { status: 400 });
     }
+
+    const erro = await sessaoOu401();
+    if (erro) return erro;
 
     return NextResponse.json(await versoesDoFicheiro(tipo, chave, id));
 }

@@ -24,6 +24,21 @@ const dailyResultadoSchema = z
     })
     .nullable();
 
+const tarefasResultadoSchema = z.object({
+    criadas: z.array(
+        z.object({
+            id: z.string(),
+            titulo: z.string(),
+        }),
+    ),
+    concluidas: z.array(
+        z.object({
+            id: z.string(),
+            titulo: z.string(),
+        }),
+    ),
+});
+
 // Tolera o shape antigo {nota: {...}|null} de jobs persistidos antes do 1 bloco→N
 // notas (espelha a tolerância do parseTurno), mapeando-o para {notas: [...]}.
 export const distillationJobResultSchema = z.preprocess(
@@ -37,6 +52,7 @@ export const distillationJobResultSchema = z.preprocess(
     z.object({
         notas: z.array(notaResultadoSchema),
         daily: dailyResultadoSchema,
+        tarefas: tarefasResultadoSchema.nullable().optional(),
     }),
 );
 

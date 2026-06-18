@@ -42,6 +42,8 @@ import { ArquivadosLista } from '@/components/layout/arquivados-lista';
 import { ConversasPanel } from '@/components/layout/conversas-panel';
 import { TarefasPanel } from '@/components/layout/tarefas-panel';
 import { WorkspaceGraph } from '@/components/layout/workspace-graph';
+import { PainelProcura } from '@/components/layout/painel-procura';
+import { useProcura } from '@/components/layout/procura-context';
 import { ClientErrorListener } from '@/components/layout/client-error-listener';
 import {
     criarNotaNaPasta,
@@ -267,6 +269,9 @@ function LeftSidebar({
     const [criandoNota, setCriandoNota] = useState(false);
     // Painel de tarefas (#21): o "+" do header abre o input de criação.
     const [criarTarefaAberto, setCriarTarefaAberto] = useState(false);
+    // Procura (#91): o input vive no header; com termo ativo, os resultados
+    // ocupam o painel (escondem o explorer/tarefas/chats). `ativa` vem do context.
+    const { ativa: procuraAtiva } = useProcura();
 
     function atualizarArvoreLocal(updater: (atual: Arvore) => Arvore) {
         setArvoreState((state) => {
@@ -497,9 +502,11 @@ function LeftSidebar({
                 </Button>
             </div>
 
-            {/* Main panel content */}
+            {/* Main panel content — a procura (#91) ocupa o painel quando ativa */}
             <div className="min-h-0 flex-1 overflow-y-auto">
-                {activePanel === 'explorer' ? (
+                {procuraAtiva ? (
+                    <PainelProcura />
+                ) : activePanel === 'explorer' ? (
                     verArquivados ? (
                         <ArquivadosLista arquivados={arquivados} onMudou={carregarArquivados} />
                     ) : (

@@ -6,6 +6,11 @@ kernel** e corre o loop ler-antes-de-escrever do Claude Code — com o mesmo
 binário e a mesma subscrição. Liga-se com `MEMVECTOR_AGENTIC_DISTILL=1`
 (A/B contra o one-shot de `chat.turno.ts`; sem fallback, para o erro ser visível).
 
+Este módulo é deliberadamente **Claude CLI + MCP**. O chat normal já suporta
+vários providers via `src/lib/providers`, mas isso não torna esses providers
+runners agentic. O contrato e a matriz de capacidades vivem em
+`docs/ORQUESTRADORES.md`.
+
 ## Peças
 
 | Ficheiro              | Papel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |

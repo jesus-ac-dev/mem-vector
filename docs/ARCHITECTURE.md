@@ -16,7 +16,7 @@ E a **rede de revisão**: cada escrita do agente grava uma versão → o utiliza
 flowchart TD
     U([Humano fala]) --> CHAT[Chat respond]
     CHAT --> CTX[RAG: match_chunks + threshold 0.78]
-    CTX --> LLM[claude CLI gera]
+    CTX --> LLM[provider escolhido gera]
     LLM --> R[Resposta imediata]
     R --> U
     CHAT -. async: destilarTurno .-> JUDGE{Facto durável?}
@@ -35,7 +35,9 @@ flowchart TD
     - **Leituras automáticas (useEffect) → rotas GET, não server actions (#73).** Os IDs das server actions rodam a cada HMR/build; um load automático num tab aberto fica com ID morto → "unexpected response". Reads chamados em `useEffect` usam `getJson` (`@/lib/api-get`) contra uma rota `GET /api/...` (URL estável). As actions ficam para escritas e para chamadas de clique.
 - **Supabase local** — Postgres + **pgvector** (RAG) + **RLS** (isolamento) + Auth. Portas `560xx`.
 - **Embeddings:** `multilingual-e5-small` local, CPU, via `@xenova/transformers` (384 dims; prefixos `passage:`/`query:`).
-- **Geração:** `claude` CLI (subscrição), invocado por `@/lib/claude`.
+- **Geração:** provider escolhido em `src/lib/providers` (`claude`, `codex`,
+  `gemini`, `ollama`; `cli|api`). O caminho agentic com tools continua Claude
+  CLI + MCP; ver [Orquestradores](./ORQUESTRADORES.md).
 - **Testes:** vitest (unit + integração RLS contra o Supabase local).
 
 ## Camadas
@@ -44,7 +46,7 @@ flowchart TD
 | ------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **App shell / UI** | `src/app/(app)/`         | Workspace de 2 colunas: **file explorer global** (`layout.tsx` + `components/layout/file-explorer.tsx`) + conteúdo (chat / ficheiro). Rotas protegidas pelo middleware. |
 | **Módulos**        | `src/modules/<feature>/` | Arquitetura **por feature**: `schema` (Zod) + `service` (dados+regras) + `actions` (porta servidor, valida Zod) [+ UI].                                                 |
-| **Lib partilhada** | `src/lib/`               | `supabase/` (server client + middleware), `embeddings` (e5-small), `claude` (`generate`).                                                                               |
+| **Lib partilhada** | `src/lib/`               | `supabase/` (server client + middleware), `embeddings` (e5-small), providers (`providerDoChatCom`) e `claude` para o runner agentic atual.                              |
 | **Dados**          | `supabase/migrations/`   | Tabelas tipadas + genéricas + RLS + RPCs (`match_chunks`, `meus_grupos`).                                                                                               |
 
 ## Mapa dos módulos
@@ -59,6 +61,7 @@ flowchart TD
 | **definicoes** | Opções por utilizador (mega modal): método de destilação + módulos ativos                                      | [README](../src/modules/definicoes/README.md) |
 | **grupos**     | Grupos de pares — a base da visibilidade `protected`                                                           | [README](../src/modules/grupos/README.md)     |
 | **auth**       | Supabase Auth — a fundação do `auth.uid()` / RLS                                                               | [README](../src/modules/auth/README.md)       |
+| **procura**    | Procura full-text (modo "Texto") sobre os `chunks` — knowledge/daily/chat, agrupada por origem (#91)           | —                                             |
 
 ## Modelo de dados
 
@@ -136,10 +139,11 @@ Toda a tabela de domínio segue o mesmo padrão (de `auth`):
 - **privado:** `owner_id = auth.uid()`
 - **protected:** `visibility = 'protected' AND group_id IN (SELECT meus_grupos())`
 - **apagar:** só o dono.
+- **concluir tarefa (RPC `concluir_tarefa`):** dono **ou** membro do grupo protected (alinhado com a RLS de UPDATE colaborativa; antes era owner-only e divergia — 2026-06-18, Codex). Apagar mantém-se só dono.
 
 `meus_grupos()` é `SECURITY DEFINER` (`search_path=''`) para quebrar a recursão de RLS. Sem sessão (auth) não há `auth.uid()` → tudo depende do módulo `auth`.
 
-> **Rotas GET de leitura e sessão expirada (smoke 2026-06-18):** sem sessão, a RLS filtra a linha e a rota colapsava em **404** — indistinguível de "ficheiro não existe", e o utilizador caía no login sem aviso. Agora `/api/file` e `/api/barra-direita` chamam `sessaoOu401()` (`@/lib/api-auth`) → **401**; o `getJson` (`@/lib/api-get`) reconhece o 401 e dispara o banner stale (#49) em vez de kick silencioso. O **refresh da sessão é do middleware** (`proxy.ts`, padrão Supabase SSR) — sem refresh proativo no cliente de propósito. Dívida conhecida: as outras rotas read beneficiariam do mesmo guard.
+> **Rotas GET de leitura e sessão expirada (smoke 2026-06-18):** sem sessão, a RLS filtra a linha e a rota colapsava em **404** — indistinguível de "ficheiro não existe", e o utilizador caía no login sem aviso. Agora `/api/file` e `/api/barra-direita` chamam `sessaoOu401()` (`@/lib/api-auth`) → **401**; o `getJson` (`@/lib/api-get`) reconhece o 401 e dispara o banner stale (#49) em vez de kick silencioso. O **refresh da sessão é do middleware** (`proxy.ts`, padrão Supabase SSR) — sem refresh proativo no cliente de propósito. As restantes rotas GET de leitura (`arquivados`, `conversa`, `cor-daily`, `definicoes`, `grafo`, `notas-linkaveis`, `pastas`, `tarefas-painel`, `versoes`) ganharam o mesmo guard (2026-06-18, Codex) — dívida saldada.
 
 ## Fluxos-chave
 
@@ -200,7 +204,9 @@ personalidade a entrar); **Agentes** declara os providers/orquestradores
 sai do provider escolhido** (`chat_provider`; claude/cli como rede de
 segurança), com link de troca sobre o botão Enviar e "Testar ligação" por
 provider. Keys cifradas at rest (AES-256-GCM, `MEMVECTOR_KEYS_SECRET`) e
-nunca devolvidas ao browser. O agente-autor (destilação) continua claude. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+nunca devolvidas ao browser. O agente-autor com tools (destilação agentic e
+resposta escalada) continua Claude CLI + MCP; isso é limitação declarada, não
+abstração genérica. Ver [Orquestradores](./ORQUESTRADORES.md). **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
 por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e

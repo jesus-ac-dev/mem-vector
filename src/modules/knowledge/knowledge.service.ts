@@ -22,6 +22,7 @@ import {
     type EscritaKnowledge,
     type NotaCandidata,
     type NotaKnowledge,
+    type NotaResumo,
     type Versao,
 } from './knowledge.schema';
 
@@ -246,12 +247,12 @@ export const escreverNotaEmPasta = async (
     author: 'agent' | 'user' = 'user',
 ) => escreverNotaEmPastaCom(await createClient(), input, folderId, author);
 
-export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
+export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaResumo[]> {
+    // Perf (#99 insight): sem `content_md` — a árvore/listagem usa só
+    // título/tags/pasta; o corpo (payload grande) só vem em getNota*.
     const { data, error } = await db
         .from('knowledge')
-        .select(
-            'id, slug, title, content_md, updated_at, folder_id, frontmatter, visibility, created_at',
-        )
+        .select('id, slug, title, updated_at, folder_id, frontmatter, visibility, created_at')
         .eq('archived', false)
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar knowledge: ${error.message}`);
@@ -259,7 +260,6 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
         id: r.id,
         slug: r.slug,
         title: r.title,
-        contentMd: r.content_md,
         updatedAt: r.updated_at,
         folderId: r.folder_id ?? null,
         tags: propriedadesDoRow(r).tags,

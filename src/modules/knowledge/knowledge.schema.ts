@@ -48,14 +48,20 @@ export const EscritaKnowledgeSchema = z.object({
 });
 export type EscritaKnowledge = z.infer<typeof EscritaKnowledgeSchema>;
 
-export interface NotaKnowledge {
+// Resumo de nota para listagens/árvore/grafo (perf): SEM o `content_md`, que é
+// um payload grande que a listagem não usa. Só `getNota*` traz o corpo.
+export interface NotaResumo {
     id: string;
     slug: string;
     title: string;
-    contentMd: string;
     updatedAt: string;
     folderId?: string | null; // pasta onde vive (null/undefined = raiz)
     tags?: string[]; // do frontmatter (preenchido onde a listagem precisa, ex.: explorer)
+}
+
+// Nota completa (de getNota*): o resumo + o corpo.
+export interface NotaKnowledge extends NotaResumo {
+    contentMd: string;
 }
 
 // Nota existente oferecida ao agente-autor como candidata a CONTINUAR (UPDATE-bias),

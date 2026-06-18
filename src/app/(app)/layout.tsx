@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { AppHeader } from '@/components/layout/app-header';
 import { WorkspaceShell } from '@/components/layout/workspace-shell';
+import { ProcuraProvider } from '@/components/layout/procura-context';
 import { OnboardingWizard } from '@/components/layout/onboarding-wizard';
 import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 import { listarDailies } from '@/modules/daily/daily.service';
@@ -65,16 +66,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="flex h-dvh flex-col">
-            <AppHeader displayName={displayName} />
-            {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
-            <WorkspaceShell
-                arvore={arvore}
-                dailies={dailyItems}
-                diasComDaily={diasComDaily}
-                projetos={projetos.map((p) => ({ id: p.id, nome: p.nome, folderId: p.folderId }))}
-            >
-                {children}
-            </WorkspaceShell>
+            {/* ProcuraProvider envolve header (input) + shell (resultados no painel) — #91 */}
+            <ProcuraProvider>
+                <AppHeader displayName={displayName} />
+                {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
+                <WorkspaceShell
+                    arvore={arvore}
+                    dailies={dailyItems}
+                    diasComDaily={diasComDaily}
+                    projetos={projetos.map((p) => ({
+                        id: p.id,
+                        nome: p.nome,
+                        folderId: p.folderId,
+                    }))}
+                >
+                    {children}
+                </WorkspaceShell>
+            </ProcuraProvider>
             <OnboardingWizard precisaOnboarding={precisaOnboarding} />
         </div>
     );

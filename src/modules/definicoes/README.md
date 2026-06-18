@@ -64,8 +64,10 @@ onChange, só entre providers já parametrizados.
 models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
   dropdowns da escolha ficam vivas — modelo novo nas notícias → Testar ligação →
   aparece. Modelo e esforço escolhem-se SEMPRE na mini-modal (nunca nas Definições,
-  sem texto livre). O agente-autor (destilação/contrato) continua claude — tools e
-  envelope afinados para ele.
+  sem texto livre). O agente-autor com tools (destilação agentic/contrato e
+  resposta escalada) continua Claude CLI + MCP — tools e envelope afinados para
+  ele. A matriz de capacidades vive em `docs/ORQUESTRADORES.md`; provider de chat
+  não implica runner agentic.
 - **Módulos** (`modulos_ativos`) — toggles: `github` (disponível), `emails`,
   `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão
   do calendário).
