@@ -16,7 +16,7 @@ E a **rede de revisão**: cada escrita do agente grava uma versão → o utiliza
 flowchart TD
     U([Humano fala]) --> CHAT[Chat respond]
     CHAT --> CTX[RAG: match_chunks + threshold 0.78]
-    CTX --> LLM[claude CLI gera]
+    CTX --> LLM[provider escolhido gera]
     LLM --> R[Resposta imediata]
     R --> U
     CHAT -. async: destilarTurno .-> JUDGE{Facto durável?}
@@ -35,7 +35,9 @@ flowchart TD
     - **Leituras automáticas (useEffect) → rotas GET, não server actions (#73).** Os IDs das server actions rodam a cada HMR/build; um load automático num tab aberto fica com ID morto → "unexpected response". Reads chamados em `useEffect` usam `getJson` (`@/lib/api-get`) contra uma rota `GET /api/...` (URL estável). As actions ficam para escritas e para chamadas de clique.
 - **Supabase local** — Postgres + **pgvector** (RAG) + **RLS** (isolamento) + Auth. Portas `560xx`.
 - **Embeddings:** `multilingual-e5-small` local, CPU, via `@xenova/transformers` (384 dims; prefixos `passage:`/`query:`).
-- **Geração:** `claude` CLI (subscrição), invocado por `@/lib/claude`.
+- **Geração:** provider escolhido em `src/lib/providers` (`claude`, `codex`,
+  `gemini`, `ollama`; `cli|api`). O caminho agentic com tools continua Claude
+  CLI + MCP; ver [Orquestradores](./ORQUESTRADORES.md).
 - **Testes:** vitest (unit + integração RLS contra o Supabase local).
 
 ## Camadas
@@ -44,7 +46,7 @@ flowchart TD
 | ------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **App shell / UI** | `src/app/(app)/`         | Workspace de 2 colunas: **file explorer global** (`layout.tsx` + `components/layout/file-explorer.tsx`) + conteúdo (chat / ficheiro). Rotas protegidas pelo middleware. |
 | **Módulos**        | `src/modules/<feature>/` | Arquitetura **por feature**: `schema` (Zod) + `service` (dados+regras) + `actions` (porta servidor, valida Zod) [+ UI].                                                 |
-| **Lib partilhada** | `src/lib/`               | `supabase/` (server client + middleware), `embeddings` (e5-small), `claude` (`generate`).                                                                               |
+| **Lib partilhada** | `src/lib/`               | `supabase/` (server client + middleware), `embeddings` (e5-small), providers (`providerDoChatCom`) e `claude` para o runner agentic atual.                              |
 | **Dados**          | `supabase/migrations/`   | Tabelas tipadas + genéricas + RLS + RPCs (`match_chunks`, `meus_grupos`).                                                                                               |
 
 ## Mapa dos módulos
@@ -201,7 +203,9 @@ personalidade a entrar); **Agentes** declara os providers/orquestradores
 sai do provider escolhido** (`chat_provider`; claude/cli como rede de
 segurança), com link de troca sobre o botão Enviar e "Testar ligação" por
 provider. Keys cifradas at rest (AES-256-GCM, `MEMVECTOR_KEYS_SECRET`) e
-nunca devolvidas ao browser. O agente-autor (destilação) continua claude. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+nunca devolvidas ao browser. O agente-autor com tools (destilação agentic e
+resposta escalada) continua Claude CLI + MCP; isso é limitação declarada, não
+abstração genérica. Ver [Orquestradores](./ORQUESTRADORES.md). **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
 por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e

@@ -32,6 +32,15 @@ O Claude usa hooks automaticos em `.claude/settings.json`; o Codex neste repo us
 
 Se o pedido explicitar delegacao, validacao paralela ou troca de tarefas entre agentes, podes usar subagente quando a ferramenta estiver disponivel. Caso contrario, aplica localmente o playbook do agente relevante e reporta o veredicto.
 
+## Orquestradores e harness
+
+- Consulta `docs/ORQUESTRADORES.md` antes de alterar providers, tools MCP,
+  `.claude/` ou `.codex/`.
+- Nao confundas provider de chat com runner agentic: `src/lib/providers`
+  responde ao chat; `src/agent/*` com tools ainda e Claude CLI + MCP.
+- `.claude` tem routing automatico por hooks; `.codex` usa routing explicito e
+  playbooks locais. Mantem a intencao alinhada, sem copiar mecanismos cegamente.
+
 ## Stack e divergencia do crmcredito
 
 - Next.js 16 App Router, React 19, TypeScript strict, Supabase Auth/Postgres/pgvector, Tailwind v3 + shadcn/ui, Zod, React Hook Form, Lucide.

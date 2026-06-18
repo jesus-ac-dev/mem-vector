@@ -10,6 +10,16 @@ O **núcleo SaaS do MythosEngine**: o humano fala, os **agentes são os autores*
 
 O `~/src/crmcredito` é a referência da casa (clean architecture, PT-PT, RHF+Zod, Supabase, skills/hooks). **MAS:** o crmcredito **proíbe Tailwind** (usa styled-jsx). O `mem-vector` **adota Tailwind + shadcn/ui + tremor** — foi decisão de produto. Não importar a regra anti-Tailwind nem os padrões styled-jsx do crmcredito. Herdar a arquitetura e as convenções; **não** a casca visual.
 
+## Orquestradores
+
+- Provider de chat, runner agentic e harness de desenvolvimento são superfícies
+  diferentes. Ver `docs/ORQUESTRADORES.md` antes de mexer em providers/tools.
+- O chat é multi-provider via `src/lib/providers`. O loop agentic com tools
+  continua Claude CLI + MCP (`generateAgentic`) até existir segundo runner real
+  com contrato equivalente.
+- `.claude/` e `.codex/` são harnesses do desenvolvimento, não runtime do produto;
+  mudanças neles devem ficar em fatia própria quando possível.
+
 ## Comandos
 
 ```bash

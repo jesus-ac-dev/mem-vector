@@ -82,6 +82,15 @@
                 "esta feature está",
                 "esta feature esta",
                 "src/modules",
+                "src/lib/providers",
+                "src/agent",
+                "mcp-tools",
+                "provider",
+                "providers",
+                "runner",
+                "agentic runner",
+                "orquestrador",
+                "orquestradores",
                 "query direta supabase",
                 "query directa supabase",
                 "createclient(",
@@ -89,7 +98,7 @@
                 ".rpc("
             ],
             "defer_to": [],
-            "reminder": "Dúvida/auditoria de arquitetura por feature. Invoca o subagent `feature-guardian` (read-only). Regras em `.claude/skills/arquitetura-por-feature.md` (ecrã→action→serviço; tudo numa pasta `src/modules/<feature>/`; nada de pastas globais por tipo)."
+            "reminder": "Dúvida/auditoria de arquitetura por feature ou orquestradores. Invoca o subagent `feature-guardian` (read-only). Regras em `.claude/skills/arquitetura-por-feature.md`; para providers/tools/runner, lê também `docs/ORQUESTRADORES.md` (provider de chat ≠ runner agentic ≠ harness)."
         },
         {
             "agent": "tdd-runner",
