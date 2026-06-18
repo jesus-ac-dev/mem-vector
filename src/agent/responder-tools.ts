@@ -8,31 +8,34 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateAgentic } from '@/lib/claude';
 import { lerWebConsultado } from './resultado';
 
-// #45: resposta do chat com acesso à internet. Quando o utilizador liga "web",
-// a resposta corre uma sessão agentic (loop de tools) com procurar_web/ler_url —
-// o CLI da subscrição NÃO faz WebSearch/WebFetch reais em -p (provado: inventa),
-// por isso a web é uma tool MCP nossa (HTTP real, com proveniência).
-const TOOLS_WEB = ['mcp__memvector__procurar_web', 'mcp__memvector__ler_url'];
+// #85 fatia 2: o agente escalado (two-phase) responde com TOOLS — leitura do
+// workspace (notas/daily-por-data/tarefas) E web. O CLI não faz WebSearch/WebFetch
+// reais em -p (inventa), por isso a web é uma tool MCP nossa; e o RAG por
+// semelhança falha em queries de data/nome, por isso a leitura direta do workspace
+// é tool também. Só se chega aqui quando o caminho rápido emitiu [[ESCALAR]].
+const TOOLS_RESPOSTA = [
+    'mcp__memvector__procurar_notas',
+    'mcp__memvector__ler_nota',
+    'mcp__memvector__ler_daily_hoje',
+    'mcp__memvector__ler_daily',
+    'mcp__memvector__listar_tarefas_abertas',
+    'mcp__memvector__procurar_web',
+    'mcp__memvector__ler_url',
+];
 
-// Discrição de tools (#45 r3, feedback do Carlos: "não deveria estar sempre a ir
-// à web"): o workspace é a fonte primária; a web é o ÚLTIMO recurso, só para
-// factos do mundo que o workspace não pode conter. Sem isto, o agente ia à net
-// até para "como correm os devs" (pergunta do próprio workspace).
-const SYSTEM_WEB =
+const SYSTEM_RESPOSTA =
     'És o assistente deste workspace. Respondes em português de Portugal, conciso e direto. ' +
-    'REGRA DE TOOLS — primeiro o workspace, a web só em último recurso:\n' +
-    '1. Responde SEMPRE primeiro com o contexto do workspace dado abaixo. Para perguntas sobre ' +
-    'o trabalho do utilizador (notas, projetos, dailies, tarefas, decisões, "como vão os devs", ' +
-    '"o que ficou decidido") NUNCA vás à internet — a resposta está no workspace.\n' +
-    '2. Usa procurar_web/ler_url SÓ quando a pergunta precisa de um facto do MUNDO, atual ou ' +
-    'externo, que o workspace não pode ter: notícias, resultados/horários de desporto, preços, ' +
-    'cotações, versões de software, meteorologia, factos públicos. Na dúvida, se o contexto ' +
-    'responde, não pesquises.\n' +
-    'Quando usares a web, cita SEMPRE os URLs (links markdown). Se uma pesquisa devolver ' +
-    'LIMITE_WEB, avisa o utilizador na resposta. Não inventes — se não encontrares, di-lo. O ' +
-    'workspace regista sozinho os factos duráveis, por isso não peças licença para guardar.';
+    'Chegaste aqui porque a pergunta precisa de ir BUSCAR algo. Usa as tools certas:\n' +
+    '1. WORKSPACE — perguntas sobre o trabalho do utilizador. Para uma DATA ("o que fiz ontem", ' +
+    '"3ª feira") usa ler_daily ("hoje"/"ontem"/"AAAA-MM-DD") — NÃO confies só no contexto, que é ' +
+    'recuperado por semelhança e falha em datas. Para uma NOTA/assunto usa procurar_notas + ler_nota. ' +
+    'Para tarefas usa listar_tarefas_abertas.\n' +
+    '2. WEB — só para factos do MUNDO (notícias, desporto, preços, versões, meteorologia). Cita ' +
+    'SEMPRE os URLs (links markdown). Se devolver LIMITE_WEB, avisa o utilizador.\n' +
+    'Não inventes — se a tool não devolver nada, di-lo claramente (ex.: "não há daily de 17/06"). ' +
+    'O workspace regista sozinho os factos duráveis, não peças licença para guardar.';
 
-export interface RespostaWeb {
+export interface RespostaTools {
     text: string;
     costUsd: number;
     model?: string;
@@ -42,11 +45,11 @@ export interface RespostaWeb {
     webSources: { url: string; titulo: string }[];
 }
 
-export async function responderComWebCom(
+export async function responderComToolsCom(
     db: SupabaseClient,
     prompt: string,
     webKey?: string,
-): Promise<RespostaWeb> {
+): Promise<RespostaTools> {
     const {
         data: { session },
     } = await db.auth.getSession();
@@ -72,8 +75,8 @@ export async function responderComWebCom(
     try {
         const g = await generateAgentic(prompt, {
             mcpConfig,
-            allowedTools: TOOLS_WEB,
-            systemPrompt: SYSTEM_WEB,
+            allowedTools: TOOLS_RESPOSTA,
+            systemPrompt: SYSTEM_RESPOSTA,
             env: {
                 MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
                 MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,

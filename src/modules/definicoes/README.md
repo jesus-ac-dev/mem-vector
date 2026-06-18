@@ -25,15 +25,17 @@ onChange, só entre providers já parametrizados.
   antes fixo no código), lido no `respond` via `providerDoChatCom`. A rede de
   candidatos do agente-autor é separada (`CANDIDATOS_DESTILACAO`, interna).
   E `web_habilitada` (#45, default false): liga a **pesquisa na internet** na
-  resposta do chat — o turno passa a correr o agente-web (`src/agent/responder-web.ts`,
-  tools `procurar_web`/`ler_url`) em vez do caminho normal. O agente é instruído a
-  responder **primeiro do workspace** e só ir à net para factos do mundo (notícias,
-  desporto, versões) — não pesquisa para perguntas do próprio workspace (r3). **Sem
-  key = DuckDuckGo** (grátis, flaky → erro lembra a key). A **key Tavily** (grátis 1k/mês,
-  sem cartão, feita p/ agentes; campo neutro `web_key_cifrada`, cifrada at rest como as
-  keys dos providers, máscara na vista) configura-se aqui no toggle, com link para a
-  obter; `MEMVECTOR_AGENT_WEB_KEY` no env fica como fallback de operação. A key segue ao
-  `responderComWebCom` via `providerDoChatCom`.
+  resposta do chat. **Two-phase (#85):** com web ON, o turno corre primeiro o
+  caminho rápido (streaming, com RAG) e só escala para o agente-com-tools
+  (`src/agent/responder-tools.ts`) se o modelo emitir `[[ESCALAR]]` — para factos
+  do mundo (web) ou para ir buscar algo que o RAG por semelhança não traz (daily
+  por data via `ler_daily`, nota/tarefa nomeada). Perguntas gerais respondem-se
+  rápido sem escalar. **Sem key = DuckDuckGo** (grátis, flaky → erro lembra a key).
+  A **key Tavily** (grátis 1k/mês, sem cartão, feita p/ agentes; campo neutro
+  `web_key_cifrada`, cifrada at rest como as keys dos providers, máscara na vista)
+  configura-se aqui no toggle, com link para a obter; `MEMVECTOR_AGENT_WEB_KEY` no
+  env fica como fallback de operação. A key segue ao `responderComToolsCom` via
+  `providerDoChatCom`.
   A entrar: proatividade, estilo, personalidade.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
   vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.

@@ -25,12 +25,14 @@ async function caso(rotulo: string, pergunta: string, esperaEscalar: boolean) {
 }
 
 (async () => {
-    const r1 = await caso('workspace ("como vão os devs?")', 'Como vão os devs hoje?', false);
-    const r2 = await caso(
-        'mundo ("horas do jogo de Portugal")',
-        'A que horas joga Portugal hoje no Mundial?',
-        true,
-    );
-    console.log(`\n=== ${r1 && r2 ? 'AMBOS OK' : 'ALGUM FALHOU'} ===`);
-    process.exit(r1 && r2 ? 0 : 1);
+    const rs = [
+        await caso('workspace geral ("como vão os devs?")', 'Como vão os devs hoje?', false),
+        await caso('geral ("resume o mem-vector")', 'Resume o que fizemos no mem-vector.', false),
+        await caso('mundo ("horas do jogo")', 'A que horas joga Portugal hoje no Mundial?', true),
+        await caso('data ("o que fiz ontem?")', 'O que fiz ontem?', true),
+        await caso('data ("tarefas de 15/06")', 'Que tarefas concluí em 2026-06-15?', true),
+    ];
+    const ok = rs.every(Boolean);
+    console.log(`\n=== ${ok ? 'TODOS OK' : 'ALGUM FALHOU'} (${rs.filter(Boolean).length}/${rs.length}) ===`);
+    process.exit(ok ? 0 : 1);
 })();
