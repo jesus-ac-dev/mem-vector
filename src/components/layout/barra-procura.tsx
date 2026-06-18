@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, CalendarDays, MessagesSquare } from 'lucide-react';
 import { getJson } from '@/lib/api-get';
 import { logClientError } from '@/lib/client-error-log';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { ResultadoProcura, TipoResultado } from '@/modules/procura/procura.service';
+
+type Modo = 'texto' | 'conceito';
 
 function hrefDoResultado(r: ResultadoProcura): string {
     if (r.tipo === 'knowledge') return `/knowledge/${r.slug ?? r.id}`;
@@ -21,68 +24,70 @@ const ICONE: Record<TipoResultado, typeof FileText> = {
     chat: MessagesSquare,
 };
 
-// Procura "Texto" (#91): full-text sobre o workspace. Escreve → resultados num
-// dropdown (ícone por tipo); clicar abre. (Modo "Conceito" entra a seguir.)
-export function BarraProcura() {
+// Procura no painel esquerdo (#91): input + buttongroup Texto/Conceito; os
+// resultados CARREGAM no painel (não dropdown). `onAtiva` avisa o shell para
+// esconder o explorer enquanto há procura. Texto = full-text (prefixo);
+// Conceito = semântico (embedding).
+export function BarraProcura({ onAtiva }: { onAtiva?: (ativa: boolean) => void }) {
     const router = useRouter();
     const [q, setQ] = useState('');
+    const [modo, setModo] = useState<Modo>('texto');
     const [resultados, setResultados] = useState<ResultadoProcura[] | null>(null);
-    const [aberto, setAberto] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
 
-    // Debounce: a procura (e a limpeza, quando vazio) corre dentro do timeout —
-    // nunca setState síncrono no corpo do effect.
     useEffect(() => {
         const termo = q.trim();
         const id = setTimeout(
             () => {
                 if (!termo) {
                     setResultados(null);
-                    setAberto(false);
+                    onAtiva?.(false);
                     return;
                 }
-                getJson<ResultadoProcura[]>(`/api/procura?q=${encodeURIComponent(termo)}`)
-                    .then((r) => {
-                        setResultados(r ?? []);
-                        setAberto(true);
-                    })
-                    .catch((e) => logClientError({ area: 'procura', action: 'texto' }, e));
+                onAtiva?.(true);
+                getJson<ResultadoProcura[]>(
+                    `/api/procura?q=${encodeURIComponent(termo)}&modo=${modo}`,
+                )
+                    .then((r) => setResultados(r ?? []))
+                    .catch((e) => {
+                        // Erro (rede/401): não deixar o painel em branco — mostra
+                        // "Sem resultados". O 401 já dispara o kick via getJson.
+                        setResultados([]);
+                        logClientError({ area: 'procura', action: modo }, e);
+                    });
             },
             termo ? 250 : 0,
         );
         return () => clearTimeout(id);
-    }, [q]);
-
-    // Fecha o dropdown ao clicar fora.
-    useEffect(() => {
-        function onClick(e: MouseEvent) {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setAberto(false);
-            }
-        }
-        document.addEventListener('mousedown', onClick);
-        return () => document.removeEventListener('mousedown', onClick);
-    }, []);
-
-    function abrir(r: ResultadoProcura) {
-        setAberto(false);
-        setQ('');
-        router.push(hrefDoResultado(r));
-    }
+    }, [q, modo, onAtiva]);
 
     return (
-        <div ref={containerRef} className="relative mx-auto max-w-md">
-            <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                onFocus={() => resultados && setAberto(true)}
-                placeholder="Procurar no workspace…"
-                className="h-9 bg-muted/40"
-            />
-            {aberto && resultados && (
-                <div className="absolute z-50 mt-1 max-h-96 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+        <div className="flex shrink-0 flex-col border-b">
+            <div className="shrink-0 space-y-1 p-2">
+                <Input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Procurar no workspace…"
+                    className="h-8 bg-muted/40"
+                />
+                <div className="flex gap-1">
+                    {(['texto', 'conceito'] as const).map((m) => (
+                        <Button
+                            key={m}
+                            variant={modo === m ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setModo(m)}
+                            className="h-6 flex-1 text-xs capitalize"
+                        >
+                            {m === 'texto' ? 'Texto' : 'Conceito'}
+                        </Button>
+                    ))}
+                </div>
+            </div>
+
+            {resultados && (
+                <div className="max-h-[50vh] overflow-y-auto border-t p-1">
                     {resultados.length === 0 ? (
-                        <p className="px-2 py-3 text-sm text-muted-foreground">Sem resultados.</p>
+                        <p className="px-2 py-3 text-xs text-muted-foreground">Sem resultados.</p>
                     ) : (
                         resultados.map((r) => {
                             const Icone = ICONE[r.tipo];
@@ -90,8 +95,10 @@ export function BarraProcura() {
                                 <Button
                                     key={`${r.tipo}:${r.id}`}
                                     variant="ghost"
-                                    onClick={() => abrir(r)}
-                                    className="flex h-auto w-full items-start justify-start gap-2 px-2 py-1.5 text-left font-normal"
+                                    onClick={() => router.push(hrefDoResultado(r))}
+                                    className={cn(
+                                        'flex h-auto w-full items-start justify-start gap-2 px-2 py-1.5 text-left font-normal',
+                                    )}
                                 >
                                     <Icone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                                     <span className="min-w-0">

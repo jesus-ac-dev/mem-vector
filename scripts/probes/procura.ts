@@ -2,15 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
 import { escreverNotaCom } from '../../src/modules/knowledge/knowledge.service';
-import { procurarTextoCom } from '../../src/modules/procura/procura.service';
+import { procurarTextoCom, procurarConceitoCom } from '../../src/modules/procura/procura.service';
 import { indexarMensagensChatCom } from '../../src/modules/chat/chat.indexing';
 import { getSupabaseAdmin } from '../../src/lib/supabase-admin';
 
 process.loadEnvFile('.env.local');
 
-// Prova headless da procura full-text (#91, modo Texto): cobre os DOIS ramos —
-// knowledge (nota) e chat (conversa). O ramo chat resolve o título via
-// conversations.title (o bug que o Audit apanhou: era `titulo`).
+// Prova headless da procura (#91). Modo Texto: cobre os DOIS ramos — knowledge
+// (nota) e chat (conversa); o ramo chat resolve o título via conversations.title
+// (o bug que o Audit apanhou: era `titulo`). Modo Conceito: caminho semântico
+// (match_chunks + metadata-por-id), encontra a nota por paráfrase (não termo
+// literal) — prova o caminho que o full-text não cobre.
 
 const EMAIL = 'dev@mem-vector.local';
 const PASSWORD = 'dev-password-123';
@@ -82,11 +84,27 @@ async function main(): Promise<void> {
         `${achouC ? '✅' : '❌'} chat — encontra a conversa e resolve o título (${resC.map((r) => `${r.tipo}:${r.titulo}`).join(', ') || 'vazio'})`,
     );
 
+    // Modo Conceito (semântico): encontra a nota por PARÁFRASE, sem o termo literal.
+    await escreverNotaCom(db, {
+        title: 'Conceito Teste Backend',
+        content_md:
+            '# Conceito Teste Backend\n\nAs baterias LiFePO4 (fosfato de ferro-lítio) oferecem mais ciclos de vida e maior segurança térmica do que as células de iões de lítio convencionais.',
+        links: [],
+        reason: 'prova procura conceito',
+    });
+    const resSem = await procurarConceitoCom(db, 'durabilidade e segurança das baterias de fosfato de ferro lítio');
+    const achouSem = resSem.some(
+        (r) => r.tipo === 'knowledge' && r.titulo === 'Conceito Teste Backend',
+    );
+    console.log(
+        `${achouSem ? '✅' : '❌'} conceito — paráfrase encontra a nota (top: ${resSem.slice(0, 3).map((r) => r.titulo).join(' | ') || 'vazio'})`,
+    );
+
     // Sanidade: termo inexistente → sem resultados.
     const vazio = (await procurarTextoCom(db, 'xptoinexistente0000')).length === 0;
     console.log(`${vazio ? '✅' : '❌'} termo inexistente → sem resultados`);
 
-    const ok = achouK && achouP && achouC && vazio;
+    const ok = achouK && achouP && achouC && achouSem && vazio;
     console.log(ok ? 'PROVA VERDE' : 'PROVA VERMELHA');
     process.exit(ok ? 0 : 1);
 }
