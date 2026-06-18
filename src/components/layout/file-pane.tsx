@@ -113,14 +113,9 @@ async function carregarFicheiroViaApi(
 ): Promise<ConteudoFicheiro | null> {
     const params = new URLSearchParams({ tipo, chave });
     if (id) params.set('id', id);
-
-    const res = await fetch(`/api/file?${params.toString()}`, {
-        method: 'GET',
-        headers: { accept: 'application/json' },
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`ler ficheiro: HTTP ${res.status}`);
-    return (await res.json()) as ConteudoFicheiro;
+    // Via getJson: 404 → null (ficheiro não existe), 401 → banner de sessão
+    // expirada (#smoke 2026-06-18), em vez de kick silencioso.
+    return getJson<ConteudoFicheiro | null>(`/api/file?${params.toString()}`);
 }
 
 // ──────────────────────────────────────────────
