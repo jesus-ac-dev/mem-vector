@@ -10,7 +10,12 @@ import {
     getNotaPorIdCom,
     summaryDoAgente,
 } from '../modules/knowledge/knowledge.service';
-import { acrescentarAoDailyCom, getDailyCom, hojeLisboa } from '../modules/daily/daily.service';
+import {
+    acrescentarAoDailyCom,
+    getDailyCom,
+    hojeLisboa,
+    resolverDataDaily,
+} from '../modules/daily/daily.service';
 import {
     listarTarefasAbertasCom,
     criarTarefaCom,
@@ -148,6 +153,18 @@ const TOOLS = [
         name: 'ler_daily_hoje',
         description: 'Lê o conteúdo atual do daily de hoje (para não duplicar registos).',
         inputSchema: { type: 'object', properties: {} },
+    },
+    {
+        name: 'ler_daily',
+        description:
+            'Lê o daily de uma data — "hoje", "ontem" ou "AAAA-MM-DD". Usa para perguntas temporais ("o que fiz ontem?"): a recuperação por semelhança falha em datas, esta tool vai direta.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                quando: { type: 'string', description: '"hoje", "ontem" ou "AAAA-MM-DD"' },
+            },
+            required: ['quando'],
+        },
     },
     {
         name: 'listar_tarefas_abertas',
@@ -308,6 +325,14 @@ async function executarTool(
         case 'ler_daily_hoje': {
             const daily = await getDailyCom(db, hojeLisboa());
             return daily?.contentMd ?? '(ainda não há daily hoje)';
+        }
+        case 'ler_daily': {
+            const quando = texto(args, 'quando');
+            const dia = resolverDataDaily(quando);
+            if (!dia)
+                return `Data não reconhecida: "${quando}". Usa "hoje", "ontem" ou "AAAA-MM-DD".`;
+            const daily = await getDailyCom(db, dia);
+            return daily?.contentMd ?? `(não há daily para ${dia})`;
         }
         case 'listar_tarefas_abertas': {
             const tarefas = await listarTarefasAbertasCom(db);

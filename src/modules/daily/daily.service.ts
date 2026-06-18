@@ -49,6 +49,28 @@ export function hojeLisboa(date: Date = new Date()): string {
     return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Lisbon' }).format(date);
 }
 
+// #85 fatia 2: resolve uma referência temporal ("hoje"/"ontem"/"AAAA-MM-DD") para
+// uma data, para a tool ler_daily ler determinísticamente (o RAG por semelhança
+// falha em queries de data). null = referência não reconhecida.
+export function resolverDataDaily(quando: string, hoje: string = hojeLisboa()): string | null {
+    const q = quando.trim().toLowerCase();
+    if (q === '' || q === 'hoje') return hoje;
+    if (q === 'ontem') {
+        // Âncora ao meio-dia UTC para o -1 dia não escorregar com fusos/DST.
+        const d = new Date(`${hoje}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(q)) {
+        // O regex passa "2026-13-99"; rejeita datas que não existem (senão o
+        // getDailyCom rebenta com erro Postgres em vez de "não há daily").
+        const d = new Date(`${q}T00:00:00Z`);
+        if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== q) return null;
+        return q;
+    }
+    return null;
+}
+
 export async function acrescentarAoDailyCom(
     db: SupabaseClient,
     linha: string,

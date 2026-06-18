@@ -8,16 +8,21 @@ export const SENTINELA_ESCALAR = '[[ESCALAR]]';
 
 // Instrução que ensina o modelo a emitir o sentinela. Anexa-se ao prompt do
 // caminho rápido (só quando a web está ligada — sem web não há para onde escalar).
-// Fatia 1: escala-se SÓ para factos do mundo (web). Perguntas do workspace
-// respondem-se já do contexto — não escalam (era o que fazia o agente lento e o
-// que o Carlos apanhou). A exploração profunda do workspace fica para a fatia 2.
+// O contexto vem por SEMELHANÇA: cobre perguntas gerais, mas falha em datas e em
+// notas/tarefas específicas. Escala-se para IR BUSCAR o que falta — fatia 2: além
+// da web, também daily-por-data e notas/tarefas nomeadas (o bug do "o que fiz
+// ontem?" que dizia "não há" tendo a daily). Geral que o contexto cobre → não escala.
 export const INSTRUCAO_ESCALADA =
-    'INSTRUÇÃO DE ESCALADA: responde com o contexto do workspace acima. SÓ se a pergunta ' +
-    'precisar de informação ATUAL ou EXTERNA que o workspace não pode conter (notícias, ' +
-    'desporto, preços, cotações, versões de software, meteorologia, factos públicos do mundo) ' +
-    'é que respondes com EXATAMENTE "[[ESCALAR]]" e mais nada — um agente vai à internet buscar. ' +
-    'Para tudo o que é sobre o trabalho do utilizador (notas, projetos, dailies, tarefas, ' +
-    'decisões, "como vão os devs"), responde JÁ com o contexto, NÃO escales. Na dúvida, não escales.';
+    'INSTRUÇÃO DE ESCALADA: tens o contexto do workspace acima, recuperado por SEMELHANÇA — ' +
+    'cobre perguntas gerais, mas não traz datas nem tudo o que existe. Responde com ele quando ' +
+    'chega. Responde com EXATAMENTE "[[ESCALAR]]" e mais nada (um agente com tools vai buscar) ' +
+    'quando precisas de algo que NÃO está no contexto:\n' +
+    '- facto ATUAL/EXTERNO do mundo (notícias, desporto, preços, versões, meteorologia) → internet;\n' +
+    '- a DAILY ou as TAREFAS de uma DATA ("o que fiz ontem?", "tarefas de 3ª feira") → o contexto ' +
+    'por semelhança não traz dailies por data, mesmo que pareça que "não há";\n' +
+    '- uma NOTA ou DECISÃO específica que o utilizador nomeia e que não vês no contexto.\n' +
+    'Para perguntas gerais que o contexto JÁ responde ("resume o projeto X", "como vão os devs"), ' +
+    'NÃO escales — responde já.';
 
 export function criarDetetorEscalada(
     sentinela: string,

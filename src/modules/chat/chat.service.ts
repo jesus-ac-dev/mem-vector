@@ -12,7 +12,7 @@ import {
 import { classificarIntencao } from './chat.intencao';
 import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
-import { responderComWebCom } from '@/agent/responder-web';
+import { responderComToolsCom } from '@/agent/responder-tools';
 import { criarDetetorEscalada, INSTRUCAO_ESCALADA, SENTINELA_ESCALAR } from './escalada';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
@@ -355,7 +355,7 @@ export async function respondStream(
         // Escalou: o agente-com-tools trata (loop agentic; pesquisa a internet de
         // verdade). Key Tavily das Definições; env como fallback de operação.
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
-        const r = await responderComWebCom(t.db, t.prompt, webKey);
+        const r = await responderComToolsCom(t.db, t.prompt, webKey);
         onTextDelta(r.text);
         // Custo honesto (#65): a fase rápida só emitiu [[ESCALAR]], mas recebeu o
         // prompt todo — esse input paga-se. Soma-se ao custo do agente.
