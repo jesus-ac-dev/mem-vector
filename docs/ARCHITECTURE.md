@@ -279,6 +279,8 @@ os chunks — este guard fecha a porta que faltava, a do upsert.
 
 **RAG:** RAG-preferred + LLM-fallback; o threshold `0.78` é rede de segurança (o e5-small comprime os scores), não classificador.
 
+> **Nota (smoke #96):** o `query_text` do FTS na recolha de candidatos é truncado (`limitarQueryFts`, 1000 chars) — uma resposta vinda da web fazia o `websearch_to_tsquery` estourar (`tsquery stack too small`), deixando a destilação sem candidatos e a sabotar o UPDATE-bias/wikilinks. O embedding leva o texto completo; só o lado lexical é cortado. Além disso, o indicador de fase ganhou o estado **`web`** ("a consultar a web"), emitido quando o turno escala para o agente-com-tools.
+
 ```mermaid
 sequenceDiagram
     actor U as Humano

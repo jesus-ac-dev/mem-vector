@@ -85,7 +85,7 @@ interface EventoDone {
     webSources?: { url: string; titulo: string }[];
 }
 
-type FaseEvento = 'consultar' | 'gerar';
+type FaseEvento = 'consultar' | 'gerar' | 'web';
 
 type EventoStreamCliente =
     | { tipo: 'inicio'; conversationId: string }
@@ -97,6 +97,7 @@ type EventoStreamCliente =
 // Label da fase do turno para o indicador dinâmico (#66).
 function labelFase(fase: FaseEvento, fontes?: number): string {
     if (fase === 'consultar') return 'a consultar o workspace';
+    if (fase === 'web') return 'a consultar a web';
     return fontes ? `a gerar (${fontes} ${fontes === 1 ? 'fonte' : 'fontes'})` : 'a gerar';
 }
 

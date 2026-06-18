@@ -235,10 +235,10 @@ interface TurnoPreparado {
     webKey?: string; // #45: key Tavily das Definições (cifrada), p/ a pesquisa web
 }
 
-// Fase do turno para o indicador dinâmico (#66): consultar → gerar. O caminho
-// web não tem fase própria (r3): só se sabe se foi à net no fim (🌐 N fontes),
-// por isso não se anuncia "a consultar a internet" à força.
-export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number };
+// Fase do turno para o indicador dinâmico (#66): consultar → gerar. A fase 'web'
+// (#96 smoke) anuncia-se SÓ quando o turno ESCALA para o agente-com-tools — aí já
+// se sabe que vai à net (antes não se sabe, daí não se forçar no arranque).
+export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number } | { fase: 'web' };
 
 // Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
 // pelo respond (one-shot) e pelo respondStream (#66). O histórico (janela da
@@ -354,6 +354,8 @@ export async function respondStream(
         }
         // Escalou: o agente-com-tools trata (loop agentic; pesquisa a internet de
         // verdade). Key Tavily das Definições; env como fallback de operação.
+        // Agora já se sabe que vai à net — anuncia a fase (#96 smoke).
+        onFase?.({ fase: 'web' });
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
         const r = await responderComToolsCom(t.db, t.prompt, webKey, t.modeloPedido);
         onTextDelta(r.text);
