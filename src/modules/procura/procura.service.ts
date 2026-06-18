@@ -55,18 +55,33 @@ export function dedupPorEntidade(chunks: ChunkHit[]): ChunkHit[] {
     return out;
 }
 
+// Numa barra de procura "à medida que se escreve", cada termo é um PREFIXO
+// (`termo:*`): "DDR" encontra "DDR5"/"DDR4" — o `websearch_to_tsquery` casava só
+// o lexema exato ("DDR" ≠ "DDR5"). Sanitiza (tira pontuação que o `to_tsquery`
+// lê como operadores) e junta com AND. Pura/testável. (#91 smoke)
+export function construirQueryPrefixo(input: string): string {
+    return input
+        .trim()
+        .split(/\s+/)
+        .map((termo) => termo.replace(/[^\p{L}\p{N}]/gu, ''))
+        .filter(Boolean)
+        .map((termo) => `${termo}:*`)
+        .join(' & ');
+}
+
 export async function procurarTextoCom(
     db: SupabaseClient,
     termo: string,
     limite = 30,
 ): Promise<ResultadoProcura[]> {
-    const t = termo.trim();
-    if (!t) return [];
+    const query = construirQueryPrefixo(termo);
+    if (!query) return [];
 
     const { data, error } = await db
         .from('chunks')
         .select('id, content, source, metadata')
-        .textSearch('fts', t, { type: 'websearch', config: 'portuguese' })
+        // Sem `type` → to_tsquery, que aceita a sintaxe de prefixo `termo:*`.
+        .textSearch('fts', query, { config: 'portuguese' })
         .limit(limite * 3); // pool — dedup por entidade reduz para ~limite
     if (error) throw new Error(`procura texto: ${error.message}`);
 

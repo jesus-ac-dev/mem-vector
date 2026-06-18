@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { dedupPorEntidade, type ChunkHit } from './procura.service';
+import { construirQueryPrefixo, dedupPorEntidade, type ChunkHit } from './procura.service';
+
+describe('construirQueryPrefixo (#91 — prefix matching)', () => {
+    it('um termo vira prefixo (DDR encontra DDR5)', () => {
+        expect(construirQueryPrefixo('DDR')).toBe('DDR:*');
+    });
+
+    it('vários termos → prefixos juntos por AND', () => {
+        expect(construirQueryPrefixo('DDR memória')).toBe('DDR:* & memória:*');
+    });
+
+    it('tira pontuação que o to_tsquery leria como operador', () => {
+        expect(construirQueryPrefixo('C++ & ou')).toBe('C:* & ou:*');
+    });
+
+    it('só pontuação/espaços → vazio (sem query, sem rebentar o to_tsquery)', () => {
+        expect(construirQueryPrefixo('   ')).toBe('');
+        expect(construirQueryPrefixo('!!!')).toBe('');
+    });
+});
 
 const kHit = (id: string, entityId: string, content = 'x'): ChunkHit => ({
     id,

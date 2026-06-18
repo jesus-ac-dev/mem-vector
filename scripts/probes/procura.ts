@@ -50,6 +50,12 @@ async function main(): Promise<void> {
     const achouK = resK.some((r) => r.tipo === 'knowledge' && r.titulo === 'Procura Teste Backend');
     console.log(`${achouK ? '✅' : '❌'} knowledge — encontra a nota pelo termo`);
 
+    // Prefix (#91 smoke "DDR não traz DDR5"): um PREFIXO do termo encontra.
+    const parcial = TERMO.slice(0, 10);
+    const resP = await procurarTextoCom(db, parcial);
+    const achouP = resP.some((r) => r.titulo === 'Procura Teste Backend');
+    console.log(`${achouP ? '✅' : '❌'} prefix — termo parcial ("${parcial}") encontra a nota completa`);
+
     // Ramo chat — resolve o título via conversations.title (o bug do Audit).
     const conv = await db
         .from('conversations')
@@ -80,7 +86,7 @@ async function main(): Promise<void> {
     const vazio = (await procurarTextoCom(db, 'xptoinexistente0000')).length === 0;
     console.log(`${vazio ? '✅' : '❌'} termo inexistente → sem resultados`);
 
-    const ok = achouK && achouC && vazio;
+    const ok = achouK && achouP && achouC && vazio;
     console.log(ok ? 'PROVA VERDE' : 'PROVA VERMELHA');
     process.exit(ok ? 0 : 1);
 }
