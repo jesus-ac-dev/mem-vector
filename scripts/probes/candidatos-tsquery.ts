@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { candidatosParaFactoCom, escreverNotaCom } from '../../src/modules/knowledge/knowledge.service';
+import {
+    candidatosParaFactoCom,
+    escreverNotaCom,
+} from '../../src/modules/knowledge/knowledge.service';
 import { limitarQueryFts } from '../../src/modules/knowledge/knowledge.props';
 import { embedQuery } from '../../src/lib/embeddings';
 import { getSupabaseAdmin } from '../../src/lib/supabase-admin';

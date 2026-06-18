@@ -59,6 +59,7 @@ flowchart TD
 | **definicoes** | Opções por utilizador (mega modal): método de destilação + módulos ativos                                      | [README](../src/modules/definicoes/README.md) |
 | **grupos**     | Grupos de pares — a base da visibilidade `protected`                                                           | [README](../src/modules/grupos/README.md)     |
 | **auth**       | Supabase Auth — a fundação do `auth.uid()` / RLS                                                               | [README](../src/modules/auth/README.md)       |
+| **procura**    | Procura full-text (modo "Texto") sobre os `chunks` — knowledge/daily/chat, agrupada por origem (#91)           | —                                             |
 
 ## Modelo de dados
 
