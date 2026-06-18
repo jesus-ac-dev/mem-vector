@@ -6,6 +6,7 @@ import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT, COR_CONVERSA_DEFAULT } fro
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
 import {
+    limitarQueryFts,
     normalizarTags,
     propriedadesDoRow,
     tagsDoAgente,
@@ -702,7 +703,8 @@ export async function candidatosParaFactoCom(
     const emb = await embedQuery(texto);
     const { data, error } = await db.rpc('match_chunks_hybrid', {
         query_embedding: JSON.stringify(emb),
-        query_text: texto,
+        // FTS estoura com texto muito longo (resposta web); o vetor já leva o todo.
+        query_text: limitarQueryFts(texto),
         match_count: CANDIDATOS_DESTILACAO,
     });
     if (error) throw new Error(`candidatos match_chunks_hybrid: ${error.message}`);

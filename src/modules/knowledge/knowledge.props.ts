@@ -41,6 +41,15 @@ export function tagsDoAgente(tags?: string[]): Record<string, string[]> {
     return tags && tags.length ? { tags } : {};
 }
 
+// O `websearch_to_tsquery` estoura ("tsquery stack too small") com texto muito
+// longo — ex.: a destilação passa pergunta+resposta, e uma resposta vinda da web
+// tem milhares de chars. O lado FTS do retrieval híbrido só precisa de termos
+// representativos; o significado completo vai no embedding (vetor). Trunca.
+const MAX_QUERY_FTS = 1000;
+export function limitarQueryFts(texto: string): string {
+    return texto.length > MAX_QUERY_FTS ? texto.slice(0, MAX_QUERY_FTS) : texto;
+}
+
 export interface PropriedadesRow {
     id: string;
     frontmatter: unknown;

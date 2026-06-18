@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { normalizarTags, propriedadesDoRow, unirTags, tagsDoAgente } from './knowledge.props';
+import {
+    normalizarTags,
+    propriedadesDoRow,
+    unirTags,
+    tagsDoAgente,
+    limitarQueryFts,
+} from './knowledge.props';
 
 describe('normalizarTags', () => {
     it('apara espaços e remove vazias', () => {
@@ -39,6 +45,16 @@ describe('tagsDoAgente (#90)', () => {
     it('patch vazio sem tags (o merge não toca no frontmatter existente)', () => {
         expect(tagsDoAgente()).toEqual({});
         expect(tagsDoAgente([])).toEqual({});
+    });
+});
+
+describe('limitarQueryFts (#96 smoke — tsquery stack too small)', () => {
+    it('trunca texto longo para o websearch_to_tsquery não estourar', () => {
+        expect(limitarQueryFts('x'.repeat(5000))).toHaveLength(1000);
+    });
+
+    it('texto curto fica inalterado', () => {
+        expect(limitarQueryFts('próximos jogos de Portugal')).toBe('próximos jogos de Portugal');
     });
 });
 
