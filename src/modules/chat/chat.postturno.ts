@@ -10,7 +10,7 @@ import {
     type NotaEscrita,
     type TurnoDestilado,
 } from './chat.service';
-import { candidatosParaFactoCom } from '@/modules/knowledge/knowledge.service';
+import { candidatosParaFactoCom, tagsExistentesCom } from '@/modules/knowledge/knowledge.service';
 import {
     listarTarefasAbertasCom,
     criarTarefaCom,
@@ -97,6 +97,15 @@ export async function executarDestilacaoTurnoCom(
         console.error('listar projetos falhou:', e);
     }
 
+    // Tags já em uso (#90): dadas ao agente para REUTILIZAR em vez de inventar
+    // variantes do mesmo conceito. Não-fatal — sem lista, gera tags livres.
+    let tagsExistentes: string[] = [];
+    try {
+        tagsExistentes = await tagsExistentesCom(db);
+    } catch (e) {
+        console.error('listar tags existentes falhou:', e);
+    }
+
     // Método de destilação (#60): a flag do M2 virou opção por workspace —
     // one-shot é o default (decisão #38: ¼ do custo); agentic é opt-in nas
     // definições. A env flag continua como override (evals/scripts forçam o
@@ -138,6 +147,7 @@ export async function executarDestilacaoTurnoCom(
             kernel,
             tarefasAbertas,
             projetos,
+            tagsExistentes,
         );
     } catch (e) {
         console.error('destilarResumirTurno falhou:', e);

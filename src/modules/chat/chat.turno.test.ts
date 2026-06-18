@@ -243,6 +243,55 @@ describe('parseTurno: summary auto (#22)', () => {
     });
 });
 
+describe('buildTurnoPrompt: tags auto (#90)', () => {
+    it('pede tags no envelope e explica a regra', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toContain('"tags"');
+        expect(prompt).toContain('REGRA PARA tags');
+    });
+
+    it('lista as tags existentes para o agente REUSAR quando há', () => {
+        const prompt = buildTurnoPrompt(
+            'q',
+            'a',
+            [],
+            undefined,
+            [],
+            '',
+            [],
+            [],
+            ['ai', 'mem-vector'],
+        );
+        expect(prompt).toMatch(/reutiliz|reusa/i);
+        expect(prompt).toContain('ai, mem-vector');
+    });
+
+    it('sem tags existentes não lista a secção de tags em uso', () => {
+        expect(buildTurnoPrompt('q', 'a')).not.toMatch(/tags já em uso/i);
+    });
+});
+
+describe('parseTurno: tags auto (#90)', () => {
+    it('extrai as tags da nota, normalizadas (sem #, espaço→hífen, dedup)', () => {
+        const raw =
+            '{"daily":[],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r","tags":["#AI","Mem Vector","ai"]}]}';
+        expect(parseTurno(raw).notas[0]?.tags).toEqual(['AI', 'Mem-Vector']);
+    });
+
+    it('nota sem tags continua válida (campo opcional)', () => {
+        const raw =
+            '{"daily":["x"],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r"}]}';
+        expect(parseTurno(raw).notas[0]?.tags).toBeUndefined();
+        expect(parseTurno(raw).notas[0]?.title).toBe('T');
+    });
+
+    it('limita o número de tags (cap 8) — o agente não inunda a nota', () => {
+        const muitas = JSON.stringify(Array.from({ length: 12 }, (_, i) => `t${i}`));
+        const raw = `{"daily":[],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r","tags":${muitas}}]}`;
+        expect(parseTurno(raw).notas[0]?.tags).toHaveLength(8);
+    });
+});
+
 describe('parseTurno: summary longo não custa a nota (#22 nit do review)', () => {
     it('trunca o summary a 500 chars em vez de rejeitar o envelope', () => {
         const longo = 'x'.repeat(600);

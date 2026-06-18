@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { normalizarTags } from './knowledge.props';
+
 export const FrontmatterSchema = z.object({
     title: z.string().min(1),
     tags: z.array(z.string()).default([]),
@@ -31,6 +33,13 @@ export const EscritaKnowledgeSchema = z.object({
         .string()
         .transform((s) => s.trim().slice(0, 500))
         .optional(),
+    // tags (#90): o agente classifica o assunto reusando as existentes.
+    // Normaliza à Obsidian e limita (8) para a tab Tags ser navegável, não
+    // ruído — transform (não max) para não custar a nota inteira no safeParse.
+    tags: z
+        .array(z.string())
+        .transform((arr) => normalizarTags(arr).slice(0, 8))
+        .optional(),
 });
 export type EscritaKnowledge = z.infer<typeof EscritaKnowledgeSchema>;
 
@@ -51,6 +60,7 @@ export interface NotaCandidata {
     slug: string;
     title: string;
     contentMd: string;
+    tags?: string[]; // tags atuais (#90): contexto p/ o agente + união aditiva ao continuar
 }
 
 export interface Versao {
