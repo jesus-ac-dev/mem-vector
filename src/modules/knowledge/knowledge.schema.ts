@@ -40,6 +40,11 @@ export const EscritaKnowledgeSchema = z.object({
         .array(z.string())
         .transform((arr) => normalizarTags(arr).slice(0, 8))
         .optional(),
+    // projeto (#96): destino da nota — nome de projeto (ou "Pessoal") ancora-a à
+    // pasta desse projeto; ausente/null = Knowledge (referência do mundo). O
+    // placement não tem de ser perfeito (o user arruma com drag-drop) e continuar
+    // herda a pasta da candidata.
+    projeto: z.string().nullish(),
 });
 export type EscritaKnowledge = z.infer<typeof EscritaKnowledgeSchema>;
 

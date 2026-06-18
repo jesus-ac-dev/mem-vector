@@ -2,9 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { slugify } from './knowledge.links';
 import type { EscritaKnowledge, NotaCandidata } from './knowledge.schema';
 import { tagsDoAgente, unirTags } from './knowledge.props';
+import { resolverProjetoCom } from '@/modules/projetos/projetos.service';
 import {
     atualizarNotaPorIdCom,
     escreverNotaCom,
+    escreverNotaEmPastaCom,
     summaryDoAgente,
     type ResultadoEscrita,
 } from './knowledge.service';
@@ -41,6 +43,14 @@ export async function escreverOuContinuarNotaCom(
             ...summaryDoAgente(input.summary),
             ...tagsDoAgente(unirTags(candidata.tags, input.tags)),
         });
+    }
+    // Nota nova (#96): o agente indica o projeto (Pessoal default quando é sobre o
+    // utilizador) → ancora à pasta desse projeto. Sem projeto = Knowledge (raiz).
+    // O placement não precisa de ser perfeito — o utilizador refina com drag-drop.
+    const projeto = input.projeto?.trim();
+    if (projeto) {
+        const { folderId } = await resolverProjetoCom(db, projeto);
+        if (folderId) return escreverNotaEmPastaCom(db, input, folderId, author);
     }
     return escreverNotaCom(db, input, author);
 }

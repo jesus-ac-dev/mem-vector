@@ -301,3 +301,34 @@ describe('parseTurno: summary longo não custa a nota (#22 nit do review)', () =
         expect(nota?.summary?.length).toBe(500);
     });
 });
+
+describe('buildTurnoPrompt: placement por projeto (#96)', () => {
+    it('pede o projeto no envelope e explica a regra de destino', () => {
+        const prompt = buildTurnoPrompt('q', 'a');
+        expect(prompt).toContain('"projeto"');
+        expect(prompt).toMatch(/REGRA PARA destino/i);
+        expect(prompt).toMatch(/Pessoal/);
+        expect(prompt).toMatch(/Knowledge/);
+    });
+});
+
+describe('parseTurno: placement por projeto (#96)', () => {
+    it('extrai o projeto da nota quando o envelope o traz', () => {
+        const raw =
+            '{"daily":[],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r","projeto":"Hidroponia"}]}';
+        expect(parseTurno(raw).notas[0]?.projeto).toBe('Hidroponia');
+    });
+
+    it('nota sem projeto continua válida (campo opcional = Knowledge)', () => {
+        const raw =
+            '{"daily":["x"],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r"}]}';
+        expect(parseTurno(raw).notas[0]?.projeto).toBeUndefined();
+        expect(parseTurno(raw).notas[0]?.title).toBe('T');
+    });
+
+    it('projeto null não rejeita a nota (cai em Knowledge)', () => {
+        const raw =
+            '{"daily":[],"notas":[{"title":"T","content_md":"c","links":[],"reason":"r","projeto":null}]}';
+        expect(parseTurno(raw).notas[0]?.title).toBe('T');
+    });
+});

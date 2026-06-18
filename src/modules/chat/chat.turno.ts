@@ -129,7 +129,7 @@ export function buildTurnoPrompt(
         'NOTA POR ASSUNTO — cada facto no seu ficheiro, nunca tudo amontoado numa só nota. ' +
         'Só "notas": [] para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
         'facto novo. Cada nota é ' +
-        '{"title": "...", "content_md": "markdown — liga assuntos relacionados com [[wikilinks]] (ver REGRA PARA LIGAÇÕES)", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase", "tags": ["etiqueta-curta"]}.\n' +
+        '{"title": "...", "content_md": "markdown — liga assuntos relacionados com [[wikilinks]] (ver REGRA PARA LIGAÇÕES)", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase", "tags": ["etiqueta-curta"], "projeto": "nome do projeto ou Pessoal (omite p/ Knowledge)"}.\n' +
         'REGRA PARA summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA ' +
         'como fica depois desta escrita — não o que mudou neste turno. Ao continuar uma nota, ' +
         're-resume o todo (conteúdo antigo + facto novo).\n' +
@@ -137,6 +137,10 @@ export function buildTurnoPrompt(
         'o ASSUNTO da nota para a reencontrar e agrupar. REUTILIZA as etiquetas já em uso (listadas ' +
         'abaixo, se houver) sempre que servirem — não inventes uma variante nova para o mesmo ' +
         'conceito. Só cria etiqueta nova se nenhuma das existentes encaixar.\n' +
+        'REGRA PARA destino (projeto): onde a nota é arrumada. Se é trabalho de um PROJETO existente ' +
+        '(lista abaixo), põe o nome dele. Se é sobre o UTILIZADOR / a vida dele, põe "Pessoal". ' +
+        'OMITE o campo só quando é conhecimento de REFERÊNCIA do mundo (pesquisa, conceitos) sem dono ' +
+        'de projeto — aí vai para Knowledge. Na dúvida, "Pessoal".\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
         '"Decisão:", e sem descrever o contexto — só o tópico. Para factos sobre pessoas, o título ' +

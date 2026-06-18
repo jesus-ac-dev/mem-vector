@@ -1,7 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
-import { notaCandidataCorrespondente } from './knowledge.continuar';
-import type { NotaCandidata } from './knowledge.schema';
+const escreverNotaCom = vi.fn();
+const escreverNotaEmPastaCom = vi.fn();
+const atualizarNotaPorIdCom = vi.fn();
+vi.mock('./knowledge.service', () => ({
+    escreverNotaCom: (...a: unknown[]) => escreverNotaCom(...a),
+    escreverNotaEmPastaCom: (...a: unknown[]) => escreverNotaEmPastaCom(...a),
+    atualizarNotaPorIdCom: (...a: unknown[]) => atualizarNotaPorIdCom(...a),
+    summaryDoAgente: (s?: string) => (s ? { summary: s, summary_author: 'agent' } : {}),
+}));
+const resolverProjetoCom = vi.fn();
+vi.mock('@/modules/projetos/projetos.service', () => ({
+    resolverProjetoCom: (...a: unknown[]) => resolverProjetoCom(...a),
+}));
+
+import { escreverOuContinuarNotaCom, notaCandidataCorrespondente } from './knowledge.continuar';
+import type { EscritaKnowledge, NotaCandidata } from './knowledge.schema';
 
 const candidatos: NotaCandidata[] = [
     {
@@ -43,5 +57,46 @@ describe('notaCandidataCorrespondente', () => {
 
     it('sem candidatos devolve null', () => {
         expect(notaCandidataCorrespondente('coisas que acontecem', [])).toBeNull();
+    });
+});
+
+describe('escreverOuContinuarNotaCom — placement por projeto (#96)', () => {
+    const fakeDb = {} as never;
+    const nota = (over: Partial<EscritaKnowledge> = {}): EscritaKnowledge => ({
+        title: 'T',
+        content_md: 'c',
+        links: [],
+        reason: 'r',
+        ...over,
+    });
+
+    beforeEach(() => {
+        escreverNotaCom.mockReset().mockResolvedValue({ id: 'n' });
+        escreverNotaEmPastaCom.mockReset().mockResolvedValue({ id: 'n' });
+        atualizarNotaPorIdCom.mockReset().mockResolvedValue({ id: 'n' });
+        resolverProjetoCom.mockReset().mockResolvedValue({ id: 'p', folderId: 'f1' });
+    });
+
+    it('nota nova com projeto → ancora à pasta desse projeto', async () => {
+        await escreverOuContinuarNotaCom(fakeDb, nota({ projeto: 'Hidroponia' }), []);
+        expect(resolverProjetoCom).toHaveBeenCalledWith(fakeDb, 'Hidroponia');
+        expect(escreverNotaEmPastaCom).toHaveBeenCalled();
+        expect(escreverNotaEmPastaCom.mock.calls[0][2]).toBe('f1'); // folderId
+        expect(escreverNotaEmPastaCom.mock.calls[0][3]).toBe('agent'); // author
+        expect(escreverNotaCom).not.toHaveBeenCalled();
+    });
+
+    it('nota nova sem projeto → raiz (Knowledge)', async () => {
+        await escreverOuContinuarNotaCom(fakeDb, nota(), []);
+        expect(escreverNotaCom).toHaveBeenCalled();
+        expect(escreverNotaEmPastaCom).not.toHaveBeenCalled();
+    });
+
+    it('com candidata correspondente → continua (ignora projeto, herda a pasta da nota)', async () => {
+        const candidatos: NotaCandidata[] = [{ id: 'id-x', slug: 't', title: 'T', contentMd: 'c' }];
+        await escreverOuContinuarNotaCom(fakeDb, nota({ projeto: 'Hidroponia' }), candidatos);
+        expect(atualizarNotaPorIdCom).toHaveBeenCalled();
+        expect(escreverNotaEmPastaCom).not.toHaveBeenCalled();
+        expect(escreverNotaCom).not.toHaveBeenCalled();
     });
 });
