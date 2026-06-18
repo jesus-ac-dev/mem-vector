@@ -26,20 +26,22 @@ describe('RLS protected colaborativo (grupos)', () => {
     let alice: Awaited<ReturnType<typeof userClient>>;
     let bob: Awaited<ReturnType<typeof userClient>>;
     let carol: Awaited<ReturnType<typeof userClient>>;
+    let aliceId: string;
+    let grupoId: string;
     let tarefaId: string;
 
     beforeAll(async () => {
         alice = await userClient('alice-grp@test.local', 'pw-a-123');
         bob = await userClient('bob-grp@test.local', 'pw-b-123');
         carol = await userClient('carol-grp@test.local', 'pw-c-123');
-        const aliceId = await uid(alice);
+        aliceId = await uid(alice);
         const bobId = await uid(bob);
 
         // Alice cria o grupo (criar_grupo adiciona-a como membro); Bob entra
         // (na vida real via convite).
         const grupo = await alice.rpc('criar_grupo', { p_nome: 'equipa' });
         if (grupo.error || !grupo.data) throw grupo.error ?? new Error('sem grupo');
-        const grupoId = (grupo.data as { id: string }).id;
+        grupoId = (grupo.data as { id: string }).id;
         const join = await bob.from('grupo_membros').insert({ grupo_id: grupoId, user_id: bobId });
         if (join.error) throw join.error;
 
@@ -72,6 +74,25 @@ describe('RLS protected colaborativo (grupos)', () => {
         expect(upd.error).toBeNull();
         const { data } = await bob.from('tarefas').select('estado').eq('id', tarefaId).single();
         expect(data?.estado).toBe('desenvolvimento');
+    });
+
+    it('membro do grupo CONCLUI tarefa protected pelo serviço', { timeout: 30_000 }, async () => {
+        const t = await alice
+            .from('tarefas')
+            .insert({
+                titulo: 'fechar partilhada',
+                owner_id: aliceId,
+                visibility: 'protected',
+                group_id: grupoId,
+            })
+            .select('id')
+            .single();
+        if (t.error || !t.data) throw t.error ?? new Error('sem tarefa');
+
+        const { concluirTarefaCom } = await import('@/modules/tarefas/tarefas.service');
+        const concluida = await concluirTarefaCom(bob, t.data.id as string);
+        expect(concluida.estado).toBe('terminado');
+        expect(concluida.concluidaEm).not.toBeNull();
     });
 
     it('membro do grupo NÃO apaga (só o dono)', async () => {

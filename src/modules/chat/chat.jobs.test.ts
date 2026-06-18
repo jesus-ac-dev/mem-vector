@@ -20,10 +20,18 @@ describe('chat jobs', () => {
             parseDistillationJobResult({
                 notas: [{ slug: 'jobs-duraveis', title: 'Jobs duráveis', criada: true }],
                 daily: { dia: '2026-06-07', criado: false },
+                tarefas: {
+                    criadas: [{ id: 'task-1', titulo: 'Fechar parser' }],
+                    concluidas: [{ id: 'task-2', titulo: 'Validar reload' }],
+                },
             }),
         ).toEqual({
             notas: [{ slug: 'jobs-duraveis', title: 'Jobs duráveis', criada: true }],
             daily: { dia: '2026-06-07', criado: false },
+            tarefas: {
+                criadas: [{ id: 'task-1', titulo: 'Fechar parser' }],
+                concluidas: [{ id: 'task-2', titulo: 'Validar reload' }],
+            },
         });
     });
 

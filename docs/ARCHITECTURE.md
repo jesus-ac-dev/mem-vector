@@ -139,10 +139,11 @@ Toda a tabela de domínio segue o mesmo padrão (de `auth`):
 - **privado:** `owner_id = auth.uid()`
 - **protected:** `visibility = 'protected' AND group_id IN (SELECT meus_grupos())`
 - **apagar:** só o dono.
+- **concluir tarefa (RPC `concluir_tarefa`):** dono **ou** membro do grupo protected (alinhado com a RLS de UPDATE colaborativa; antes era owner-only e divergia — 2026-06-18, Codex). Apagar mantém-se só dono.
 
 `meus_grupos()` é `SECURITY DEFINER` (`search_path=''`) para quebrar a recursão de RLS. Sem sessão (auth) não há `auth.uid()` → tudo depende do módulo `auth`.
 
-> **Rotas GET de leitura e sessão expirada (smoke 2026-06-18):** sem sessão, a RLS filtra a linha e a rota colapsava em **404** — indistinguível de "ficheiro não existe", e o utilizador caía no login sem aviso. Agora `/api/file` e `/api/barra-direita` chamam `sessaoOu401()` (`@/lib/api-auth`) → **401**; o `getJson` (`@/lib/api-get`) reconhece o 401 e dispara o banner stale (#49) em vez de kick silencioso. O **refresh da sessão é do middleware** (`proxy.ts`, padrão Supabase SSR) — sem refresh proativo no cliente de propósito. Dívida conhecida: as outras rotas read beneficiariam do mesmo guard.
+> **Rotas GET de leitura e sessão expirada (smoke 2026-06-18):** sem sessão, a RLS filtra a linha e a rota colapsava em **404** — indistinguível de "ficheiro não existe", e o utilizador caía no login sem aviso. Agora `/api/file` e `/api/barra-direita` chamam `sessaoOu401()` (`@/lib/api-auth`) → **401**; o `getJson` (`@/lib/api-get`) reconhece o 401 e dispara o banner stale (#49) em vez de kick silencioso. O **refresh da sessão é do middleware** (`proxy.ts`, padrão Supabase SSR) — sem refresh proativo no cliente de propósito. As restantes rotas GET de leitura (`arquivados`, `conversa`, `cor-daily`, `definicoes`, `grafo`, `notas-linkaveis`, `pastas`, `tarefas-painel`, `versoes`) ganharam o mesmo guard (2026-06-18, Codex) — dívida saldada.
 
 ## Fluxos-chave
 
