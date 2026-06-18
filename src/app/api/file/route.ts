@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { lerConteudoFicheiro } from '@/modules/workspace/workspace.files';
+import { sessaoOu401 } from '@/lib/api-auth';
 
 export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
@@ -13,6 +14,10 @@ export async function GET(request: Request) {
     if (!chave) {
         return NextResponse.json({ error: 'chave vazia' }, { status: 400 });
     }
+
+    // Sem sessão → 401 (não deixar a RLS colapsar em 404 silencioso → kick sem aviso).
+    const erro = await sessaoOu401();
+    if (erro) return erro;
 
     const ficheiro = await lerConteudoFicheiro(tipo, chave, id);
     if (!ficheiro) return NextResponse.json(null, { status: 404 });

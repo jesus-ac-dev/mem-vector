@@ -139,6 +139,8 @@ Toda a tabela de domínio segue o mesmo padrão (de `auth`):
 
 `meus_grupos()` é `SECURITY DEFINER` (`search_path=''`) para quebrar a recursão de RLS. Sem sessão (auth) não há `auth.uid()` → tudo depende do módulo `auth`.
 
+> **Rotas GET de leitura e sessão expirada (smoke 2026-06-18):** sem sessão, a RLS filtra a linha e a rota colapsava em **404** — indistinguível de "ficheiro não existe", e o utilizador caía no login sem aviso. Agora `/api/file` e `/api/barra-direita` chamam `sessaoOu401()` (`@/lib/api-auth`) → **401**; o `getJson` (`@/lib/api-get`) reconhece o 401 e dispara o banner stale (#49) em vez de kick silencioso. O **refresh da sessão é do middleware** (`proxy.ts`, padrão Supabase SSR) — sem refresh proativo no cliente de propósito. Dívida conhecida: as outras rotas read beneficiariam do mesmo guard.
+
 ## Fluxos-chave
 
 **Agente-autor (o coração):**
