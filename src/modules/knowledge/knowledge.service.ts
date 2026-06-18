@@ -5,7 +5,12 @@ import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projec
 import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT, COR_CONVERSA_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
-import { normalizarTags, propriedadesDoRow, type PropriedadesNota } from './knowledge.props';
+import {
+    normalizarTags,
+    propriedadesDoRow,
+    tagsDoAgente,
+    type PropriedadesNota,
+} from './knowledge.props';
 import { nomesDosAutoresCom } from './versoes-nomes';
 import { montarArestasGrafo } from './knowledge.grafo';
 import { diffLines, type DiffLine } from './knowledge.diff';
@@ -141,7 +146,11 @@ export async function escreverNotaCom(
     // Título + summary do agente quando o envelope o traz: o RPC faz merge com
     // o frontmatter existente, preservando propriedades do utilizador —
     // incluindo o summary quando summary_author = 'user'.
-    const frontmatter = { title: dados.title, ...summaryDoAgente(dados.summary) };
+    const frontmatter = {
+        title: dados.title,
+        ...summaryDoAgente(dados.summary),
+        ...tagsDoAgente(dados.tags),
+    };
 
     // Escrita transacional no Postgres: nota viva + file_version no mesmo
     // statement, serializada por (user,slug). A RPC devolve o conteúdo anterior
@@ -197,7 +206,11 @@ export async function escreverNotaEmPastaCom(
     if (!user) throw new Error('sem sessão');
 
     const slug = slugify(dados.title);
-    const frontmatter = { title: dados.title, ...summaryDoAgente(dados.summary) };
+    const frontmatter = {
+        title: dados.title,
+        ...summaryDoAgente(dados.summary),
+        ...tagsDoAgente(dados.tags),
+    };
 
     const up = await db
         .rpc('write_knowledge_entry_in_folder', {
@@ -252,6 +265,13 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
     }));
 }
 export const listarKnowledge = async () => listarKnowledgeCom(await createClient());
+
+// Tags distintas já em uso no workspace (#90), para o agente REUTILIZAR em vez
+// de inventar variantes. Reusa a listagem, que já traz as tags por nota.
+export async function tagsExistentesCom(db: SupabaseClient): Promise<string[]> {
+    const notas = await listarKnowledgeCom(db);
+    return normalizarTags(notas.flatMap((n) => n.tags ?? []));
+}
 
 // Arquivar: tira a nota da memória ativa. Marca archived=true e apaga os chunks
 // (sai do RAG). Versões e edges mantêm-se (auditoria).
@@ -716,7 +736,7 @@ export async function candidatosParaFactoCom(
 
     const { data: notas, error: nErr } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md')
+        .select('id, slug, title, content_md, frontmatter, visibility, created_at')
         .in('id', entityIds);
     if (nErr) throw new Error(`candidatos knowledge: ${nErr.message}`);
 
@@ -724,7 +744,20 @@ export async function candidatosParaFactoCom(
     return entityIds
         .map((id) => porId.get(id))
         .filter((n): n is NonNullable<typeof n> => Boolean(n))
-        .map((n) => ({ id: String(n.id), slug: n.slug, title: n.title, contentMd: n.content_md }));
+        .map((n) => ({
+            id: String(n.id),
+            slug: n.slug,
+            title: n.title,
+            contentMd: n.content_md,
+            // tags atuais (#90): vão ao agente como contexto e à união aditiva
+            // ao CONTINUAR, para as tags do utilizador não se perderem.
+            tags: propriedadesDoRow({
+                id: String(n.id),
+                frontmatter: n.frontmatter,
+                visibility: n.visibility,
+                created_at: n.created_at,
+            }).tags,
+        }));
 }
 export const candidatosParaFacto = async (texto: string, limite = 3) =>
     candidatosParaFactoCom(await createClient(), texto, limite);

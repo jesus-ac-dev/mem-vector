@@ -28,6 +28,19 @@ export function normalizarTags(tags: string[]): string[] {
     return out;
 }
 
+// União aditiva de tags ao continuar uma nota (#90): preserva as existentes
+// (incl. as postas pelo utilizador) e acrescenta as novas do agente, dedup à
+// Obsidian. A política é acrescentar, nunca remover o que o user pôs.
+export function unirTags(existentes: string[] = [], novas: string[] = []): string[] {
+    return normalizarTags([...existentes, ...novas]);
+}
+
+// Patch de frontmatter das tags geradas pelo agente (#90), análogo a
+// summaryDoAgente: vazio sem tags — o merge não toca no que existe.
+export function tagsDoAgente(tags?: string[]): Record<string, string[]> {
+    return tags && tags.length ? { tags } : {};
+}
+
 export interface PropriedadesRow {
     id: string;
     frontmatter: unknown;

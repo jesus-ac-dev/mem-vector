@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { slugify } from './knowledge.links';
 import type { EscritaKnowledge, NotaCandidata } from './knowledge.schema';
+import { tagsDoAgente, unirTags } from './knowledge.props';
 import {
     atualizarNotaPorIdCom,
     escreverNotaCom,
@@ -33,14 +34,13 @@ export async function escreverOuContinuarNotaCom(
     const candidata = notaCandidataCorrespondente(input.title, candidatos);
     if (candidata) {
         // CONTINUAR refresca o summary na mesma escrita (#22); o guard de
-        // autoria (summary do utilizador) vive no RPC.
-        return atualizarNotaPorIdCom(
-            db,
-            candidata.id,
-            input.content_md,
-            author,
-            summaryDoAgente(input.summary),
-        );
+        // autoria (summary do utilizador) vive no RPC. Tags (#90): união
+        // aditiva com as da candidata — o agente acrescenta sem apagar as
+        // existentes (incl. as do utilizador).
+        return atualizarNotaPorIdCom(db, candidata.id, input.content_md, author, {
+            ...summaryDoAgente(input.summary),
+            ...tagsDoAgente(unirTags(candidata.tags, input.tags)),
+        });
     }
     return escreverNotaCom(db, input, author);
 }

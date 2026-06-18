@@ -91,6 +91,13 @@ function blocoProjetos(projetos: string[]): string {
     return `PROJETOS EXISTENTES (usa o nome certo; um nome novo cria projeto): ${projetos.join(', ')}\n\n`;
 }
 
+// Tags já em uso no workspace (#90): dadas ao agente para REUTILIZAR em vez de
+// inventar variantes do mesmo conceito — senão a navegação por tag vira ruído.
+function blocoTagsExistentes(tags: string[]): string {
+    if (!tags.length) return '';
+    return `TAGS JÁ EM USO (reutiliza estas quando servirem, não cries variantes): ${tags.join(', ')}\n\n`;
+}
+
 export function buildTurnoPrompt(
     question: string,
     answer: string,
@@ -100,6 +107,7 @@ export function buildTurnoPrompt(
     kernel = '',
     tarefasAbertas: TarefaAbertaRef[] = [],
     projetos: string[] = [],
+    tagsExistentes: string[] = [],
 ): string {
     return (
         // Kernel do workspace (#34): as regras/identidade do utilizador também
@@ -121,10 +129,14 @@ export function buildTurnoPrompt(
         'NOTA POR ASSUNTO — cada facto no seu ficheiro, nunca tudo amontoado numa só nota. ' +
         'Só "notas": [] para conversa MESMO trivial: saudações, agradecimentos, ou perguntas sem ' +
         'facto novo. Cada nota é ' +
-        '{"title": "...", "content_md": "markdown — liga assuntos relacionados com [[wikilinks]] (ver REGRA PARA LIGAÇÕES)", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase"}.\n' +
+        '{"title": "...", "content_md": "markdown — liga assuntos relacionados com [[wikilinks]] (ver REGRA PARA LIGAÇÕES)", "links": ["slug-alvo"], "reason": "porquê é durável", "summary": "resumo de 1 frase", "tags": ["etiqueta-curta"]}.\n' +
         'REGRA PARA summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA ' +
         'como fica depois desta escrita — não o que mudou neste turno. Ao continuar uma nota, ' +
         're-resume o todo (conteúdo antigo + facto novo).\n' +
+        'REGRA PARA tags: 1 a 4 etiquetas curtas (1-2 palavras, minúsculas, sem #) que classificam ' +
+        'o ASSUNTO da nota para a reencontrar e agrupar. REUTILIZA as etiquetas já em uso (listadas ' +
+        'abaixo, se houver) sempre que servirem — não inventes uma variante nova para o mesmo ' +
+        'conceito. Só cria etiqueta nova se nenhuma das existentes encaixar.\n' +
         'REGRA PARA title: rótulo CURTO de 3 a 6 palavras, máx. 60 caracteres, como título de nota ' +
         '(ex.: "BD tipada vs memsearch"); NÃO uma frase completa, sem prefixos como "Daily Notes" ou ' +
         '"Decisão:", e sem descrever o contexto — só o tópico. Para factos sobre pessoas, o título ' +
@@ -159,6 +171,7 @@ export function buildTurnoPrompt(
         blocoCandidatos(candidatos) +
         blocoTarefasAbertas(tarefasAbertas) +
         blocoProjetos(projetos) +
+        blocoTagsExistentes(tagsExistentes) +
         `Pergunta: ${question}\nResposta: ${answer}\n\n` +
         'Responde só com o bloco ```json```.'
     );
@@ -242,6 +255,7 @@ export async function destilarResumirTurno(
     kernel = '',
     tarefasAbertas: TarefaAbertaRef[] = [],
     projetos: string[] = [],
+    tagsExistentes: string[] = [],
 ): Promise<TurnoDestiladoRaw> {
     const { text } = await generate(
         buildTurnoPrompt(
@@ -253,6 +267,7 @@ export async function destilarResumirTurno(
             kernel,
             tarefasAbertas,
             projetos,
+            tagsExistentes,
         ),
     );
     return parseTurno(text);

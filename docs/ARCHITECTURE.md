@@ -274,6 +274,7 @@ os chunks — este guard fecha a porta que faltava, a do upsert.
 - `tags` e `summary` vivem no `frontmatter` (lista, sem `#`); `created` é a row; `visibility` é coluna (RLS). UI: bloco à Obsidian no file-pane; filtro por tag no explorer.
 - As escritas de conteúdo fazem **merge** do frontmatter (nunca substituem) — propriedades do utilizador sobrevivem às escritas do agente.
 - **Summary auto (#22):** o envelope da destilação traz `summary` (1 frase, a nota INTEIRA como ficou — re-resume ao continuar), sem chamada CLI extra. Autoria em `summary_author`: `agent` refresca a cada escrita; `user` (editado à mão nas propriedades) trava o agente — guard `respeitar_summary_do_user` nos 3 RPCs de escrita; limpar o campo devolve-o ao agente.
+- **Tags auto (#90):** o envelope da destilação (caminho **one-shot**) traz `tags` (1-4 etiquetas curtas, cap 8, normalizadas à Obsidian) que o agente gera REUTILIZANDO as já em uso — a lista é injetada no prompt (`tagsExistentesCom`) para a navegação por tag não virar ruído de variantes. Política **aditiva**: ao CONTINUAR uma nota, `unirTags` funde as novas com as da nota (vindas da candidata), por isso as do utilizador nunca se perdem. Sem chamada CLI extra (espelha o summary). Fatia 2 (caminho **agentic**) e um guard SQL de autoria para a colisão slug-sem-candidata ficam de fora desta fatia.
 
 **RAG:** RAG-preferred + LLM-fallback; o threshold `0.78` é rede de segurança (o e5-small comprime os scores), não classificador.
 
