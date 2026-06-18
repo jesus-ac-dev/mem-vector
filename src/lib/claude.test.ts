@@ -73,6 +73,15 @@ describe('buildClaudeAgenticArgs', () => {
         expect(buildClaudeAgenticArgs({ ...cfg, maxTurns: 7 })).toContain('7');
         expect(args).not.toContain('prompt enorme');
     });
+
+    it('passa o modelo escolhido ao CLI com --model (e omite-o sem modelo)', () => {
+        // #89: o caminho agentic perdia a escolha de modelo (sonnet) e caía no
+        // default da conta (opus). Espelha buildClaudeArgs: --model só quando há.
+        const comModelo = buildClaudeAgenticArgs({ ...cfg, model: 'sonnet' });
+        expect(comModelo[comModelo.indexOf('--model') + 1]).toBe('sonnet');
+
+        expect(buildClaudeAgenticArgs(cfg)).not.toContain('--model');
+    });
 });
 
 describe('claudeAgenticTimeoutMs', () => {

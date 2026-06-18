@@ -212,6 +212,7 @@ export interface AgenticConfig {
     mcpConfig: string; // JSON inline para --mcp-config
     allowedTools: string[]; // ex.: mcp__memvector__criar_nota
     systemPrompt: string;
+    model?: string; // modelo escolhido nas definições (#89); sem ele, o default da conta
     env?: Record<string, string>; // extras herdados pelo MCP server
     timeoutMs?: number;
     maxTurns?: number;
@@ -241,6 +242,8 @@ export function buildClaudeAgenticArgs(cfg: AgenticConfig): string[] {
         '--system-prompt',
         cfg.systemPrompt,
         '--exclude-dynamic-system-prompt-sections',
+        // Modelo escolhido nas definições (#89); sem ele, o default da conta.
+        ...(cfg.model ? ['--model', cfg.model] : []),
         '--disallowedTools',
         ...DISALLOWED_TOOLS,
     ];

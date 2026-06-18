@@ -355,7 +355,7 @@ export async function respondStream(
         // Escalou: o agente-com-tools trata (loop agentic; pesquisa a internet de
         // verdade). Key Tavily das Definições; env como fallback de operação.
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
-        const r = await responderComToolsCom(t.db, t.prompt, webKey);
+        const r = await responderComToolsCom(t.db, t.prompt, webKey, t.modeloPedido);
         onTextDelta(r.text);
         // Custo honesto (#65): a fase rápida só emitiu [[ESCALAR]], mas recebeu o
         // prompt todo — esse input paga-se. Soma-se ao custo do agente.
