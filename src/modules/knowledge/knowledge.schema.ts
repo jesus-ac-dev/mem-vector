@@ -47,7 +47,7 @@ export interface NotaKnowledge {
     id: string;
     slug: string;
     title: string;
-    contentMd: string;
+    contentMd?: string;
     updatedAt: string;
     folderId?: string | null; // pasta onde vive (null/undefined = raiz)
     tags?: string[]; // do frontmatter (preenchido onde a listagem precisa, ex.: explorer)

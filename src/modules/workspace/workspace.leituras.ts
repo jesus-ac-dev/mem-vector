@@ -39,7 +39,7 @@ export async function dadosDaBarraDireita(
             backlinksDe(nota.slug, nota.id),
             forwardLinksDe(nota.id),
         ]);
-        return { outline: extrairOutline(nota.contentMd), backlinks, forwardLinks };
+        return { outline: extrairOutline(nota.contentMd!), backlinks, forwardLinks };
     }
 
     const daily = id ? await getDailyPorId(id) : await getDaily(chave);

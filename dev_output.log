@@ -1,0 +1,47 @@
+
+> mem-vector@0.1.0 dev
+> next dev -p 2500
+
+▲ Next.js 16.2.7 (Turbopack)
+- Local:         http://localhost:2500
+- Network:       http://192.168.0.2:2500
+✓ Ready in 531ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+
+⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at <unknown> (https://supabase.com/dashboard/project/_/settings/api)
+    at updateSession (src/lib/supabase/middleware.ts:9:40)
+    at proxy (src/proxy.ts:5:25)
+   7 |     let response = NextResponse.next({ request });
+   8 |
+>  9 |     const supabase = createServerClient(
+     |                                        ^
+  10 |         process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  11 |         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  12 |         {
+ GET / 404 in 3.2s (next.js: -278400µs, proxy.ts: 3.2s, application-code: 285ms)
+[browser] Uncaught Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at <unknown> (https://supabase.com/dashboard/project/_/settings/api)
+    at <unknown> (https://supabase.com/dashboard/project/_/settings/api)
+    at updateSession (src/lib/supabase/middleware.ts:9:40)
+    at proxy (src/proxy.ts:5:25)
+   7 |     let response = NextResponse.next({ request });
+   8 |
+>  9 |     const supabase = createServerClient(
+     |                                        ^
+  10 |         process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  11 |         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  12 |         {
+○ Compiling /_not-found/page ...

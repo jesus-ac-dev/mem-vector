@@ -24,7 +24,7 @@ export async function lerConteudoFicheiro(
         const propriedades = (await getPropriedadesNotaPorId(nota.id)) ?? undefined;
         return {
             titulo: nota.title,
-            contentMd: nota.contentMd,
+            contentMd: nota.contentMd!,
             folderId: nota.folderId ?? null,
             propriedades,
         };

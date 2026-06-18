@@ -94,7 +94,7 @@ export async function renomearNotaPorH1Action(
     const nota = id ? await getNotaPorId(id) : await getNota(slug);
     if (!nota) throw new Error('nota não encontrada');
 
-    const contentMd = substituirPrimeiroTituloMarkdown(nota.contentMd, titulo);
+    const contentMd = substituirPrimeiroTituloMarkdown(nota.contentMd!, titulo);
     const res = await guardarFicheiro('knowledge', nota.slug, contentMd, nota.id);
     if (!res.ok) throw new Error(res.erro);
     return { titulo: res.titulo ?? titulo, chave: res.chave ?? nota.slug };

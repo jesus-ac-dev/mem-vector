@@ -91,7 +91,7 @@ export default async function NotaPage({
             ) : (
                 /* Content mode: note body only */
                 <section>
-                    <NoteContent content={nota.contentMd} />
+                    <NoteContent content={nota.contentMd!} />
                 </section>
             )}
         </main>

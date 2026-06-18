@@ -82,7 +82,7 @@ async function main(): Promise<void> {
 
     // Eixo 4 — getNotaCom devolve conteúdo atualizado.
     const nota = await getNotaCom(db, 'prova-kernel');
-    const conteudoAtualizado = !!nota?.contentMd.includes('versionadas');
+    const conteudoAtualizado = !!nota?.contentMd!.includes('versionadas');
     console.log(`${conteudoAtualizado ? '✅' : '❌'} eixo 4 — getNotaCom conteúdo atualizado`);
 
     const ok = escrita1Ok && achou && temDiff && conteudoAtualizado;

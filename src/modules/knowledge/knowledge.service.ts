@@ -248,9 +248,7 @@ export const escreverNotaEmPasta = async (
 export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
     const { data, error } = await db
         .from('knowledge')
-        .select(
-            'id, slug, title, content_md, updated_at, folder_id, frontmatter, visibility, created_at',
-        )
+        .select('id, slug, title, updated_at, folder_id, frontmatter, visibility, created_at')
         .eq('archived', false)
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar knowledge: ${error.message}`);
@@ -258,7 +256,6 @@ export async function listarKnowledgeCom(db: SupabaseClient): Promise<NotaKnowle
         id: r.id,
         slug: r.slug,
         title: r.title,
-        contentMd: r.content_md,
         updatedAt: r.updated_at,
         folderId: r.folder_id ?? null,
         tags: propriedadesDoRow(r).tags,
@@ -343,7 +340,7 @@ export const reporNota = async (slug: string) => reporNotaCom(await createClient
 export async function listarArquivadosCom(db: SupabaseClient): Promise<NotaKnowledge[]> {
     const { data, error } = await db
         .from('knowledge')
-        .select('id, slug, title, content_md, updated_at, folder_id')
+        .select('id, slug, title, updated_at, folder_id')
         .eq('archived', true)
         .order('updated_at', { ascending: false });
     if (error) throw new Error(`listar arquivados: ${error.message}`);
@@ -351,7 +348,6 @@ export async function listarArquivadosCom(db: SupabaseClient): Promise<NotaKnowl
         id: r.id,
         slug: r.slug,
         title: r.title,
-        contentMd: r.content_md,
         updatedAt: r.updated_at,
         folderId: r.folder_id ?? null,
     }));
@@ -965,10 +961,10 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     }
 
     // Nós knowledge (não arquivadas, fora do Kernel), cor = cor da pasta.
-    // content_md vem só para medir o tamanho (PostgREST não expõe char_length).
+    // #perf: deixámos de ler content_md para o payload do grafo ser leve.
     const { data: notas, error } = await db
         .from('knowledge')
-        .select('id, slug, title, folder_id, content_md, created_at')
+        .select('id, slug, title, folder_id, created_at')
         .eq('owner_id', user.id)
         .eq('archived', false);
     if (error) throw new Error(`grafo knowledge: ${error.message}`);
@@ -988,7 +984,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
                 n.folder_id ? corPorPasta.get(String(n.folder_id)) : null,
                 COR_DEFAULT,
             ),
-            size: (n.content_md ?? '').length,
+            size: 0, // o componente lib/grafo.ts trata o tamanho min
             createdAt: String(n.created_at),
         }));
 
@@ -999,7 +995,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
     // Nós daily.
     const { data: dailies } = await db
         .from('dailies')
-        .select('id, dia, content_md, created_at')
+        .select('id, dia, created_at')
         .eq('owner_id', user.id);
     const nodesD: GrafoNode[] = (dailies ?? []).map((d) => ({
         id: String(d.id),
@@ -1007,7 +1003,7 @@ export async function grafoDadosCom(db: SupabaseClient): Promise<GrafoDados> {
         title: d.dia,
         group: 'daily',
         color: corDaily,
-        size: (d.content_md ?? '').length,
+        size: 0,
         createdAt: String(d.created_at),
     }));
 

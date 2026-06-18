@@ -57,7 +57,7 @@ async function main(): Promise<void> {
 
     const ref = await getNotaCom(db, refSlug);
     const eixo2 =
-        !!ref && ref.contentMd.includes(newTitle) && !ref.contentMd.includes(`[[${oldSlug}]]`);
+        !!ref && ref.contentMd!.includes(newTitle) && !ref.contentMd!.includes(`[[${oldSlug}]]`);
     console.log(`${eixo2 ? '✅' : '❌'} eixo 2 — o [[link]] na nota referente foi reapontado`);
 
     const ed = await db
