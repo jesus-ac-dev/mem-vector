@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     alvoParaHref,
+    contarLinksResolvidos,
     parseWikilinkTargets,
     parseWikilinks,
     partesWikilink,
@@ -155,5 +156,30 @@ describe('parseWikilinkTargets — namespace conversa', () => {
         const md = 'recap [[conversa:abc-123]] e [[Embeddings E5]]';
         expect(parseWikilinkTargets(md).map((t) => t.slug)).toEqual(['embeddings-e5']);
         expect(parseWikilinks(md)).toEqual(['embeddings-e5']);
+    });
+});
+
+describe('contarLinksResolvidos', () => {
+    it('separa links resolvidos (slug existe) de pendentes (slug não existe)', () => {
+        const r = contarLinksResolvidos(
+            'ver [[CPU]] e [[RAM]] e [[Placa Gráfica]]',
+            new Set(['cpu', 'ram']),
+        );
+        expect(r).toEqual({ total: 3, resolvidos: 2, pendentes: 1 });
+    });
+    it('conta cada alvo uma só vez (dedup por slug, como o parser de edges)', () => {
+        const r = contarLinksResolvidos('[[CPU]] e outra vez [[cpu]]', new Set(['cpu']));
+        expect(r).toEqual({ total: 1, resolvidos: 1, pendentes: 0 });
+    });
+    it('sem links devolve tudo a zero', () => {
+        expect(contarLinksResolvidos('texto sem links', new Set(['cpu']))).toEqual({
+            total: 0,
+            resolvidos: 0,
+            pendentes: 0,
+        });
+    });
+    it('ignora [[conversa:<id>]] na contagem (não é nota knowledge)', () => {
+        const r = contarLinksResolvidos('[[conversa:abc]] e [[CPU]]', new Set(['cpu']));
+        expect(r).toEqual({ total: 1, resolvidos: 1, pendentes: 0 });
     });
 });

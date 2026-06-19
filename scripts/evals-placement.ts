@@ -10,6 +10,7 @@ import {
 } from '../src/modules/knowledge/knowledge.service';
 import { criarPastaCom } from '../src/modules/folders/folders.service';
 import { getDailyCom, hojeLisboa } from '../src/modules/daily/daily.service';
+import { contarLinksResolvidos } from '../src/modules/knowledge/knowledge.links';
 import type { TurnoDestilado } from '../src/modules/chat/chat.service';
 
 process.loadEnvFile('.env.local');
@@ -208,6 +209,65 @@ const CENARIOS: Cenario[] = [
                 tarefasConcluidas: 1,
             },
         ],
+    },
+    {
+        id: 'densidade',
+        descricao: 'mede links resolvidos/nota num cluster relacionado (#104 baseline)',
+        // Semeia 4 notas vizinhas (componentes de PC) para o turno ter a quem
+        // ligar. A teia densa precisa que o agente ligue a VÁRIAS; o teto de
+        // candidatas (limite=3 em candidatosParaFacto) é o que esta baseline expõe.
+        setup: async (db) => {
+            const seeds = [
+                ['Processador Ryzen', 'O processador é um AMD Ryzen, o cérebro do PC.'],
+                ['Memória RAM DDR5', 'A RAM é DDR5, 32GB, para o PC correr fluido.'],
+                ['Placa gráfica RTX', 'A placa gráfica é uma NVIDIA RTX, para jogos e IA.'],
+                ['Armazenamento SSD NVMe', 'O armazenamento é um SSD NVMe rápido.'],
+            ];
+            for (const [title, corpo] of seeds) {
+                await escreverNotaCom(db, {
+                    title,
+                    content_md: `# ${title}\n\n${corpo}`,
+                    links: [],
+                    reason: 'seed eval densidade',
+                });
+            }
+        },
+        turnos: [
+            {
+                q: 'Montei o meu PC novo: tem o processador Ryzen, 32GB de RAM DDR5, uma placa gráfica RTX e um SSD NVMe.',
+                a: 'Boa máquina! Ryzen, 32GB DDR5, RTX e SSD NVMe — registado.',
+                nota: 'qualquer',
+                daily: 'qualquer',
+            },
+        ],
+        checksFinais: async (db, resultados) => {
+            const problemas: string[] = [];
+            const { data: todas } = await db.from('knowledge').select('slug');
+            const slugs = new Set((todas ?? []).map((n) => String(n.slug)));
+            const escritas = resultados.flatMap((r) => r.notas);
+            if (!escritas.length) return ['densidade: nenhuma nota escrita'];
+
+            let totalResolvidos = 0;
+            for (const nota of escritas) {
+                const { data } = await db
+                    .from('knowledge')
+                    .select('content_md')
+                    .eq('slug', nota.slug)
+                    .single();
+                const r = contarLinksResolvidos(data?.content_md ?? '', slugs);
+                totalResolvidos += r.resolvidos;
+                console.log(
+                    `    · ${nota.slug}: ${r.resolvidos} resolvidos / ${r.pendentes} pendentes`,
+                );
+            }
+            const media = totalResolvidos / escritas.length;
+            console.log(`    densidade: ${media.toFixed(1)} links resolvidos/nota (baseline #104)`);
+            // Piso real: a teia partida (zero resolvidos) é falha; a baseline fina
+            // (1-2) passa e é o número que o fix terá de subir.
+            if (totalResolvidos < 1)
+                problemas.push('densidade: zero links resolvidos — teia partida');
+            return problemas;
+        },
     },
     {
         id: 'kernel',
