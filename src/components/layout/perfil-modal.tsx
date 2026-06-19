@@ -44,12 +44,16 @@ export function PerfilModal({
     const fileRef = useRef<HTMLInputElement>(null);
     const iniciais = displayName.slice(0, 2).toUpperCase() || '?';
 
-    async function correr(area: string, fn: () => Promise<unknown>, msgOk: string) {
+    async function correr(
+        area: string,
+        fn: () => Promise<unknown>,
+        msgOk: string | ((r: unknown) => string),
+    ) {
         setAGravar(area);
         setEstado({ tipo: 'idle' });
         try {
-            await runClientAction({ area: 'perfil', action: area }, fn);
-            setEstado({ tipo: 'ok', msg: msgOk });
+            const r = await runClientAction({ area: 'perfil', action: area }, fn);
+            setEstado({ tipo: 'ok', msg: typeof msgOk === 'function' ? msgOk(r) : msgOk });
         } catch (e) {
             setEstado({ tipo: 'erro', msg: e instanceof Error ? e.message : 'Falhou.' });
         } finally {
@@ -140,7 +144,8 @@ export function PerfilModal({
                         </div>
                     </div>
 
-                    {/* Email */}
+                    {/* Email — é o login (#92): a mensagem segue o que o Supabase fez
+                        mesmo (pendente de confirmação vs mudança imediata). */}
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Email</label>
                         <div className="flex gap-2">
@@ -155,13 +160,17 @@ export function PerfilModal({
                                     void correr(
                                         'email',
                                         () => atualizarEmail({ email }),
-                                        'Confirma no email novo para efetivar.',
+                                        (r) =>
+                                            (r as { pendente: boolean }).pendente
+                                                ? 'Confirma no email novo para efetivar o novo login.'
+                                                : 'Email alterado — passas a entrar com o novo.',
                                     )
                                 }
                             >
                                 Guardar
                             </Button>
                         </div>
+                        <p className="text-xs text-muted-foreground">O email é o teu login.</p>
                     </div>
 
                     {/* Password */}

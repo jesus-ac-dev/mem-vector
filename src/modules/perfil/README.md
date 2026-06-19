@@ -6,8 +6,12 @@ espelha a `DefinicoesModal`) aberto pelo item **Perfil** do menu do badge.
 ## Campos
 
 - **Nome** → `profiles.display_name` (`atualizarNomeCom`). RLS "o próprio".
-- **Email / Password** → Supabase Auth `updateUser`. Mudar email dispara o fluxo
-  de **confirmação** (email para o novo endereço; só efetiva no clique); a UI avisa.
+- **Email / Password** → Supabase Auth `updateUser`. **O email É o login.** O
+  comportamento de mudar email depende da config (`config.toml [auth.email]`):
+  com `enable_confirmations` LIGADO (prod) o novo email fica **pendente**
+  (`new_email`) até o clique no link; DESLIGADO (autoconfirm, ex.: dev local)
+  muda **já e em silêncio**. A action `atualizarEmail` devolve `{ pendente }` e a
+  UI mostra a mensagem certa — não promete um email de confirmação que não vem.
 - **Avatar** → Supabase **Storage**, bucket `avatars`:
   - leitura **pública** (identidade visual, não sensível; ajuda a reconhecer nos grupos);
   - escrita só do **próprio**, na pasta `{uid}/` — RLS em `storage.objects`

@@ -13,13 +13,15 @@ export async function atualizarNome(input: unknown): Promise<void> {
     await atualizarNomeCom(await createClient(), displayName);
 }
 
-// Mudar email dispara o fluxo de confirmação do Supabase (email para o novo
-// endereço); só efetiva após o clique. Password muda direto para o utilizador
-// com sessão.
-export async function atualizarEmail(input: unknown): Promise<void> {
+// O email É o login. Com confirmações LIGADAS (prod), `updateUser` deixa o novo
+// email PENDENTE (`new_email`) até o clique no link — o login só muda aí. Com
+// confirmações DESLIGADAS (autoconfirm, ex.: dev local), muda JÁ e em silêncio.
+// Devolvemos qual dos dois aconteceu para a UI não mentir.
+export async function atualizarEmail(input: unknown): Promise<{ pendente: boolean }> {
     const { email } = AtualizarEmailSchema.parse(input);
-    const { error } = await (await createClient()).auth.updateUser({ email });
+    const { data, error } = await (await createClient()).auth.updateUser({ email });
     if (error) throw new Error(error.message);
+    return { pendente: Boolean(data.user?.new_email) };
 }
 
 export async function atualizarPassword(input: unknown): Promise<void> {
