@@ -206,7 +206,12 @@ segurança), com link de troca sobre o botão Enviar e "Testar ligação" por
 provider. Keys cifradas at rest (AES-256-GCM, `MEMVECTOR_KEYS_SECRET`) e
 nunca devolvidas ao browser. O agente-autor com tools (destilação agentic e
 resposta escalada) continua Claude CLI + MCP; isso é limitação declarada, não
-abstração genérica. Ver [Orquestradores](./ORQUESTRADORES.md). **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+abstração genérica. Ver [Orquestradores](./ORQUESTRADORES.md). **A resposta
+escalada streama (#100):** o caminho agentic passou de `--output-format json`
+(bloco no fim) para `stream-json` (`generateAgenticStream` + `runClaudeStreamCom`
+generalizado), por isso o texto sai token-a-token e o indicador de fase fecha
+quando a resposta começa, em vez de ficar preso. O parser de stream ignora os
+eventos de tool_use/result do loop; narração por passo de tool fica para fatia 2. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
 por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildClaudeArgs,
     buildClaudeAgenticArgs,
+    buildClaudeAgenticStreamArgs,
     buildClaudeStreamArgs,
     claudeAgenticTimeoutMs,
     claudeConcurrency,
@@ -81,6 +82,32 @@ describe('buildClaudeAgenticArgs', () => {
         expect(comModelo[comModelo.indexOf('--model') + 1]).toBe('sonnet');
 
         expect(buildClaudeAgenticArgs(cfg)).not.toContain('--model');
+    });
+});
+
+describe('buildClaudeAgenticStreamArgs (#100)', () => {
+    const cfg = {
+        mcpConfig: '{"mcpServers":{}}',
+        allowedTools: ['mcp__memvector__procurar_web'],
+        systemPrompt: 'contrato',
+    };
+
+    it('streama (stream-json + verbose + parciais) mantendo as tools agentic', () => {
+        const args = buildClaudeAgenticStreamArgs(cfg);
+        // streaming: a resposta escalada deixa de vir num bloco só
+        expect(args[args.indexOf('--output-format') + 1]).toBe('stream-json');
+        expect(args).toContain('--verbose');
+        expect(args).toContain('--include-partial-messages');
+        // tools agentic intactas
+        expect(args).toContain('--mcp-config');
+        expect(args).toContain('mcp__memvector__procurar_web');
+        expect(args).toContain('--max-turns');
+        expect(args).toContain('--disallowedTools');
+    });
+
+    it('honra o modelo escolhido (e omite-o sem modelo)', () => {
+        expect(buildClaudeAgenticStreamArgs({ ...cfg, model: 'sonnet' })).toContain('sonnet');
+        expect(buildClaudeAgenticStreamArgs(cfg)).not.toContain('--model');
     });
 });
 

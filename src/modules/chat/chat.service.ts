@@ -357,8 +357,9 @@ export async function respondStream(
         // Agora já se sabe que vai à net — anuncia a fase (#96 smoke).
         onFase?.({ fase: 'web' });
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
-        const r = await responderComToolsCom(t.db, t.prompt, webKey, t.modeloPedido);
-        onTextDelta(r.text);
+        const r = await responderComToolsCom(t.db, t.prompt, webKey, t.modeloPedido, onTextDelta);
+        // #100: r.text já saiu token-a-token por onTextDelta durante a geração
+        // (o indicador de fase fecha quando o texto começa); não reemitir o bloco.
         // Custo honesto (#65): a fase rápida só emitiu [[ESCALAR]], mas recebeu o
         // prompt todo — esse input paga-se. Soma-se ao custo do agente.
         const soma = (a?: number | null, b?: number | null) =>
