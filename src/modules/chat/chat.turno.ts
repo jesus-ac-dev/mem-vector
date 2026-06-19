@@ -26,16 +26,37 @@ export interface TurnoDestiladoRaw {
 
 // Secção de UPDATE-bias: oferece as notas existentes relacionadas para o agente
 // CONTINUAR a certa, em vez de criar uma nota nova por facto.
+function candidatoTranscriptYoutube(c: NotaCandidata): boolean {
+    return Boolean(c.tags?.includes('youtube') && c.tags.includes('transcript'));
+}
+
 function blocoCandidatos(candidatos: NotaCandidata[]): string {
     if (!candidatos.length) return '';
     // Conteúdo entre <nota>…</nota> para o limite ser inequívoco (evita que um
     // título ou um bloco de código dentro da nota se confunda com o prompt).
     const lista = candidatos
-        .map((c) => `- título: "${c.title}"\n  conteúdo atual:\n<nota>\n${c.contentMd}\n</nota>`)
+        .map(
+            (c) =>
+                `- título: "${c.title}"${
+                    c.tags?.length ? `\n  tags: ${c.tags.join(', ')}` : ''
+                }\n  conteúdo atual:\n<nota>\n${c.contentMd}\n</nota>`,
+        )
         .join('\n\n');
+    const transcripts = candidatos.filter(candidatoTranscriptYoutube);
+    const blocoTranscript = transcripts.length
+        ? 'FONTES YOUTUBE / TRANSCRIPTS: as candidatas com tags `youtube` e `transcript` são ' +
+          'FONTE BRUTA. NÃO continues nem reescrevas o transcript, salvo se o utilizador pedir ' +
+          'explicitamente corrigir a transcrição. Ao extrair conhecimento durável de um vídeo, ' +
+          'CONTINUA a nota temática existente do assunto; se o assunto for novo, cria uma nota ' +
+          'com o melhor nome do TEMA (nunca "Notas sobre <vídeo>"). Nessa nota temática, liga a ' +
+          `fonte transcript com ${transcripts.map((c) => `[[${c.title}]]`).join(', ')}. ` +
+          'Se uma ideia vier de uma zona concreta, escreve também o timestamp textual perto do ' +
+          'link (ex.: "ver [[Título do vídeo]] [12:30]") para ser fácil voltar ao ponto certo.\n\n'
+        : '';
     return (
         'NOTAS EXISTENTES (preferir CONTINUAR uma destas a criar nova):\n' +
         `${lista}\n\n` +
+        blocoTranscript +
         'CONTINUA uma destas APENAS se o facto pertencer mesmo ao assunto dela (título e ' +
         'conteúdo sobre o MESMO assunto): usa EXATAMENTE o mesmo "title" e devolve o ' +
         '"content_md" COMPLETO com o facto novo integrado (não percas o que já lá está). ' +
