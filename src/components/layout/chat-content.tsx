@@ -85,19 +85,20 @@ interface EventoDone {
     webSources?: { url: string; titulo: string }[];
 }
 
-type FaseEvento = 'consultar' | 'gerar' | 'web';
+type FaseEvento = 'consultar' | 'gerar' | 'web' | 'ferramenta';
 
 type EventoStreamCliente =
     | { tipo: 'inicio'; conversationId: string }
-    | { tipo: 'fase'; fase: FaseEvento; fontes?: number }
+    | { tipo: 'fase'; fase: FaseEvento; fontes?: number; label?: string }
     | { tipo: 'delta'; texto: string }
     | EventoDone
     | { tipo: 'erro'; mensagem: string };
 
-// Label da fase do turno para o indicador dinâmico (#66).
-function labelFase(fase: FaseEvento, fontes?: number): string {
+// Label da fase do turno para o indicador dinâmico (#66; passos de tool #100).
+function labelFase(fase: FaseEvento, fontes?: number, label?: string): string {
     if (fase === 'consultar') return 'a consultar o workspace';
     if (fase === 'web') return 'a consultar a web';
+    if (fase === 'ferramenta') return label ?? 'a usar uma ferramenta';
     return fontes ? `a gerar (${fontes} ${fontes === 1 ? 'fonte' : 'fontes'})` : 'a gerar';
 }
 
@@ -679,7 +680,7 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                             abrirConversa(ev.conversationId);
                         }
                     } else if (ev.tipo === 'fase') {
-                        setFaseAtual(labelFase(ev.fase, ev.fontes));
+                        setFaseAtual(labelFase(ev.fase, ev.fontes, ev.label));
                     } else if (ev.tipo === 'delta') {
                         aplicarDelta(ev.texto);
                     } else if (ev.tipo === 'done') {

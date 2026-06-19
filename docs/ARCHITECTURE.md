@@ -210,8 +210,11 @@ abstração genérica. Ver [Orquestradores](./ORQUESTRADORES.md). **A resposta
 escalada streama (#100):** o caminho agentic passou de `--output-format json`
 (bloco no fim) para `stream-json` (`generateAgenticStream` + `runClaudeStreamCom`
 generalizado), por isso o texto sai token-a-token e o indicador de fase fecha
-quando a resposta começa, em vez de ficar preso. O parser de stream ignora os
-eventos de tool_use/result do loop; narração por passo de tool fica para fatia 2. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
+quando a resposta começa, em vez de ficar preso. O parser de stream também
+**surface os eventos `tool_use`** do loop como passos de narração (fatia 2):
+cada tool MCP que o agente chama vira uma fase `ferramenta` ("a procurar na web",
+"a ler uma nota"…) via `labelFerramenta`; built-ins internas (ToolSearch) não se
+narram. Os `result` do tool são ignorados. **A flag `MEMVECTOR_AGENTIC_DISTILL` virou opção
 por workspace**: o pós-turno lê `metodo_destilacao` das definições (one-shot
 default — decisão #38; agentic opt-in); a env flag continua como override para
 evals/scripts. Módulos: GitHub (toggle; configuração chega com a importação) e

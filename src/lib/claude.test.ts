@@ -224,6 +224,26 @@ describe('interpretarLinhaStream (#66)', () => {
         expect(interpretarLinhaStream('')).toEqual({ tipo: 'ignorar' });
         expect(interpretarLinhaStream('não-é-json {')).toEqual({ tipo: 'ignorar' });
     });
+
+    it('#100: início de bloco tool_use vira evento ferramenta (narração de passo)', () => {
+        const linha = JSON.stringify({
+            type: 'stream_event',
+            event: {
+                type: 'content_block_start',
+                content_block: { type: 'tool_use', name: 'mcp__memvector__procurar_web' },
+            },
+        });
+        expect(interpretarLinhaStream(linha)).toEqual({
+            tipo: 'ferramenta',
+            nome: 'mcp__memvector__procurar_web',
+        });
+        // outros content_block (texto) não são ferramenta
+        const textoStart = JSON.stringify({
+            type: 'stream_event',
+            event: { type: 'content_block_start', content_block: { type: 'text' } },
+        });
+        expect(interpretarLinhaStream(textoStart)).toEqual({ tipo: 'ignorar' });
+    });
 });
 
 describe('createAsyncSemaphore', () => {

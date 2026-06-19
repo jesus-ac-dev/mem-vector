@@ -78,6 +78,7 @@ export function tokensDoEnvelopeClaude(usage: unknown): TokenUsage {
 // final (result). Thinking, system, assistant-completo e ruído → ignorar.
 export type EventoStream =
     | { tipo: 'texto'; texto: string }
+    | { tipo: 'ferramenta'; nome: string }
     | {
           tipo: 'final';
           costUsd: number;
@@ -93,7 +94,11 @@ export function interpretarLinhaStream(linha: string): EventoStream {
     if (!t) return { tipo: 'ignorar' };
     let d: {
         type?: string;
-        event?: { type?: string; delta?: { type?: string; text?: string } };
+        event?: {
+            type?: string;
+            delta?: { type?: string; text?: string };
+            content_block?: { type?: string; name?: string };
+        };
         total_cost_usd?: number;
         modelUsage?: Record<string, unknown>;
         usage?: unknown;
@@ -107,6 +112,15 @@ export function interpretarLinhaStream(linha: string): EventoStream {
         const delta = d.event.delta;
         if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
             return { tipo: 'texto', texto: delta.text };
+        }
+        return { tipo: 'ignorar' };
+    }
+    // #100 fatia 2: o início de um bloco tool_use narra o passo do agente
+    // ("a consultar a web", "a ler nota...") durante a geração escalada.
+    if (d.type === 'stream_event' && d.event?.type === 'content_block_start') {
+        const cb = d.event.content_block;
+        if (cb?.type === 'tool_use' && typeof cb.name === 'string') {
+            return { tipo: 'ferramenta', nome: cb.name };
         }
         return { tipo: 'ignorar' };
     }
@@ -322,12 +336,14 @@ export function generateAgenticStream(
     prompt: string,
     cfg: AgenticConfig,
     onTextDelta: (texto: string) => void,
+    onFerramenta?: (nome: string) => void,
 ): Promise<Generation> {
     return claudeQueue.run(() =>
         runClaudeStreamCom(prompt, onTextDelta, {
             args: buildClaudeAgenticStreamArgs(cfg),
             env: cfg.env,
             timeoutMs: cfg.timeoutMs ?? claudeAgenticTimeoutMs(),
+            onFerramenta,
         }),
     );
 }
@@ -427,7 +443,12 @@ function runClaudeStream(
 function runClaudeStreamCom(
     prompt: string,
     onTextDelta: (texto: string) => void,
-    opts: { args: string[]; env?: Record<string, string>; timeoutMs?: number },
+    opts: {
+        args: string[];
+        env?: Record<string, string>;
+        timeoutMs?: number;
+        onFerramenta?: (nome: string) => void;
+    },
 ): Promise<Generation> {
     return new Promise<Generation>((resolve, reject) => {
         let settled = false;
@@ -469,6 +490,8 @@ function runClaudeStreamCom(
             if (ev.tipo === 'texto') {
                 texto += ev.texto;
                 onTextDelta(ev.texto);
+            } else if (ev.tipo === 'ferramenta') {
+                opts.onFerramenta?.(ev.nome);
             } else if (ev.tipo === 'final') {
                 final = ev;
             }

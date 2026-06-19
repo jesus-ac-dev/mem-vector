@@ -51,6 +51,7 @@ export async function responderComToolsCom(
     webKey?: string,
     model?: string,
     onTextDelta?: (texto: string) => void,
+    onFerramenta?: (nome: string) => void,
 ): Promise<RespostaTools> {
     const {
         data: { session },
@@ -90,7 +91,7 @@ export async function responderComToolsCom(
         // #100: com callback, a resposta escalada streama token-a-token (o
         // indicador deixa de ficar preso); sem ele, mantém o bloco único.
         const g = onTextDelta
-            ? await generateAgenticStream(prompt, cfg, onTextDelta)
+            ? await generateAgenticStream(prompt, cfg, onTextDelta, onFerramenta)
             : await generateAgentic(prompt, cfg);
         const webSources = lerWebConsultado(resultFile).map((r) => ({
             url: r.url,
