@@ -759,22 +759,37 @@ function RightSidebar({
             {/* Header — icon tabs + collapse button */}
             <div className="flex h-9 shrink-0 items-center justify-between border-b px-2">
                 <div className="flex items-center gap-0.5">
-                    {rightTabs.map(({ id, label, Icon }) => (
-                        <Button
-                            key={id}
-                            variant="ghost"
-                            size="icon"
-                            title={label}
-                            aria-label={label}
-                            onClick={() => setActiveTab(id)}
-                            className={cn(
-                                'h-6 w-6 text-muted-foreground',
-                                activeTab === id && 'bg-accent text-accent-foreground',
-                            )}
-                        >
-                            <Icon className="h-3.5 w-3.5" />
-                        </Button>
-                    ))}
+                    {rightTabs.map(({ id, label, Icon }) => {
+                        // Contagem na tab (#103): a teia fica visível à primeira —
+                        // backlinks/forward links sem ter de clicar para descobrir.
+                        const n =
+                            id === 'backlinks'
+                                ? (dadosAtivos?.backlinks.length ?? 0)
+                                : id === 'forward'
+                                  ? (dadosAtivos?.forwardLinks.length ?? 0)
+                                  : 0;
+                        return (
+                            <Button
+                                key={id}
+                                variant="ghost"
+                                size="icon"
+                                title={n ? `${label} (${n})` : label}
+                                aria-label={n ? `${label} (${n})` : label}
+                                onClick={() => setActiveTab(id)}
+                                className={cn(
+                                    'relative h-6 w-6 text-muted-foreground',
+                                    activeTab === id && 'bg-accent text-accent-foreground',
+                                )}
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                {n > 0 && (
+                                    <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-medium leading-none text-primary-foreground">
+                                        {n}
+                                    </span>
+                                )}
+                            </Button>
+                        );
+                    })}
                 </div>
                 <Button
                     variant="ghost"
