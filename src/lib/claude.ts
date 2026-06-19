@@ -78,6 +78,7 @@ export function tokensDoEnvelopeClaude(usage: unknown): TokenUsage {
 // final (result). Thinking, system, assistant-completo e ruído → ignorar.
 export type EventoStream =
     | { tipo: 'texto'; texto: string }
+    | { tipo: 'ferramenta'; nome: string }
     | {
           tipo: 'final';
           costUsd: number;
@@ -93,7 +94,11 @@ export function interpretarLinhaStream(linha: string): EventoStream {
     if (!t) return { tipo: 'ignorar' };
     let d: {
         type?: string;
-        event?: { type?: string; delta?: { type?: string; text?: string } };
+        event?: {
+            type?: string;
+            delta?: { type?: string; text?: string };
+            content_block?: { type?: string; name?: string };
+        };
         total_cost_usd?: number;
         modelUsage?: Record<string, unknown>;
         usage?: unknown;
@@ -107,6 +112,15 @@ export function interpretarLinhaStream(linha: string): EventoStream {
         const delta = d.event.delta;
         if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
             return { tipo: 'texto', texto: delta.text };
+        }
+        return { tipo: 'ignorar' };
+    }
+    // #100 fatia 2: o início de um bloco tool_use narra o passo do agente
+    // ("a consultar a web", "a ler nota...") durante a geração escalada.
+    if (d.type === 'stream_event' && d.event?.type === 'content_block_start') {
+        const cb = d.event.content_block;
+        if (cb?.type === 'tool_use' && typeof cb.name === 'string') {
+            return { tipo: 'ferramenta', nome: cb.name };
         }
         return { tipo: 'ignorar' };
     }
@@ -249,6 +263,36 @@ export function buildClaudeAgenticArgs(cfg: AgenticConfig): string[] {
     ];
 }
 
+// Variante streaming do agentic (#100): os MESMOS args agentic, mas em
+// `stream-json` (+ `--verbose` e `--include-partial-messages`) para a resposta
+// escalada sair token-a-token em vez de num bloco no fim — o indicador de fase
+// deixa de ficar preso. Os eventos de tool_use/result do loop são ignorados
+// pelo parser (interpretarLinhaStream); só o text_delta e o result interessam.
+export function buildClaudeAgenticStreamArgs(cfg: AgenticConfig): string[] {
+    return [
+        '-p',
+        '--input-format',
+        'text',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--include-partial-messages',
+        '--strict-mcp-config',
+        '--mcp-config',
+        cfg.mcpConfig,
+        '--allowedTools',
+        ...cfg.allowedTools,
+        '--max-turns',
+        String(cfg.maxTurns ?? 15),
+        '--system-prompt',
+        cfg.systemPrompt,
+        '--exclude-dynamic-system-prompt-sections',
+        ...(cfg.model ? ['--model', cfg.model] : []),
+        '--disallowedTools',
+        ...DISALLOWED_TOOLS,
+    ];
+}
+
 interface RunOptions {
     args: string[];
     env?: Record<string, string>;
@@ -283,6 +327,25 @@ export function generateStream(
     onTextDelta: (texto: string) => void,
 ): Promise<Generation> {
     return claudeQueue.run(() => runClaudeStream(prompt, opts?.model, onTextDelta));
+}
+
+// Streaming do agentic (#100): mesma fila/contexto, mas com as tools MCP + o env
+// da sessão (herdado pelo MCP server). A resposta escalada passa a sair por
+// `onTextDelta` à medida que o agente escreve, em vez de num bloco no fim.
+export function generateAgenticStream(
+    prompt: string,
+    cfg: AgenticConfig,
+    onTextDelta: (texto: string) => void,
+    onFerramenta?: (nome: string) => void,
+): Promise<Generation> {
+    return claudeQueue.run(() =>
+        runClaudeStreamCom(prompt, onTextDelta, {
+            args: buildClaudeAgenticStreamArgs(cfg),
+            env: cfg.env,
+            timeoutMs: cfg.timeoutMs ?? claudeAgenticTimeoutMs(),
+            onFerramenta,
+        }),
+    );
 }
 
 function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
@@ -372,11 +435,27 @@ function runClaudeStream(
     model: string | undefined,
     onTextDelta: (texto: string) => void,
 ): Promise<Generation> {
+    return runClaudeStreamCom(prompt, onTextDelta, { args: buildClaudeStreamArgs(model) });
+}
+
+// Miolo do streaming generalizado (#100): aceita args/env/timeout para servir
+// tanto o fast path (#66, sem env) como o agentic (com tools MCP + env da sessão).
+function runClaudeStreamCom(
+    prompt: string,
+    onTextDelta: (texto: string) => void,
+    opts: {
+        args: string[];
+        env?: Record<string, string>;
+        timeoutMs?: number;
+        onFerramenta?: (nome: string) => void;
+    },
+): Promise<Generation> {
     return new Promise<Generation>((resolve, reject) => {
         let settled = false;
-        const timeoutMs = claudeTimeoutMs();
-        const child = spawn(CLAUDE_BIN, buildClaudeStreamArgs(model), {
+        const timeoutMs = opts.timeoutMs ?? claudeTimeoutMs();
+        const child = spawn(CLAUDE_BIN, opts.args, {
             cwd: tmpdir(),
+            env: opts.env ? { ...process.env, ...opts.env } : undefined,
             stdio: ['pipe', 'pipe', 'pipe'],
             detached: true,
         });
@@ -411,6 +490,8 @@ function runClaudeStream(
             if (ev.tipo === 'texto') {
                 texto += ev.texto;
                 onTextDelta(ev.texto);
+            } else if (ev.tipo === 'ferramenta') {
+                opts.onFerramenta?.(ev.nome);
             } else if (ev.tipo === 'final') {
                 final = ev;
             }

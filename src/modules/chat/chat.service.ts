@@ -238,7 +238,29 @@ interface TurnoPreparado {
 // Fase do turno para o indicador dinâmico (#66): consultar → gerar. A fase 'web'
 // (#96 smoke) anuncia-se SÓ quando o turno ESCALA para o agente-com-tools — aí já
 // se sabe que vai à net (antes não se sabe, daí não se forçar no arranque).
-export type FaseTurno = { fase: 'consultar' } | { fase: 'gerar'; fontes: number } | { fase: 'web' };
+export type FaseTurno =
+    | { fase: 'consultar' }
+    | { fase: 'gerar'; fontes: number }
+    | { fase: 'web' }
+    | { fase: 'ferramenta'; label: string };
+
+// #100 fatia 2: narra o passo do agente escalado pelo nome da tool MCP que ele
+// chama (procurar_web → "a procurar na web"...), para o indicador não ficar
+// parado no "a consultar a web" durante o loop. Fallback genérico p/ tools novas.
+const LABEL_FERRAMENTA: Record<string, string> = {
+    procurar_web: 'a procurar na web',
+    ler_url: 'a ler uma página',
+    procurar_notas: 'a procurar nas notas',
+    ler_nota: 'a ler uma nota',
+    ler_daily: 'a ler a daily',
+    ler_daily_hoje: 'a ler a daily de hoje',
+    listar_tarefas_abertas: 'a ver as tarefas',
+};
+
+export function labelFerramenta(nome: string): string {
+    const curto = nome.replace(/^mcp__\w+__/, '');
+    return LABEL_FERRAMENTA[curto] ?? 'a usar uma ferramenta';
+}
 
 // Tudo até à geração: embed(query) → match_chunks → expand → prompt. Partilhado
 // pelo respond (one-shot) e pelo respondStream (#66). O histórico (janela da
@@ -357,8 +379,22 @@ export async function respondStream(
         // Agora já se sabe que vai à net — anuncia a fase (#96 smoke).
         onFase?.({ fase: 'web' });
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
-        const r = await responderComToolsCom(t.db, t.prompt, webKey, t.modeloPedido);
-        onTextDelta(r.text);
+        const r = await responderComToolsCom(
+            t.db,
+            t.prompt,
+            webKey,
+            t.modeloPedido,
+            onTextDelta,
+            // #100 fatia 2: cada tool MCP que o agente chama narra um passo
+            // ("a procurar na web", "a ler uma nota"…) durante o loop. Built-ins
+            // internas (ex.: ToolSearch) não se narram — ruído, não progresso.
+            (nome) => {
+                if (nome.startsWith('mcp__'))
+                    onFase?.({ fase: 'ferramenta', label: labelFerramenta(nome) });
+            },
+        );
+        // #100: r.text já saiu token-a-token por onTextDelta durante a geração
+        // (o indicador de fase fecha quando o texto começa); não reemitir o bloco.
         // Custo honesto (#65): a fase rápida só emitiu [[ESCALAR]], mas recebeu o
         // prompt todo — esse input paga-se. Soma-se ao custo do agente.
         const soma = (a?: number | null, b?: number | null) =>

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { generateAgentic } from '@/lib/claude';
+import { generateAgentic, generateAgenticStream } from '@/lib/claude';
 import { lerWebConsultado } from './resultado';
 
 // #85 fatia 2: o agente escalado (two-phase) responde com TOOLS — leitura do
@@ -50,6 +50,8 @@ export async function responderComToolsCom(
     prompt: string,
     webKey?: string,
     model?: string,
+    onTextDelta?: (texto: string) => void,
+    onFerramenta?: (nome: string) => void,
 ): Promise<RespostaTools> {
     const {
         data: { session },
@@ -74,7 +76,7 @@ export async function responderComToolsCom(
     });
 
     try {
-        const g = await generateAgentic(prompt, {
+        const cfg = {
             mcpConfig,
             allowedTools: TOOLS_RESPOSTA,
             systemPrompt: SYSTEM_RESPOSTA,
@@ -85,7 +87,12 @@ export async function responderComToolsCom(
                 MEMVECTOR_AGENT_RESULT_FILE: resultFile,
                 ...(webKey ? { MEMVECTOR_AGENT_WEB_KEY: webKey } : {}),
             },
-        });
+        };
+        // #100: com callback, a resposta escalada streama token-a-token (o
+        // indicador deixa de ficar preso); sem ele, mantém o bloco único.
+        const g = onTextDelta
+            ? await generateAgenticStream(prompt, cfg, onTextDelta, onFerramenta)
+            : await generateAgentic(prompt, cfg);
         const webSources = lerWebConsultado(resultFile).map((r) => ({
             url: r.url,
             titulo: r.titulo,
