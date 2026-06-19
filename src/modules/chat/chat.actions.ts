@@ -3,15 +3,14 @@
 import { z } from 'zod';
 import { respond, type ChatResult, type TurnoDestilado } from './chat.service';
 import { createClient } from '@/lib/supabase/server';
+import { after } from 'next/server';
 import { executarDestilacaoTurnoCom } from './chat.postturno';
 import { garantirConversaCom, listarConversas, ultimasMensagensCom } from './chat.conversas';
 import { indexarMensagensChatCom } from './chat.indexing';
 import {
-    concluirDestilacaoJobCom,
     criarDestilacaoJobCom,
-    estadoDestilacaoJobCom,
-    falharDestilacaoJobCom,
-    reclamarDestilacaoJobCom,
+    processarDestilacaoJobCom,
+    varrerDestilacaoPendentesCom,
 } from './chat.jobs';
 
 export async function listarConversasAction() {
@@ -110,6 +109,11 @@ export async function ask(
         assistantMessageId: String(asstMsg.data.id),
     });
 
+    // #118: o servidor processa a destilação a seguir à resposta (after corre
+    // depois do retorno) — não depende do cliente. O sweeper apanha este job +
+    // órfãos de turnos anteriores. Tab fechada ≠ rasto perdido.
+    after(() => varrerDestilacaoPendentesCom(db).catch(() => {}));
+
     return { ...result, conversationId: convId, distillationJobId };
 }
 
@@ -123,41 +127,11 @@ const processarJobSchema = z.object({
     jobId: z.string().uuid(),
 });
 
-function mensagemErro(e: unknown): string {
-    return e instanceof Error ? e.message : 'erro desconhecido';
-}
-
+// Ação fina: o cliente ainda pode disparar a destilação do seu turno (UI ao
+// vivo). O núcleo (claim + processar, ou observar se o servidor já o reclamou)
+// vive em chat.jobs para o sweeper server-side o reusar.
 export async function processarDestilacaoJob(jobIdInput: string): Promise<TurnoDestilado> {
     const { jobId } = processarJobSchema.parse({ jobId: jobIdInput });
     const db = await createClient();
-
-    const job = await reclamarDestilacaoJobCom(db, jobId);
-    if (!job) {
-        const estado = await estadoDestilacaoJobCom(db, jobId);
-        if (estado.status === 'done' && estado.result) return estado.result;
-        if (estado.status === 'failed') {
-            throw new Error(estado.error ?? 'job de destilação falhou');
-        }
-        throw new Error('job de destilação já está em processamento');
-    }
-
-    try {
-        const result = await executarDestilacaoTurnoCom(
-            db,
-            job.payload.question,
-            job.payload.answer,
-            {
-                conversationId: job.payload.conversationId,
-                excluirIds: [job.payload.userMessageId, job.payload.assistantMessageId].filter(
-                    (id): id is string => Boolean(id),
-                ),
-            },
-        );
-        await concluirDestilacaoJobCom(db, job.id, result);
-        return result;
-    } catch (e) {
-        const msg = mensagemErro(e);
-        await falharDestilacaoJobCom(db, job.id, msg);
-        throw new Error(msg);
-    }
+    return processarDestilacaoJobCom(db, jobId);
 }

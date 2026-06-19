@@ -82,4 +82,30 @@ describe('agent_jobs (integração RLS)', () => {
             },
         });
     }, 60_000);
+
+    it('reclama um running preso (lock expirado) mas não um running fresco (#118)', async () => {
+        const { criarDestilacaoJobCom, reclamarDestilacaoJobCom } =
+            await import('@/modules/chat/chat.jobs');
+        const admin = getSupabaseAdmin();
+
+        const jobId = await criarDestilacaoJobCom(alice, {
+            question: 'q preso',
+            answer: 'a preso',
+            conversationId: '44444444-4444-4444-8444-444444444444',
+            userMessageId: null,
+            assistantMessageId: null,
+        });
+
+        // 1.º claim → running com lock fresco; um running fresco NÃO é reclamável
+        // (o processador ainda está vivo).
+        expect((await reclamarDestilacaoJobCom(alice, jobId))?.id).toBe(jobId);
+        await expect(reclamarDestilacaoJobCom(alice, jobId)).resolves.toBeNull();
+
+        // Simula o processador morto: lock há 20 min (> 10 min do limite).
+        const vinteMinAtras = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+        await admin.from('agent_jobs').update({ locked_at: vinteMinAtras }).eq('id', jobId);
+
+        // Agora o sweeper consegue reclamar o órfão.
+        await expect(reclamarDestilacaoJobCom(alice, jobId)).resolves.toMatchObject({ id: jobId });
+    }, 60_000);
 });

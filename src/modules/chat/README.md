@@ -17,7 +17,7 @@ novo provider também consegue destilar/escalar com tools.
 | Ficheiro             | Responsabilidade                                                                                                                                                 |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `chat.service.ts`    | `prepararTurno` (retrieval+prompt, partilhado); `respond(question)` one-shot e `respondStream(question, historico, onTextDelta)` (#66, token-a-token); `aplicarDestilacao` — destilar→escrever; tipos `ChatResult`, `NotaEscrita`                         |
-| `chat.jobs.ts`       | Criação/claim/conclusão/falha dos jobs duráveis de destilação em `agent_jobs`                                                                                    |
+| `chat.jobs.ts`       | Jobs duráveis de destilação em `agent_jobs`: criação/claim/conclusão/falha + **sweeper server-side** (`varrerDestilacaoPendentesCom`) e processamento (`processarDestilacaoJobCom`, observa se outro já reclamou). O claim reclama 'running' órfão (lock > 10 min) — #118 |
 | `chat.indexing.ts`   | Indexação dos turnos de chat em `chunks`, com metadata de conversa/mensagem e pruning por conversa                                                               |
 | `chat.actions.ts`    | Server actions: `processarDestilacaoJob(jobId)` — processa/retry de destilação; `ask(input)` — caminho one-shot (não-streaming, legado); `destilarTurno` fica só para compatibilidade |
 | `app/api/chat/stream/route.ts` | **Caminho principal do turno (#66):** ndjson token-a-token (`respondStream`) — server actions não fazem stream. Persiste user/assistant + cria o job, igual ao `ask` |
@@ -48,17 +48,21 @@ Cliente → ask(question, conversationId?)
   │     metadata: conversation_id, message_id, role, created_at
   │     pruning: mantém os 80 chunks de chat mais recentes por conversa
   ├─ cria agent_jobs(type='chat_turn_distillation', status='pending')
+  ├─ after(varrerDestilacaoPendentes)  → o SERVIDOR processa a seguir à resposta (#118)
   └─ devolve { answer, sources, costUsd, provider, modelos, latencyMs, conversationId, distillationJobId }
 
-Cliente → processarDestilacaoJob(distillationJobId)   [job já persistido]
+Destilação (server-side por after; o cliente pode disparar em paralelo p/ UI ao vivo) [#118]
   │
-  ├─ claim_agent_job(jobId)         → pending/failed → running, attempts + 1
+  ├─ varrerDestilacaoPendentes      → lista pending + running-órfão (lock > 10 min), processa cada
+  ├─ claim_agent_job(jobId)         → pending/failed/stale-running → running, attempts + 1
   ├─ candidatosParaFacto            → UPDATE-bias
   ├─ destilarResumirTurno           → decide nota + resumo daily numa chamada CLI
   ├─ escreverNota/acrescentarDaily  → cria/atualiza conhecimento e daily
-  ├─ agent_jobs.status='done'       → guarda { nota, daily }
+  ├─ agent_jobs.status='done'       → guarda { notas, daily, tarefas }
   │
-  └─ se falhar: agent_jobs.status='failed' com error, retryable
+  └─ se falhar: agent_jobs.status='failed' com error, retryable.
+     Tab fechada ≠ rasto perdido: o after() do servidor processa o job, e os
+     órfãos de turnos anteriores são apanhados no sweep do turno seguinte.
 ```
 
 ## Tipos principais
