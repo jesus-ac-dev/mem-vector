@@ -22,14 +22,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     } = await supabase.auth.getUser();
 
     let displayName = user?.email ?? '';
+    let avatarUrl: string | null = null;
     if (user) {
         const { data } = await supabase
             .from('profiles')
-            .select('display_name')
+            .select('display_name, avatar_url')
             .eq('id', user.id)
             .single();
         displayName = data?.display_name ?? user.email ?? '';
+        avatarUrl = (data?.avatar_url as string | null) ?? null;
     }
+    const perfil = { displayName, email: user?.email ?? '', avatarUrl };
 
     // Seed do Kernel (#36): a pasta e as notas iniciais nascem sozinhas no
     // primeiro carregamento (idempotente, 1 query quando já existe; arquivar a
@@ -68,7 +71,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex h-dvh flex-col">
             {/* ProcuraProvider envolve header (input) + shell (resultados no painel) — #91 */}
             <ProcuraProvider>
-                <AppHeader displayName={displayName} />
+                <AppHeader perfil={perfil} />
                 {/* WorkspaceShell é client; recebe server children como prop — válido em Next.js */}
                 <WorkspaceShell
                     arvore={arvore}
