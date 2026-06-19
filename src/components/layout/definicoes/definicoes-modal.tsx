@@ -39,8 +39,8 @@ import {
     type Modulo,
     type Provider,
 } from '@/modules/definicoes/definicoes.schema';
-import { ProviderIcon } from '@/components/layout/provider-icon';
-import { providersPorForcarTeste } from '@/components/layout/definicoes-modal.logic';
+import { ProviderIcon } from '@/components/layout/chat/provider-icon';
+import { providersPorForcarTeste } from '@/components/layout/definicoes/definicoes-modal.logic';
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
 // forms à direita. Aqui PARAMETRIZA-SE (Comportamento, Agentes, Módulos) com

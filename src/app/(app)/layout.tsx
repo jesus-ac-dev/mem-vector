@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
-import { AppHeader } from '@/components/layout/app-header';
-import { WorkspaceShell } from '@/components/layout/workspace-shell';
-import { ProcuraProvider } from '@/components/layout/procura-context';
-import { OnboardingWizard } from '@/components/layout/onboarding-wizard';
+import { AppHeader } from '@/components/layout/workspace/app-header';
+import { WorkspaceShell } from '@/components/layout/workspace/workspace-shell';
+import { ProcuraProvider } from '@/components/layout/procura/procura-context';
+import { OnboardingWizard } from '@/components/layout/onboarding/onboarding-wizard';
 import { listarKnowledge } from '@/modules/knowledge/knowledge.service';
 import { listarDailies } from '@/modules/daily/daily.service';
 import { listarPastas } from '@/modules/folders/folders.service';

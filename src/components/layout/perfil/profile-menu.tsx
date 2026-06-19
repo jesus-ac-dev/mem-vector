@@ -14,8 +14,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { DefinicoesModal } from '@/components/layout/definicoes-modal';
-import { PerfilModal } from '@/components/layout/perfil-modal';
+import { DefinicoesModal } from '@/components/layout/definicoes/definicoes-modal';
+import { PerfilModal } from '@/components/layout/perfil/perfil-modal';
 import type { PerfilVista } from '@/modules/perfil/perfil.schema';
 
 export function ProfileMenu({ perfil }: { perfil: PerfilVista }) {

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace-context';
+import { WorkspaceProvider, useWorkspace } from '@/components/layout/workspace/workspace-context';
 import {
     ListTodo,
     MessageSquare,
@@ -36,15 +36,15 @@ import {
     DRAG_NOTA_SLUG,
     DRAG_PASTA_ID,
     FileExplorer,
-} from '@/components/layout/file-explorer';
-import type { DailyItem } from '@/components/layout/file-explorer';
-import { ArquivadosLista } from '@/components/layout/arquivados-lista';
-import { ConversasPanel } from '@/components/layout/conversas-panel';
-import { TarefasPanel } from '@/components/layout/tarefas-panel';
-import { WorkspaceGraph } from '@/components/layout/workspace-graph';
-import { PainelProcura } from '@/components/layout/painel-procura';
-import { useProcura } from '@/components/layout/procura-context';
-import { ClientErrorListener } from '@/components/layout/client-error-listener';
+} from '@/components/layout/explorer/file-explorer';
+import type { DailyItem } from '@/components/layout/explorer/file-explorer';
+import { ArquivadosLista } from '@/components/layout/explorer/arquivados-lista';
+import { ConversasPanel } from '@/components/layout/chat/conversas-panel';
+import { TarefasPanel } from '@/components/layout/tarefas/tarefas-panel';
+import { WorkspaceGraph } from '@/components/layout/grafo/workspace-graph';
+import { PainelProcura } from '@/components/layout/procura/painel-procura';
+import { useProcura } from '@/components/layout/procura/procura-context';
+import { ClientErrorListener } from '@/components/layout/workspace/client-error-listener';
 import {
     criarNotaNaPasta,
     novaPasta,
@@ -55,7 +55,7 @@ import {
 } from '@/modules/workspace/workspace.actions';
 import { getJson } from '@/lib/api-get';
 import { type DadosBarraDireita } from '@/modules/workspace/workspace.leituras';
-import { tabKey } from '@/components/layout/workspace-context';
+import { tabKey } from '@/components/layout/workspace/workspace-context';
 import {
     tagsComNotasDaArvore,
     type Arvore,

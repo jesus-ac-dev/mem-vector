@@ -1,6 +1,6 @@
 import { ThemeToggle } from './theme-toggle';
-import { ProfileMenu } from './profile-menu';
-import { ProcuraInput } from './procura-input';
+import { ProfileMenu } from '@/components/layout/perfil/profile-menu';
+import { ProcuraInput } from '@/components/layout/procura/procura-input';
 import type { PerfilVista } from '@/modules/perfil/perfil.schema';
 
 // Header da app (autenticado): logo+nome · input de procura (centro) · tema ·

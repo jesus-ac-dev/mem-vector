@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { ArchiveRestore, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { runClientAction } from '@/lib/client-error-log';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { reporNotaAction } from '@/modules/workspace/workspace.actions';
 import type { NotaKnowledge } from '@/modules/knowledge/knowledge.schema';
 

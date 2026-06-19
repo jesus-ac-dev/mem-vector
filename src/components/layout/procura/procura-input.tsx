@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useProcura } from '@/components/layout/procura-context';
+import { useProcura } from '@/components/layout/procura/procura-context';
 
 // Input de procura (#91) no centro do header. Escreve o termo no context; os
 // resultados (e o buttongroup Texto/Conceito) carregam no painel esquerdo.

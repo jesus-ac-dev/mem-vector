@@ -18,8 +18,8 @@ import {
     type NoGrafoView,
 } from '@/lib/grafo';
 import { Button } from '@/components/ui/button';
-import { useWorkspace } from '@/components/layout/workspace-context';
-import { GrafoConfig } from '@/components/layout/grafo-config';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
+import { GrafoConfig } from '@/components/layout/grafo/grafo-config';
 import { getJson } from '@/lib/api-get';
 import type { GrafoDados } from '@/modules/knowledge/knowledge.service';
 import type {

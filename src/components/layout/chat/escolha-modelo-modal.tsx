@@ -20,8 +20,8 @@ import {
 } from '@/components/ui/select';
 import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
 import { getJson } from '@/lib/api-get';
-import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
-import { ProviderIcon } from '@/components/layout/provider-icon';
+import { pedirDefinicoes } from '@/components/layout/definicoes/definicoes-modal';
+import { ProviderIcon } from '@/components/layout/chat/provider-icon';
 import {
     ESFORCOS,
     MODELOS_SUGERIDOS,

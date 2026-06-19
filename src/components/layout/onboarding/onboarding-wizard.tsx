@@ -14,7 +14,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { completarOnboarding } from '@/modules/onboarding/onboarding.actions';
-import { pedirDefinicoes } from '@/components/layout/definicoes-modal';
+import { pedirDefinicoes } from '@/components/layout/definicoes/definicoes-modal';
 
 // Onboarding (#40): wizard sequencial (página por pergunta) que nasce no 1.º
 // login de um user fresh — reusa o chassis Dialog das Definições, mas linear.

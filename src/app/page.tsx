@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { PublicHeader } from '@/components/layout/public-header';
+import { PublicHeader } from '@/components/layout/workspace/public-header';
 
 export default function Home() {
     return (
