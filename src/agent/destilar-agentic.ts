@@ -34,6 +34,8 @@ export interface TurnoAgenticInput {
     // Kernel do workspace (#34): junta-se ao contrato como system prompt —
     // contrato base (a casa) + personalidade do utilizador.
     kernel?: string;
+    // Tags já em uso (#95): para o agentic reutilizar como o one-shot.
+    tagsExistentes?: string[];
 }
 
 // Caminho agentic da destilação (issue #27): em vez de pedir um JSON one-shot,
@@ -79,6 +81,7 @@ export async function destilarTurnoAgenticCom(
                 input.candidatos ?? [],
                 input.intencao,
                 input.historico ?? [],
+                input.tagsExistentes ?? [],
             ),
             {
                 mcpConfig,
