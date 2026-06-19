@@ -1,3 +1,3 @@
-## 2026-06-20 - [Shortcut de Procura Global]
-**Learning:** Em ferramentas de produtividade inspiradas no Obsidian, os utilizadores esperam atalhos de teclado padrão (como Cmd+K) para ações frequentes. Adicionar um visual hint (`<kbd>`) melhora a descoberta sem sobrecarregar a UI. Diferenciar entre `⌘` e `Ctrl` com base no OS é um pequeno toque de polimento que faz a app sentir-se nativa.
-**Action:** Ao implementar atalhos de teclado, usar sempre uma lógica de deteção de plataforma para mostrar o símbolo correto (`⌘` vs `Ctrl`) e garantir que o listener é limpo no `useEffect`.
+## 2026-06-20 - [Estado Vazio do Chat Futurista]
+**Learning:** Um "Empty State" não é apenas um placeholder; é o cartão de visita da funcionalidade. Usar animações sutis (`animate-in`, `fade-in`, `zoom-in`) e gradientes de fundo (`bg-gradient-to-b`) transforma uma interface estática numa experiência "viva" e acolhedora. Adicionar sugestões de prompts ajuda a reduzir a fricção inicial do utilizador.
+**Action:** Usar tokens semânticos (`primary`, `accent`) mesmo em gradientes para respeitar o design system. Garantir que ícones decorativos não poluem a experiência de screen readers.

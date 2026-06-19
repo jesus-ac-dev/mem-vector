@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
+import {
+    Activity,
+    AlertTriangle,
+    CheckCircle2,
+    Clock3,
+    Info,
+    Radio,
+    Sparkles,
+    X,
+} from 'lucide-react';
 import { processarDestilacaoJob } from '@/modules/chat/chat.actions';
 import { getJson } from '@/lib/api-get';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
@@ -796,12 +805,29 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             )}
 
             {/* Lista de mensagens — coladas ao fundo, crescem para cima */}
-            <div className="flex-1 overflow-y-auto rounded-lg border p-4">
+            <div className="flex-1 overflow-y-auto rounded-lg border bg-gradient-to-b from-background to-muted/20 p-4">
                 <div className="flex min-h-full flex-col justify-end space-y-3">
                     {messages.length === 0 && (
-                        <p className="text-sm text-muted-foreground">
-                            Faz uma pergunta sobre o mem-vector...
-                        </p>
+                        <div className="flex flex-1 flex-col items-center justify-center space-y-6 text-center duration-1000 animate-in fade-in zoom-in-95">
+                            <div className="relative">
+                                <div className="absolute -inset-4 animate-pulse rounded-full bg-gradient-to-r from-primary/30 to-accent/30 opacity-20 blur-2xl" />
+                                <div className="relative rounded-full border border-primary/20 bg-background/50 p-6 shadow-2xl backdrop-blur-sm">
+                                    <Sparkles
+                                        className="h-10 w-10 animate-bounce text-primary"
+                                        aria-hidden="true"
+                                    />
+                                </div>
+                            </div>
+                            <div className="max-w-[240px] space-y-2">
+                                <h2 className="bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+                                    mem-vector
+                                </h2>
+                                <p className="text-balance text-xs text-muted-foreground">
+                                    O teu segundo cérebro está pronto para processar o teu
+                                    conhecimento.
+                                </p>
+                            </div>
+                        </div>
                     )}
                     {messages.map((m) => (
                         <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
