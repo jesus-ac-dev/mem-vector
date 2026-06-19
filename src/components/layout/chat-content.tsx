@@ -3,9 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
+import {
+    Activity,
+    AlertTriangle,
+    CheckCircle2,
+    Clock3,
+    Info,
+    Radio,
+    X,
+    Youtube,
+} from 'lucide-react';
 import { processarDestilacaoJob } from '@/modules/chat/chat.actions';
 import { getJson } from '@/lib/api-get';
+import { dataPt } from '@/lib/datas';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
 import type { Source } from '@/modules/chat/chat.prompt';
 import type { DailyEscrito, NotaEscrita, TarefasDoTurno } from '@/modules/chat/chat.service';
@@ -24,8 +34,11 @@ import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
+import { abrirOuCriarNota } from '@/modules/workspace/workspace.actions';
 import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
 import { ProviderIcon } from '@/components/layout/provider-icon';
+import { YoutubeModal } from '@/components/layout/youtube-modal';
+import type { IngestaoResult } from '@/modules/youtube/youtube.actions';
 import { DEFINICOES_MUDARAM_EVENT, pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import {
     ESFORCOS,
@@ -68,6 +81,29 @@ interface Message {
     webSources?: { url: string; titulo: string }[]; // #45: fontes 🌐
 }
 
+function promptVideoIngerido(r: IngestaoResult): string {
+    return [
+        `Acabei de ingerir o vídeo "${r.title}" de ${r.author}.`,
+        '',
+        `Usa a nota [[${r.title}]] como contexto principal e dá-me:`,
+        '- os pontos principais;',
+        '- ideias acionáveis para o meu trabalho;',
+        '- ligações a notas/tópicos que já existam no workspace, se fizer sentido.',
+    ].join('\n');
+}
+
+function mensagemVideoIngerido(r: IngestaoResult): string {
+    return `Pronto: [${r.title}](/knowledge/${encodeURIComponent(r.slug)}?id=${encodeURIComponent(r.id)}) - de ${r.author}. Já podes falar sobre ele.`;
+}
+
+function tituloDeSlug(slug: string): string {
+    return slug
+        .split('-')
+        .filter(Boolean)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+}
+
 // Eventos do stream do chat (#66, ndjson de POST /api/chat/stream).
 interface EventoDone {
     tipo: 'done';
@@ -104,7 +140,13 @@ function labelFase(fase: FaseEvento, fontes?: number, label?: string): string {
 
 // Proveniência honesta: de onde veio a resposta — fontes do workspace ou
 // conhecimento geral do modelo (quando o threshold cortou tudo).
-function ProvenanceLine({ sources }: { sources: Source[] }) {
+function ProvenanceLine({
+    sources,
+    onInternalLink,
+}: {
+    sources: Source[];
+    onInternalLink: (href: string) => void;
+}) {
     const p = provenance(sources);
     if (!p.fromWorkspace) {
         return <p className="mt-1 text-xs text-muted-foreground">🌐 {p.label}</p>;
@@ -119,9 +161,14 @@ function ProvenanceLine({ sources }: { sources: Source[] }) {
                     return (
                         <li key={i}>
                             {href ? (
-                                <Link href={href} className="font-medium text-primary">
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    onClick={() => onInternalLink(href)}
+                                    className="h-auto p-0 align-baseline font-medium text-primary underline"
+                                >
                                     {label}
-                                </Link>
+                                </Button>
                             ) : (
                                 <span className="font-medium">{label}</span>
                             )}
@@ -536,12 +583,22 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     // resposta aparecer a streamar. `faseAtual` narra o turno (consultar→gerar).
     const [respostaIniciada, setRespostaIniciada] = useState(false);
     const [faseAtual, setFaseAtual] = useState<string | null>(null);
+    const [youtubeAberto, setYoutubeAberto] = useState(false); // #101: bandeja de tools
+
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastTrace, setLastTrace] = useState<ChatTrace | null>(null);
     const [error, setError] = useState<string | null>(null);
     const nextIdRef = useRef(0);
     const bottomRef = useRef<HTMLDivElement>(null);
-    const { conversaAberta, abrirConversa, fecharChat, notificarWorkspaceMudou } = useWorkspace();
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const {
+        conversaAberta,
+        abrirConversa,
+        abrirFicheiro,
+        abrirChat,
+        fecharChat,
+        notificarWorkspaceMudou,
+    } = useWorkspace();
     const conversaCarregadaRef = useRef<string | null>(null);
     // Provider/modelo do chat (#60): controlos inline abaixo da textarea.
     const [defsChat, setDefsChat] = useState<DefinicoesVista | null>(null);
@@ -606,8 +663,8 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
         };
     }, [conversaAberta]);
 
-    async function handleSend() {
-        const question = input.trim();
+    async function handleSend(questionOverride?: string) {
+        const question = (questionOverride ?? input).trim();
         if (!question || pending) return;
         setError(null);
         // Caminho (a): sem provider configurado é estado ESPERADO — avisa inline
@@ -772,6 +829,75 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
         }
     }
 
+    function handleYoutubeIngerido(r: IngestaoResult) {
+        const prompt = promptVideoIngerido(r);
+        abrirChat();
+        abrirFicheiro({ tipo: 'knowledge', id: r.id, chave: r.slug, titulo: r.title });
+        setMessages((prev) => [
+            ...prev,
+            {
+                id: nextIdRef.current++,
+                role: 'assistant',
+                content: mensagemVideoIngerido(r),
+            },
+        ]);
+        setInput(prompt);
+        notificarWorkspaceMudou();
+        router.refresh();
+        requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            void handleSend(prompt);
+        });
+    }
+
+    async function handleInternalLink(href: string) {
+        try {
+            const url = new URL(href, 'http://mem-vector.local');
+            const mChat = /^\/chat\/(.+)$/.exec(url.pathname);
+            if (mChat) {
+                abrirConversa(decodeURIComponent(mChat[1]));
+                return;
+            }
+            const mKnow = /^\/knowledge\/(.+)$/.exec(url.pathname);
+            if (mKnow) {
+                const slug = decodeURIComponent(mKnow[1]);
+                const id = url.searchParams.get('id') ?? undefined;
+                if (id) {
+                    abrirFicheiro({
+                        tipo: 'knowledge',
+                        id,
+                        chave: slug,
+                        titulo: tituloDeSlug(slug),
+                    });
+                    return;
+                }
+
+                const path = url.searchParams.get('path');
+                const nota = await abrirOuCriarNota(slug, path);
+                if (nota.estado === 'ambiguo') {
+                    setError(`Há várias notas com o slug "${nota.slug}". Abre-a pelo explorer.`);
+                    return;
+                }
+                abrirFicheiro({
+                    tipo: 'knowledge',
+                    id: nota.id,
+                    chave: nota.chave,
+                    titulo: nota.titulo,
+                });
+                if (nota.criada) router.refresh();
+                return;
+            }
+            const mDaily = /^\/daily\/(.+)$/.exec(url.pathname);
+            if (mDaily) {
+                const dia = decodeURIComponent(mDaily[1]);
+                const id = url.searchParams.get('id') ?? undefined;
+                abrirFicheiro({ tipo: 'daily', id, chave: dia, titulo: dataPt(dia) });
+            }
+        } catch (e) {
+            logClientError({ area: 'chat', action: 'handleInternalLink', meta: { href } }, e);
+        }
+    }
+
     return (
         <div
             className={
@@ -822,11 +948,17 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                                 <span className="inline-block rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
                                     {/* wikilinks ligados (#27, smoke 2026-06-11): [[slug]] na
                                         resposta abre a nota, como os chips e as citações. */}
-                                    <Markdown content={linkCitations(m.content, m.sources ?? [])} />
+                                    <Markdown
+                                        content={linkCitations(m.content, m.sources ?? [])}
+                                        onInternalLink={handleInternalLink}
+                                    />
                                 </span>
                             )}
                             {m.role === 'assistant' && m.sources && (
-                                <ProvenanceLine sources={m.sources} />
+                                <ProvenanceLine
+                                    sources={m.sources}
+                                    onInternalLink={handleInternalLink}
+                                />
                             )}
                             {m.role === 'assistant' && !!m.webSources?.length && (
                                 <details className="mt-1 text-xs text-muted-foreground">
@@ -905,8 +1037,27 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
 
             {error && <p className="shrink-0 text-sm text-destructive">{error}</p>}
 
+            {/* #101: bandeja de tools sobre o composer (YouTube agora; upload etc. depois). */}
+            <div className="flex shrink-0 items-center gap-1">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Ingerir vídeo do YouTube"
+                    title="Ingerir vídeo do YouTube"
+                    onClick={() => setYoutubeAberto(true)}
+                >
+                    <Youtube className="h-5 w-5" />
+                </Button>
+            </div>
+            <YoutubeModal
+                open={youtubeAberto}
+                onOpenChange={setYoutubeAberto}
+                onIngerido={handleYoutubeIngerido}
+            />
+
             <div className="flex shrink-0 gap-2">
                 <Textarea
+                    ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
