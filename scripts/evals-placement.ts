@@ -214,8 +214,8 @@ const CENARIOS: Cenario[] = [
         id: 'densidade',
         descricao: 'mede links resolvidos/nota num cluster relacionado (#104 baseline)',
         // Semeia 4 notas vizinhas (componentes de PC) para o turno ter a quem
-        // ligar. A teia densa precisa que o agente ligue a VÁRIAS; o teto de
-        // candidatas (limite=3 em candidatosParaFacto) é o que esta baseline expõe.
+        // ligar. A teia densa precisa que o agente ligue a VÁRIAS; o cluster mede
+        // se ele cria um índice que liga os componentes em vez de enterrar tudo num.
         setup: async (db) => {
             const seeds = [
                 ['Processador Ryzen', 'O processador é um AMD Ryzen, o cérebro do PC.'],
@@ -247,7 +247,7 @@ const CENARIOS: Cenario[] = [
             const escritas = resultados.flatMap((r) => r.notas);
             if (!escritas.length) return ['densidade: nenhuma nota escrita'];
 
-            let totalResolvidos = 0;
+            const porNota: number[] = [];
             for (const nota of escritas) {
                 const { data } = await db
                     .from('knowledge')
@@ -255,17 +255,23 @@ const CENARIOS: Cenario[] = [
                     .eq('slug', nota.slug)
                     .single();
                 const r = contarLinksResolvidos(data?.content_md ?? '', slugs);
-                totalResolvidos += r.resolvidos;
+                porNota.push(r.resolvidos);
                 console.log(
                     `    · ${nota.slug}: ${r.resolvidos} resolvidos / ${r.pendentes} pendentes`,
                 );
             }
-            const media = totalResolvidos / escritas.length;
-            console.log(`    densidade: ${media.toFixed(1)} links resolvidos/nota (baseline #104)`);
-            // Piso real: a teia partida (zero resolvidos) é falha; a baseline fina
-            // (1-2) passa e é o número que o fix terá de subir.
-            if (totalResolvidos < 1)
-                problemas.push('densidade: zero links resolvidos — teia partida');
+            const media = porNota.reduce((a, b) => a + b, 0) / porNota.length;
+            const maxNumaNota = Math.max(0, ...porNota);
+            console.log(`    densidade: media ${media.toFixed(1)} links/nota · hub max ${maxNumaNota} (#104)`);
+            // B (estrutura): UMA nota tem de ligar >=K componentes — estrela densa
+            // (índice→detalhes), não estrada de grau 1 espalhada por N notas. Como
+            // só contam links resolvidos, uma nota quase-duplicada (slug novo) não
+            // soma ao hub: a métrica nunca premeia over-split.
+            const K = 3;
+            if (maxNumaNota < K)
+                problemas.push(`densidade: sem nota-índice a ligar >=${K} componentes (max ${maxNumaNota})`);
+            // A (densidade): piso da média de links resolvidos por nota.
+            if (media < 2) problemas.push(`densidade: média ${media.toFixed(1)} < 2 links/nota`);
             return problemas;
         },
     },

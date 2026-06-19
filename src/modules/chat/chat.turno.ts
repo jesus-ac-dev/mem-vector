@@ -41,9 +41,17 @@ function blocoCandidatos(candidatos: NotaCandidata[]): string {
         '"content_md" COMPLETO com o facto novo integrado (não percas o que já lá está). ' +
         'Uma nota de teste, quase vazia ou com título genérico NÃO captura factos novos — ' +
         'nesse caso cria nota nova com o título do assunto (pessoas → os nomes delas).\n' +
+        'LIGA SEMPRE: se o turno referir OUTRAS notas desta lista, liga-as no content_md com ' +
+        '[[título exato]] (copia o título tal como listado acima) — continuar (ou criar) uma nota ' +
+        'não dispensa ligar às vizinhas que o facto também menciona.\n' +
         'Se o facto NÃO continua nenhuma destas mas é um ASSUNTO VIZINHO (relacionado, não o ' +
         'mesmo), cria nota nova E LIGA-A à nota candidata com [[título exato]] (copia o título tal ' +
-        'como listado acima) no content_md — assim a rede fica ligada em vez de ilhas separadas.\n\n'
+        'como listado acima) no content_md — assim a rede fica ligada em vez de ilhas separadas.\n' +
+        'ÍNDICE: se o turno junta VÁRIAS destas notas como partes de um TODO (ex.: componentes de ' +
+        'um mesmo PC), cria/mantém uma nota-índice com o nome do todo e liga lá cada parte com ' +
+        '[[título exato]], em vez de enterrar os links numa nota-componente — o índice é o conjunto ' +
+        '(assunto novo), as partes ficam nas suas notas, e NÃO cries uma nota quase igual a uma que ' +
+        'já existe.\n\n'
     );
 }
 
@@ -156,7 +164,10 @@ export function buildTurnoPrompt(
         'outra nota ou um tema que já exista no workspace, LIGA-O no content_md com [[título exato]] ' +
         'em vez de o escreveres em texto simples. Liga liberalmente entre assuntos relacionados — o ' +
         'objetivo é tudo ligado a tudo, sem clusters isolados. Usa os títulos EXATOS das notas ' +
-        'candidatas listadas abaixo quando os referires.\n' +
+        'candidatas listadas abaixo quando os referires. Ligar vale tanto ao CRIAR como ao ' +
+        'CONTINUAR: liga a TODAS as candidatas relacionadas do turno, não só à dona do assunto. Se ' +
+        'o turno junta várias delas num só tema (ex.: componentes de um PC), prefere uma nota-índice ' +
+        'desse tema que as liga a todas, sem duplicar uma nota que já exista quase igual.\n' +
         '3) "tarefas": array (pode ser vazio) de AÇÕES do utilizador — coisas a fazer, lembretes, ' +
         'coisas a acompanhar (ex.: "ligar ao contabilista", "rever proposta"). Na dúvida entre ' +
         'criar e não criar, CRIA — apagar é barato. Cada uma: {"titulo": "verbo + objeto, curto", ' +
