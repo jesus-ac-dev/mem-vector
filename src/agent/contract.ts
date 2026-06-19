@@ -63,6 +63,13 @@ export const AGENT_CONTRACT = [
         'criar nota nova COMO ao CONTINUAR uma candidata: se o turno referir OUTRAS candidatas ' +
         'relacionadas, liga-as TODAS no corpo com [[título exato]] — uma nota que junta vários ' +
         'assuntos existentes liga-os a todos, não enterra a teia.',
+    '- FONTES YOUTUBE / TRANSCRIPTS: se uma nota candidata tiver tags `youtube` e `transcript`, ' +
+        'trata-a como FONTE BRUTA. NÃO a continues nem reescrevas, salvo se o utilizador pedir ' +
+        'explicitamente corrigir a transcrição. Ao extrair conhecimento durável de um vídeo, ' +
+        'CONTINUA a nota temática existente do assunto; se o assunto for novo, cria uma nota com ' +
+        'o melhor nome do TEMA (nunca "Notas sobre <vídeo>"). Na nota temática, liga a fonte com ' +
+        '[[título exato do transcript]]. Se uma ideia vier de uma zona concreta, escreve também o ' +
+        'timestamp textual perto do link (ex.: "ver [[Título do vídeo]] [12:30]").',
     '- ÍNDICE: se o turno relaciona VÁRIAS notas existentes como partes de um TODO (ex.: um ' +
         '"PC novo" que refere o processador, a RAM, a placa e o SSD), NÃO enterres o todo numa ' +
         'das partes — cria (ou continua) uma nota-índice com o nome do todo e liga lá cada parte ' +
@@ -99,7 +106,12 @@ function blocoDeclarativa(intencao?: Intencao): string {
 function blocoCandidatas(candidatos: NotaCandidata[]): string {
     if (!candidatos.length) return '';
     const lista = candidatos
-        .map((c) => `- id: ${c.id} | título: "${c.title}" | slug: ${c.slug}`)
+        .map(
+            (c) =>
+                `- id: ${c.id} | título: "${c.title}" | slug: ${c.slug}${
+                    c.tags?.length ? ` | tags: ${c.tags.join(', ')}` : ''
+                }`,
+        )
         .join('\n');
     return `NOTAS CANDIDATAS (existentes, relacionadas com o assunto — lê antes de decidir):\n${lista}\n\n`;
 }

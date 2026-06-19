@@ -46,6 +46,25 @@ describe('buildTurnoPrompt: ligações entre notas (#82)', () => {
     });
 });
 
+describe('buildTurnoPrompt: YouTube como fonte bruta', () => {
+    it('não manda continuar o transcript; manda criar/continuar nota temática ligada à fonte', () => {
+        const prompt = buildTurnoPrompt('analisa este vídeo', 'pontos principais', [
+            {
+                id: 'id-video',
+                slug: 'finally-agent-loops-clearly-explained',
+                title: 'Finally Agent Loops Clearly Explained',
+                contentMd: '# Finally Agent Loops Clearly Explained\n\n[00:00] transcript',
+                tags: ['youtube', 'transcript'],
+            },
+        ]);
+
+        expect(prompt).toContain('FONTE BRUTA');
+        expect(prompt).toContain('NÃO continues nem reescrevas o transcript');
+        expect(prompt).toContain('nunca "Notas sobre <vídeo>"');
+        expect(prompt).toContain('[[Finally Agent Loops Clearly Explained]]');
+    });
+});
+
 // Declarativa sem marcas de pergunta = facto declarado → a nota é obrigatória,
 // salvo trivialidade (#19, decisão 2026-06-10).
 describe('buildTurnoPrompt com intenção declarativa', () => {

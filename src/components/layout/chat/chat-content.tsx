@@ -88,10 +88,11 @@ function promptVideoIngerido(r: IngestaoResult): string {
     return [
         `Acabei de ingerir o vídeo "${r.title}" de ${r.author}.`,
         '',
-        `Usa a nota [[${r.title}]] como contexto principal e dá-me:`,
-        '- os pontos principais;',
-        '- ideias acionáveis para o meu trabalho;',
-        '- ligações a notas/tópicos que já existam no workspace, se fizer sentido.',
+        `Usa o transcript [[${r.title}]] como fonte principal e faz duas coisas:`,
+        '1. dá-me os pontos principais e ideias acionáveis para o meu trabalho;',
+        '2. transforma o que for durável em conhecimento do workspace: continua notas existentes sobre os temas; se o tema for novo, cria uma nota com o melhor nome do tema.',
+        '',
+        `Não cries uma nota "Notas sobre ${r.title}". O transcript é fonte bruta: as notas temáticas novas/continuadas devem apontar para [[${r.title}]] e, quando fizer sentido, indicar o timestamp textual perto do link.`,
     ].join('\n');
 }
 

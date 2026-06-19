@@ -8,6 +8,8 @@ describe('AGENT_CONTRACT', () => {
         expect(AGENT_CONTRACT).toContain('CONTINUA a nota dona do assunto');
         expect(AGENT_CONTRACT).toContain('carimbos de proveniência');
         expect(AGENT_CONTRACT).toContain('não escreves NADA');
+        expect(AGENT_CONTRACT).toContain('FONTES YOUTUBE / TRANSCRIPTS');
+        expect(AGENT_CONTRACT).toContain('nunca "Notas sobre <vídeo>"');
     });
 });
 
@@ -33,6 +35,20 @@ describe('buildPromptAgentic', () => {
         expect(p).toContain('id: abc-1');
         expect(p).toContain('slug: carlos-e-sofia');
         // O conteúdo fica para a tool ler_nota: ler antes de escrever.
+        expect(p).not.toContain('# segredo');
+    });
+
+    it('mostra tags das candidatas para o contrato reconhecer transcripts YouTube', () => {
+        const p = buildPromptAgentic('analisa este vídeo', 'pontos principais', [
+            {
+                id: 'video-1',
+                slug: 'finally-agent-loops-clearly-explained',
+                title: 'Finally Agent Loops Clearly Explained',
+                contentMd: '# segredo',
+                tags: ['youtube', 'transcript'],
+            },
+        ]);
+        expect(p).toContain('tags: youtube, transcript');
         expect(p).not.toContain('# segredo');
     });
 
