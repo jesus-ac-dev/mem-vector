@@ -23,8 +23,7 @@ export function ProcuraInput() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const isMac =
-        typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+    const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
     return (
         <div className="relative mx-auto w-full max-w-md">
