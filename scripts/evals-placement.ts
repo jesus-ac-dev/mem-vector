@@ -10,6 +10,7 @@ import {
 } from '../src/modules/knowledge/knowledge.service';
 import { criarPastaCom } from '../src/modules/folders/folders.service';
 import { getDailyCom, hojeLisboa } from '../src/modules/daily/daily.service';
+import { contarLinksResolvidos } from '../src/modules/knowledge/knowledge.links';
 import type { TurnoDestilado } from '../src/modules/chat/chat.service';
 
 process.loadEnvFile('.env.local');
@@ -208,6 +209,71 @@ const CENARIOS: Cenario[] = [
                 tarefasConcluidas: 1,
             },
         ],
+    },
+    {
+        id: 'densidade',
+        descricao: 'mede links resolvidos/nota num cluster relacionado (#104 baseline)',
+        // Semeia 4 notas vizinhas (componentes de PC) para o turno ter a quem
+        // ligar. A teia densa precisa que o agente ligue a VÁRIAS; o cluster mede
+        // se ele cria um índice que liga os componentes em vez de enterrar tudo num.
+        setup: async (db) => {
+            const seeds = [
+                ['Processador Ryzen', 'O processador é um AMD Ryzen, o cérebro do PC.'],
+                ['Memória RAM DDR5', 'A RAM é DDR5, 32GB, para o PC correr fluido.'],
+                ['Placa gráfica RTX', 'A placa gráfica é uma NVIDIA RTX, para jogos e IA.'],
+                ['Armazenamento SSD NVMe', 'O armazenamento é um SSD NVMe rápido.'],
+            ];
+            for (const [title, corpo] of seeds) {
+                await escreverNotaCom(db, {
+                    title,
+                    content_md: `# ${title}\n\n${corpo}`,
+                    links: [],
+                    reason: 'seed eval densidade',
+                });
+            }
+        },
+        turnos: [
+            {
+                q: 'Montei o meu PC novo: tem o processador Ryzen, 32GB de RAM DDR5, uma placa gráfica RTX e um SSD NVMe.',
+                a: 'Boa máquina! Ryzen, 32GB DDR5, RTX e SSD NVMe — registado.',
+                nota: 'qualquer',
+                daily: 'qualquer',
+            },
+        ],
+        checksFinais: async (db, resultados) => {
+            const problemas: string[] = [];
+            const { data: todas } = await db.from('knowledge').select('slug');
+            const slugs = new Set((todas ?? []).map((n) => String(n.slug)));
+            const escritas = resultados.flatMap((r) => r.notas);
+            if (!escritas.length) return ['densidade: nenhuma nota escrita'];
+
+            const porNota: number[] = [];
+            for (const nota of escritas) {
+                const { data } = await db
+                    .from('knowledge')
+                    .select('content_md')
+                    .eq('slug', nota.slug)
+                    .single();
+                const r = contarLinksResolvidos(data?.content_md ?? '', slugs);
+                porNota.push(r.resolvidos);
+                console.log(
+                    `    · ${nota.slug}: ${r.resolvidos} resolvidos / ${r.pendentes} pendentes`,
+                );
+            }
+            const media = porNota.reduce((a, b) => a + b, 0) / porNota.length;
+            const maxNumaNota = Math.max(0, ...porNota);
+            console.log(`    densidade: media ${media.toFixed(1)} links/nota · hub max ${maxNumaNota} (#104)`);
+            // B (estrutura): UMA nota tem de ligar >=K componentes — estrela densa
+            // (índice→detalhes), não estrada de grau 1 espalhada por N notas. Como
+            // só contam links resolvidos, uma nota quase-duplicada (slug novo) não
+            // soma ao hub: a métrica nunca premeia over-split.
+            const K = 3;
+            if (maxNumaNota < K)
+                problemas.push(`densidade: sem nota-índice a ligar >=${K} componentes (max ${maxNumaNota})`);
+            // A (densidade): piso da média de links resolvidos por nota.
+            if (media < 2) problemas.push(`densidade: média ${media.toFixed(1)} < 2 links/nota`);
+            return problemas;
+        },
     },
     {
         id: 'kernel',

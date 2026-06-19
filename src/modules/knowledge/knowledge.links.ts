@@ -102,6 +102,19 @@ export function parseWikilinks(markdown: string): string[] {
     return [...new Set(parseWikilinkTargets(markdown).map((link) => link.slug))];
 }
 
+// Mede a densidade de links de uma nota: dos [[wikilinks]] que ela faz, quantos
+// resolvem para uma nota existente (slug no conjunto) vs ficam pendentes (alvo
+// por criar). É a métrica que torna o gap da teia mensurável (#104) — o que não
+// se mede não melhora. Dedup e namespace conversa: herdados de parseWikilinkTargets.
+export function contarLinksResolvidos(
+    markdown: string,
+    slugsExistentes: Set<string>,
+): { total: number; resolvidos: number; pendentes: number } {
+    const alvos = parseWikilinkTargets(markdown);
+    const resolvidos = alvos.filter((alvo) => slugsExistentes.has(alvo.slug)).length;
+    return { total: alvos.length, resolvidos, pendentes: alvos.length - resolvidos };
+}
+
 export function parseWikilinkTargets(markdown: string): WikilinkTarget[] {
     const out: WikilinkTarget[] = [];
     const seen = new Set<string>();

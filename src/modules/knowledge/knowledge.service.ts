@@ -698,7 +698,10 @@ const CANDIDATOS_DESTILACAO = 8;
 export async function candidatosParaFactoCom(
     db: SupabaseClient,
     texto: string,
-    limite = 3,
+    // 5 (não 3): a nota-índice precisa de VER todos os vizinhos para os ligar
+    // (#104). Sem custo de retrieval — o pool já é CANDIDATOS_DESTILACAO=8,
+    // cortado aqui pelo dedup de entidades; subir o teto só deixa passar mais.
+    limite = 5,
 ): Promise<NotaCandidata[]> {
     const emb = await embedQuery(texto);
     const { data, error } = await db.rpc('match_chunks_hybrid', {
@@ -761,7 +764,7 @@ export async function candidatosParaFactoCom(
             }).tags,
         }));
 }
-export const candidatosParaFacto = async (texto: string, limite = 3) =>
+export const candidatosParaFacto = async (texto: string, limite = 5) =>
     candidatosParaFactoCom(await createClient(), texto, limite);
 
 export interface LinkNota {

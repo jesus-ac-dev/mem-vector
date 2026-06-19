@@ -55,7 +55,16 @@ export const AGENT_CONTRACT = [
         'ou um tema existente, LIGA-O com [[título exato]] no corpo (e o slug no campo links) em vez ' +
         'de o escreveres em texto simples. Liga liberalmente entre assuntos relacionados — tudo ' +
         'ligado a tudo, sem clusters isolados; usa o título EXATO das notas candidatas (copia-o ' +
-        'letra a letra) como alvo dos [[...]], senão a ligação fica pendente.',
+        'letra a letra) como alvo dos [[...]], senão a ligação fica pendente. Isto vale TANTO ao ' +
+        'criar nota nova COMO ao CONTINUAR uma candidata: se o turno referir OUTRAS candidatas ' +
+        'relacionadas, liga-as TODAS no corpo com [[título exato]] — uma nota que junta vários ' +
+        'assuntos existentes liga-os a todos, não enterra a teia.',
+    '- ÍNDICE: se o turno relaciona VÁRIAS notas existentes como partes de um TODO (ex.: um ' +
+        '"PC novo" que refere o processador, a RAM, a placa e o SSD), NÃO enterres o todo numa ' +
+        'das partes — cria (ou continua) uma nota-índice com o nome do todo e liga lá cada parte ' +
+        'com [[título exato]]. O índice é o conjunto (assunto NOVO); as partes ficam nas notas ' +
+        'delas: não copies o conteúdo das partes para o índice nem partas um único assunto em ' +
+        'notas quase-iguais.',
     '- Se uma escrita falhar com "no arquivo", o nome pertence a uma nota arquivada: NÃO insistas ' +
         'nem escrevas por cima — cria a nota com um título ligeiramente diferente e menciona na ' +
         'resposta final que existe uma arquivada homónima.',
