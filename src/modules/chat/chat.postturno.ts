@@ -130,6 +130,7 @@ export async function executarDestilacaoTurnoCom(
             intencao: classificarIntencao(question),
             historico,
             kernel,
+            tagsExistentes,
         });
     }
 

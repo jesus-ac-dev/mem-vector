@@ -50,6 +50,10 @@ export const AGENT_CONTRACT = [
         'nomes delas (ex.: "Carlos e Sofia"), nunca o facto.',
     '- summary: UMA frase curta (máx. ~140 caracteres) que resume a NOTA INTEIRA como fica depois ' +
         'desta escrita — não o que mudou neste turno.',
+    '- tags: passa 1 a 4 etiquetas curtas (1-2 palavras, minúsculas, sem #) que classificam o ' +
+        'ASSUNTO da nota no campo `tags` de criar_nota/continuar_nota. REUTILIZA as que já estão ' +
+        'em uso (lista abaixo) em vez de inventar variantes do mesmo conceito; ao continuar, as ' +
+        'novas são UNIDAS às que a nota já tem (nunca as substituem).',
     '- Escreve factos autocontidos: resolve pronomes em nomes usando a conversa recente.',
     '- LIGAÇÕES (o workspace é uma REDE, não notas soltas): sempre que a nota referir outra nota ' +
         'ou um tema existente, LIGA-O com [[título exato]] no corpo (e o slug no campo links) em vez ' +
@@ -100,12 +104,20 @@ function blocoCandidatas(candidatos: NotaCandidata[]): string {
     return `NOTAS CANDIDATAS (existentes, relacionadas com o assunto — lê antes de decidir):\n${lista}\n\n`;
 }
 
+// Tags já em uso (#95, paridade com o one-shot): dadas ao agente para reutilizar
+// em vez de inventar variantes do mesmo conceito.
+function blocoTagsExistentes(tags: string[]): string {
+    if (!tags.length) return '';
+    return `TAGS JÁ EM USO (reutiliza estas quando servirem, não cries variantes): ${tags.join(', ')}\n\n`;
+}
+
 export function buildPromptAgentic(
     question: string,
     answer: string,
     candidatos: NotaCandidata[] = [],
     intencao?: Intencao,
     historico: MensagemConversa[] = [],
+    tagsExistentes: string[] = [],
 ): string {
     return (
         'Processa o pós-turno desta troca segundo o teu contrato. ' +
@@ -113,6 +125,7 @@ export function buildPromptAgentic(
         blocoConversa(historico) +
         blocoDeclarativa(intencao) +
         blocoCandidatas(candidatos) +
+        blocoTagsExistentes(tagsExistentes) +
         `Pergunta: ${question}\nResposta: ${answer}`
     );
 }

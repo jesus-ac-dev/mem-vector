@@ -10,6 +10,7 @@ import {
     getNotaPorIdCom,
     summaryDoAgente,
 } from '../modules/knowledge/knowledge.service';
+import { normalizarTags, tagsDoAgente } from '../modules/knowledge/knowledge.props';
 import {
     acrescentarAoDailyCom,
     getDailyCom,
@@ -107,6 +108,12 @@ const TOOLS = [
                 },
                 reason: { type: 'string', description: 'Porque é que este facto é durável' },
                 summary: { type: 'string', description: 'Uma frase que resume a nota inteira' },
+                tags: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                        '1 a 4 etiquetas curtas (minúsculas, sem #) que classificam o assunto; reutiliza as já em uso',
+                },
             },
             required: ['title', 'content_md', 'reason'],
         },
@@ -126,6 +133,12 @@ const TOOLS = [
                 summary: {
                     type: 'string',
                     description: 'Uma frase que re-resume a nota inteira como fica',
+                },
+                tags: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                        'Etiquetas a acrescentar (minúsculas, sem #); são unidas às que a nota já tem, nunca as substituem',
                 },
             },
             required: ['id', 'content_md'],
@@ -275,6 +288,10 @@ async function executarTool(
                     links: Array.isArray(args.links) ? listaStrings(args, 'links') : [],
                     reason: texto(args, 'reason'),
                     summary: typeof args.summary === 'string' ? args.summary : undefined,
+                    // #95: paridade com o one-shot — o agentic também classifica.
+                    tags: normalizarTags(
+                        Array.isArray(args.tags) ? listaStrings(args, 'tags') : [],
+                    ),
                 },
                 'agent',
             );
@@ -296,7 +313,13 @@ async function executarTool(
                 texto(args, 'id'),
                 texto(args, 'content_md'),
                 'agent',
-                summaryDoAgente(typeof args.summary === 'string' ? args.summary : undefined),
+                {
+                    ...summaryDoAgente(typeof args.summary === 'string' ? args.summary : undefined),
+                    // #95: tags acrescentadas — o RPC une com as existentes (guard).
+                    ...tagsDoAgente(
+                        normalizarTags(Array.isArray(args.tags) ? listaStrings(args, 'tags') : []),
+                    ),
+                },
             );
             registarNotaTurno(estado, { slug: r.slug, title: r.title, criada: false });
             if (RESULT_FILE) {
