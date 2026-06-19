@@ -3,16 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-    Activity,
-    AlertTriangle,
-    CheckCircle2,
-    Clock3,
-    Info,
-    Radio,
-    Sparkles,
-    X,
-} from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
 import { processarDestilacaoJob } from '@/modules/chat/chat.actions';
 import { getJson } from '@/lib/api-get';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
