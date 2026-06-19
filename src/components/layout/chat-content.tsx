@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Info, Radio, X } from 'lucide-react';
+import {
+    Activity,
+    AlertTriangle,
+    CheckCircle2,
+    Clock3,
+    Info,
+    Radio,
+    X,
+    Youtube,
+} from 'lucide-react';
 import { processarDestilacaoJob } from '@/modules/chat/chat.actions';
 import { getJson } from '@/lib/api-get';
 import { linkCitations, provenance, sourceHref, sourceLabel } from '@/modules/chat/chat.provenance';
@@ -26,6 +35,7 @@ import { useWorkspace } from '@/components/layout/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
 import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
 import { ProviderIcon } from '@/components/layout/provider-icon';
+import { YoutubeModal } from '@/components/layout/youtube-modal';
 import { DEFINICOES_MUDARAM_EVENT, pedirDefinicoes } from '@/components/layout/definicoes-modal';
 import {
     ESFORCOS,
@@ -536,6 +546,8 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     // resposta aparecer a streamar. `faseAtual` narra o turno (consultar→gerar).
     const [respostaIniciada, setRespostaIniciada] = useState(false);
     const [faseAtual, setFaseAtual] = useState<string | null>(null);
+    const [youtubeAberto, setYoutubeAberto] = useState(false); // #101: bandeja de tools
+
     const [conversationId, setConversationId] = useState<string | undefined>(undefined);
     const [lastTrace, setLastTrace] = useState<ChatTrace | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -904,6 +916,20 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             </div>
 
             {error && <p className="shrink-0 text-sm text-destructive">{error}</p>}
+
+            {/* #101: bandeja de tools sobre o composer (YouTube agora; upload etc. depois). */}
+            <div className="flex shrink-0 items-center gap-1">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Ingerir vídeo do YouTube"
+                    title="Ingerir vídeo do YouTube"
+                    onClick={() => setYoutubeAberto(true)}
+                >
+                    <Youtube className="h-5 w-5" />
+                </Button>
+            </div>
+            <YoutubeModal open={youtubeAberto} onOpenChange={setYoutubeAberto} />
 
             <div className="flex shrink-0 gap-2">
                 <Textarea
