@@ -42,6 +42,7 @@ describe('ingerirVideoCom (#101)', () => {
     it('escreve a nota em YouTube/<autor> com cabeçalho + transcript', async () => {
         vi.mocked(buscarVideo).mockResolvedValue(FAKE);
         const r = await ingerirVideoCom(db, FAKE.url);
+        expect(r.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
         expect(r.title).toBe(FAKE.title);
         expect(r.author).toBe(FAKE.author);
 

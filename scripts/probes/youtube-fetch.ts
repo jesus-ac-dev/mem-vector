@@ -1,8 +1,8 @@
-// Probe #101: gate de viabilidade — buscarVideo (timedtext Node-nativo) funciona
-// num vídeo real? Sem isto, o desenho cai para o fallback (Python/yt-dlp).
+// Probe #101: gate de viabilidade — buscarVideo consegue obter metadados +
+// transcript num vídeo real via yt-dlp?
 import { buscarVideo } from '../../src/modules/youtube/youtube';
 
-const URL = process.argv[2] ?? 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+const URL = process.argv[2] ?? 'https://www.youtube.com/watch?v=Ks-_Mh1QhMc';
 
 async function main(): Promise<void> {
     const v = await buscarVideo(URL);
@@ -12,7 +12,7 @@ async function main(): Promise<void> {
     console.log('--- início do transcript ---');
     console.log(v.transcript.slice(0, 300));
     const ok = v.transcript.length > 50 && Boolean(v.title) && Boolean(v.author);
-    console.log(ok ? '\n✅ VIÁVEL (Node-nativo busca metadados + transcript)' : '\n❌ falhou');
+    console.log(ok ? '\n✅ VIÁVEL (yt-dlp busca metadados + transcript)' : '\n❌ falhou');
     if (!ok) process.exit(1);
 }
 

@@ -66,6 +66,15 @@ export function formatTimestamp(ms: number): string {
     return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+// Remove anotações de não-fala das auto-legendas ([Music], [Applause],
+// [Aplausos], [Laughter]…) — ruído que polui o conhecimento e o RAG. NÃO mexe nas
+// âncoras de tempo [mm:ss] (essas são dígitos e são adicionadas DEPOIS, no join).
+const RE_ANOTACAO =
+    /\[(?:music|música|applause|aplausos|laughter|risos|cheering|cheers[^\]]*|inaudible|impercet[íi]vel|crosstalk|silence|sil[êe]ncio|background noise|ru[íi]do[^\]]*)\]/gi;
+function semAnotacoes(t: string): string {
+    return t.replace(RE_ANOTACAO, ' ');
+}
+
 // Texto corrido (sem timestamp por-segmento) com uma âncora [mm:ss] no início e a
 // cada bucket de 30s — legível, mas ainda dá para saltar a um momento.
 const BUCKET_MS = 30_000;
@@ -73,7 +82,7 @@ export function limparTranscript(segmentos: SegmentoTranscript[]): string {
     let out = '';
     let bucketAnterior = -1;
     for (const seg of segmentos) {
-        const texto = seg.text.replace(/\s+/g, ' ').trim();
+        const texto = semAnotacoes(seg.text).replace(/\s+/g, ' ').trim();
         if (!texto) continue;
         const bucket = Math.floor(seg.offsetMs / BUCKET_MS);
         if (bucket !== bucketAnterior) {
@@ -128,6 +137,9 @@ export async function buscarVideo(url: string): Promise<VideoYoutube> {
                 [
                     '--no-playlist',
                     '--skip-download',
+                    // `--print` ativa simulação no yt-dlp; sem isto obtemos
+                    // título/autor mas nenhum ficheiro de legenda.
+                    '--no-simulate',
                     // O yt-dlp exige um runtime JS para extrair o YouTube (EJS,
                     // anti-bot). Reusamos o Node que já corre a app — sem deno.
                     '--js-runtimes',
@@ -137,8 +149,9 @@ export async function buscarVideo(url: string): Promise<VideoYoutube> {
                     '--ignore-errors',
                     '--retries',
                     '3',
-                    // Auto-legendas (quase universais em fala) — provado a baixar.
-                    // Manual-only é raro; evita-se um pedido extra (menos 429).
+                    // Pedimos manuais + auto: vídeos grandes/curados tendem a
+                    // ter legendas manuais; vídeos pequenos dependem das auto.
+                    '--write-subs',
                     '--write-auto-subs',
                     '--sub-format',
                     'json3',

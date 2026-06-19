@@ -57,4 +57,16 @@ describe('limparTranscript', () => {
         const t = limparTranscript([seg('  a  ', 0), seg('', 1), seg('b', 2)]);
         expect(t).toBe('[00:00] a b');
     });
+
+    it('remove anotações de não-fala ([Music]/[Applause]/[Aplausos]) — ruído p/ o RAG', () => {
+        const t = limparTranscript([
+            seg('[Music] [Applause] olá a todos', 0),
+            seg('[Aplausos]', 2),
+            seg('isto é o conteúdo', 4),
+        ]);
+        expect(t).toBe('[00:00] olá a todos isto é o conteúdo');
+        expect(t).not.toMatch(/Music|Applause|Aplausos/i);
+        // a âncora de tempo (dígitos entre parênteses retos) sobrevive
+        expect(t.startsWith('[00:00]')).toBe(true);
+    });
 });

@@ -33,6 +33,9 @@ já corre a app (`--js-runtimes node:${process.execPath}`). MAS o `NODE_OPTIONS`
 app (tuning de memória / loader tsx) herdado **parte esse Node em silêncio** → sem
 legendas. Por isso o spawn usa `envLimpo()` (apaga `NODE_OPTIONS`).
 
+**Gotcha resolvido 2:** `--print` liga modo simulação no `yt-dlp`; é obrigatório
+usar `--no-simulate`, senão ele imprime título/autor mas não grava nenhum `.json3`.
+
 ## Limitações conhecidas
 
 - **Deploy (dívida declarada):** em Vercel (IP datacenter) o yt-dlp pode ser
@@ -40,6 +43,6 @@ legendas. Por isso o spawn usa `envLimpo()` (apaga `NODE_OPTIONS`).
   ao lançar, trocar por proxy/API de transcript. Local (1.º utilizador) funciona.
 - **429 (rate-limit):** muitos pedidos seguidos → o YouTube degrada a extração
   (sem legendas, sem 429 limpo). Mensagem amigável quando detetável no stderr.
-- **Só auto-legendas** (`--write-auto-subs`): um vídeo com **só** legendas manuais
-  e auto desligadas cai em "sem transcrição". Raro (a fala gera auto-legenda).
+- Pede legendas manuais + auto (`--write-subs` + `--write-auto-subs`), mas ainda
+  depende do que o YouTube disponibiliza ao `yt-dlp`.
 - Frames/multimodal (review visual) ficam para fatia futura — transcript-first.

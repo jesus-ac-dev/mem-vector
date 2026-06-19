@@ -31,6 +31,7 @@ function montarNota(v: VideoYoutube): string {
 }
 
 export interface ResultadoIngestao {
+    id: string;
     slug: string;
     title: string;
     author: string;
@@ -57,7 +58,7 @@ export async function ingerirVideoCom(db: SupabaseClient, url: string): Promise<
         autorId,
         'user',
     );
-    return { slug: r.slug, title: r.title, author: v.author, criada: r.diff === null };
+    return { id: r.id, slug: r.slug, title: r.title, author: v.author, criada: r.diff === null };
 }
 
 export const ingerirVideo = async (url: string) => ingerirVideoCom(await createClient(), url);

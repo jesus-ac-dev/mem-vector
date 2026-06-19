@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 
 import { logClientError } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
@@ -17,18 +16,16 @@ import { ingerirVideoAction, type IngestaoResult } from '@/modules/youtube/youtu
 
 // #101: cola um link do YouTube → o transcript vira uma nota (YouTube/<autor>/),
 // pronta para discutir no chat. A ingestão é um dump; a inteligência é a conversa.
-type Estado =
-    | { tipo: 'idle' }
-    | { tipo: 'a-ingerir' }
-    | { tipo: 'ok'; r: IngestaoResult }
-    | { tipo: 'erro'; msg: string };
+type Estado = { tipo: 'idle' } | { tipo: 'a-ingerir' } | { tipo: 'erro'; msg: string };
 
 export function YoutubeModal({
     open,
     onOpenChange,
+    onIngerido,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
+    onIngerido: (r: IngestaoResult) => void;
 }) {
     const [url, setUrl] = useState('');
     const [estado, setEstado] = useState<Estado>({ tipo: 'idle' });
@@ -40,8 +37,10 @@ export function YoutubeModal({
             // devolve undefined, o que comia as mensagens do servidor (sem
             // legendas, 429, privado). Aqui o catch recebe-as e mostra-as.
             const r = await ingerirVideoAction(url);
-            setEstado({ tipo: 'ok', r });
             setUrl('');
+            setEstado({ tipo: 'idle' });
+            onIngerido(r);
+            onOpenChange(false);
         } catch (e) {
             logClientError({ area: 'youtube', action: 'ingerir' }, e);
             setEstado({ tipo: 'erro', msg: e instanceof Error ? e.message : 'Falhou.' });
@@ -86,19 +85,6 @@ export function YoutubeModal({
                     ) : null}
                     {estado.tipo === 'erro' ? (
                         <p className="text-sm text-destructive">{estado.msg}</p>
-                    ) : null}
-                    {estado.tipo === 'ok' ? (
-                        <p className="text-sm text-muted-foreground">
-                            Pronto:{' '}
-                            <Link
-                                href={`/knowledge/${estado.r.slug}`}
-                                className="font-medium text-primary"
-                                onClick={() => onOpenChange(false)}
-                            >
-                                {estado.r.title}
-                            </Link>{' '}
-                            — de {estado.r.author}. Já podes falar sobre ele.
-                        </p>
                     ) : null}
                 </div>
             </DialogContent>
