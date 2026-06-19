@@ -8,8 +8,8 @@ import { dataPt } from '@/lib/datas';
 import { logClientError, runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
-import { NotaEditor } from '@/components/layout/nota-editor';
-import { NotaPropriedades } from '@/components/layout/nota-propriedades';
+import { NotaEditor } from '@/components/layout/knowledge/nota-editor';
+import { NotaPropriedades } from '@/components/layout/knowledge/nota-propriedades';
 import {
     Select,
     SelectContent,
@@ -17,7 +17,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { useWorkspace, tabKey, type FicheiroAberto } from '@/components/layout/workspace-context';
+import {
+    useWorkspace,
+    tabKey,
+    type FicheiroAberto,
+} from '@/components/layout/workspace/workspace-context';
 import {
     guardarFicheiro,
     abrirOuCriarNota,

@@ -7,7 +7,7 @@ import { getJson } from '@/lib/api-get';
 import { logClientError } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useProcura } from '@/components/layout/procura-context';
+import { useProcura } from '@/components/layout/procura/procura-context';
 import type { ResultadoProcura, TipoResultado } from '@/modules/procura/procura.service';
 
 function hrefDoResultado(r: ResultadoProcura): string {

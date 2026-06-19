@@ -1,5 +1,5 @@
-import { KanbanBoard } from '@/components/layout/kanban-board';
-import { ChatContent } from '@/components/layout/chat-content';
+import { KanbanBoard } from '@/components/layout/kanban/kanban-board';
+import { ChatContent } from '@/components/layout/chat/chat-content';
 
 // Kanban (#58): vista das tarefas pelas 6 colunas canónicas; filtrado a um
 // projeto é a página do projeto v1. Visão fechada (2026-06-05): em modo

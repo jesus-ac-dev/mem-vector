@@ -23,7 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { apagarTarefa, concluirTarefa, mudarEstadoTarefa } from '@/modules/tarefas/tarefas.actions';
 import { getJson } from '@/lib/api-get';
 import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';

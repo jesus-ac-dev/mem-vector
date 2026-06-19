@@ -32,14 +32,17 @@ import { Button } from '@/components/ui/button';
 import { logClientError } from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { runClientAction } from '@/lib/client-error-log';
 import { abrirOuCriarNota } from '@/modules/workspace/workspace.actions';
 import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
-import { ProviderIcon } from '@/components/layout/provider-icon';
-import { YoutubeModal } from '@/components/layout/youtube-modal';
+import { ProviderIcon } from '@/components/layout/chat/provider-icon';
+import { YoutubeModal } from '@/components/layout/youtube/youtube-modal';
 import type { IngestaoResult } from '@/modules/youtube/youtube.actions';
-import { DEFINICOES_MUDARAM_EVENT, pedirDefinicoes } from '@/components/layout/definicoes-modal';
+import {
+    DEFINICOES_MUDARAM_EVENT,
+    pedirDefinicoes,
+} from '@/components/layout/definicoes/definicoes-modal';
 import {
     ESFORCOS,
     MODELOS_SUGERIDOS,

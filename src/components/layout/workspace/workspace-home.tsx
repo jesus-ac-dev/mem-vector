@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MessageSquarePlus, FilePlus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logClientError, runClientAction } from '@/lib/client-error-log';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { criarNotaVazia } from '@/modules/workspace/workspace.actions';
 
 // Home do workspace — aparece quando o chat e todas as tabs estão fechados.

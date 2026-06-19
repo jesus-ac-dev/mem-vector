@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useWorkspace, tabKey } from '@/components/layout/workspace-context';
+import { useWorkspace, tabKey } from '@/components/layout/workspace/workspace-context';
 import {
     moverNotaParaPasta,
     moverPastaParaPasta,

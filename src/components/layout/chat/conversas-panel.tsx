@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { listarConversasAction } from '@/modules/chat/chat.actions';
 import type { ConversaResumo } from '@/modules/chat/chat.conversas';
 

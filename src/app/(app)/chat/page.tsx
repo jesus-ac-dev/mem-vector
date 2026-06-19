@@ -1,9 +1,9 @@
 'use client';
 
-import { ChatContent } from '@/components/layout/chat-content';
-import { FilePane } from '@/components/layout/file-pane';
-import { WorkspaceHome } from '@/components/layout/workspace-home';
-import { useWorkspace } from '@/components/layout/workspace-context';
+import { ChatContent } from '@/components/layout/chat/chat-content';
+import { FilePane } from '@/components/layout/explorer/file-pane';
+import { WorkspaceHome } from '@/components/layout/workspace/workspace-home';
+import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 
 export default function ChatPage() {
     const { chatAberto, ficheirosAbertos } = useWorkspace();
