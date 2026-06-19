@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, History, Pencil, FileText, Archive, Save } from 'lucide-react';
+import { X, History, Pencil, FileText, Archive, Save, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dataPt } from '@/lib/datas';
 import { logClientError, runClientAction } from '@/lib/client-error-log';
@@ -26,6 +26,7 @@ import {
     guardarFicheiro,
     abrirOuCriarNota,
     arquivarNotaAction,
+    restaurarVersaoAction,
     type NotaResolvidaWikilink,
 } from '@/modules/workspace/workspace.actions';
 import { getJson } from '@/lib/api-get';
@@ -148,6 +149,7 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
     // ── editor co-autor ──
     const [rascunho, setRascunho] = useState('');
     const [guardando, setGuardando] = useState(false);
+    const [restaurando, setRestaurando] = useState(false);
     const [erroGuardar, setErroGuardar] = useState<string | null>(null);
     const [confirmarArquivo, setConfirmarArquivo] = useState(false);
     const [wikilinkAmbiguo, setWikilinkAmbiguo] = useState<{
@@ -293,6 +295,32 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         if (ficheiro.tipo !== 'knowledge') return;
         await arquivarNotaAction(ficheiro.chave, ficheiro.id);
         fecharFicheiro(ficheiroKey);
+        notificarWorkspaceMudou();
+        router.refresh();
+    }
+
+    // #119: repõe a versão selecionada como a atual. Otimista (o corpo da versão
+    // já está em mão), depois refresca o workspace para o resto reagir.
+    async function handleRestaurar(versionId: string, conteudoRestaurado: string) {
+        if (restaurando) return;
+        setRestaurando(true);
+        setErroGuardar(null);
+        const res = await restaurarVersaoAction(versionId);
+        setRestaurando(false);
+        if (!res.ok) {
+            setErroGuardar(res.erro);
+            return;
+        }
+        setEstado((prev) => ({
+            tipo: 'ok',
+            titulo: prev.tipo === 'ok' ? prev.titulo : (ficheiro.titulo ?? ficheiro.chave),
+            contentMd: conteudoRestaurado,
+            folderId: prev.tipo === 'ok' ? prev.folderId : null,
+            propriedades: prev.tipo === 'ok' ? prev.propriedades : undefined,
+        }));
+        setRascunho(conteudoRestaurado);
+        setBaseId(null);
+        setVista('conteudo');
         notificarWorkspaceMudou();
         router.refresh();
     }
@@ -595,6 +623,41 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
                                     </Select>
                                 </div>
                                 {diff !== null && <DiffView diff={diff} />}
+                                {ficheiro.tipo === 'knowledge' &&
+                                    (() => {
+                                        const selId = baseId ?? historyEstado.versoes[1]?.id;
+                                        const sel = historyEstado.versoes.find(
+                                            (v) => v.id === selId,
+                                        );
+                                        if (!sel) return null;
+                                        return (
+                                            <div className="space-y-1 border-t border-border pt-3">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={restaurando}
+                                                    onClick={() =>
+                                                        handleRestaurar(sel.id, sel.contentMd)
+                                                    }
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                                                    {restaurando
+                                                        ? 'A restaurar…'
+                                                        : 'Restaurar esta versão'}
+                                                </Button>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Repõe o corpo desta versão como o atual. Gera
+                                                    uma nova versão — o histórico mantém-se.
+                                                </p>
+                                                {erroGuardar && (
+                                                    <p className="text-xs text-destructive">
+                                                        {erroGuardar}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                             </div>
                         )}
                     </>

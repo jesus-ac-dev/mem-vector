@@ -1097,3 +1097,25 @@ export async function listarVersoesCom(db: SupabaseClient, entityId: string): Pr
 }
 export const listarVersoes = async (entityId: string) =>
     listarVersoesCom(await createClient(), entityId);
+
+// #119 (Ponte C): repõe o corpo de uma versão antiga como o atual. Reusa o
+// caminho de escrita do editor (author 'user' → passa a guarda de encolhimento +
+// projeta edges/índices) e GERA uma nova versão — o histórico nunca se apaga,
+// por isso o próprio restauro é reversível. É o "git revert" de uma nota.
+export async function restaurarVersaoKnowledgeCom(
+    db: SupabaseClient,
+    versionId: string,
+): Promise<ResultadoEscrita> {
+    const { data, error } = await db
+        .from('file_versions')
+        .select('entity_id, entity_type, content_md')
+        .eq('id', versionId)
+        .maybeSingle();
+    if (error) throw new Error(`ler versão: ${error.message}`);
+    if (!data) throw new Error('versão não encontrada');
+    if (data.entity_type !== 'knowledge') throw new Error('só notas têm restauro de versão');
+
+    return atualizarNotaPorIdCom(db, String(data.entity_id), String(data.content_md), 'user');
+}
+export const restaurarVersaoKnowledge = async (versionId: string) =>
+    restaurarVersaoKnowledgeCom(await createClient(), versionId);
