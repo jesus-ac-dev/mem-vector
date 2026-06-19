@@ -1,6 +1,6 @@
 # tarefas
 
-Ultima atualizacao: 2026-06-14
+Ultima atualizacao: 2026-06-19
 
 ## Retoma rapida
 
@@ -29,6 +29,7 @@ Sem pendentes de média.
 
 ## Concluidas Recentemente
 
+- [x] **Memória operacional de agentes** — importadas as lições úteis do `ai-memory` como camada nativa no produto: `agent_sessions`, `agent_observations`, `agent_handoffs`, sanitização de segredos, briefing barato e integração no chat/destilação (`user-prompt`, `assistant-response`, `agent-write`, `job-result`). Fechada como infra v1; sem fase 2 ativa. Ref: `src/modules/memory/*`, `src/modules/chat/chat.actions.ts`, `src/modules/chat/chat.postturno.ts`, `supabase/migrations/20260619120000_agent_memory.sql`.
 - [x] **Chat trace — provider/modelo auditável** — cada resposta guarda `provider`, modelo pedido, modelo efetivo, latência, custo e fontes em `messages`; o chat mostra um chip junto à textarea e um inspector lateral com timeline da conversa. Divergência de modelo aparece como aviso informativo, sem bloquear a resposta. Ref: `src/modules/chat/chat.service.ts`, `src/modules/chat/chat.actions.ts`, `src/modules/chat/chat.conversas.ts`, `src/components/layout/chat-content.tsx`, `supabase/migrations/20260612230000_messages_model_trace.sql`.
 - [x] **Chat composer — controlos inline** — o chip do trace e a escolha de provider/modelo/esforço passaram para uma faixa inline debaixo da textarea; a mini-modal de escolha deixou de ser usada no composer. Rótulos do inspector afinados: `modelo pedido`, `modelo efetivo` e `não reportado pelo provider`. Ref: `src/components/layout/chat-content.tsx`, `src/modules/chat/chat.trace.ts`.
 - [x] **Kanban — refresh após tarefas criadas pelo chat** — loaders do kanban e do painel de tarefas ignoram respostas antigas fora de ordem, evitando que um load stale sobrescreva a lista nova depois da destilação criar tarefas. Ref: `src/components/layout/kanban-board.tsx`, `src/components/layout/tarefas-panel.tsx`.

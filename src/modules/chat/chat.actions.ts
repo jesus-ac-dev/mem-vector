@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { executarDestilacaoTurnoCom } from './chat.postturno';
 import { garantirConversaCom, listarConversas, ultimasMensagensCom } from './chat.conversas';
 import { indexarMensagensChatCom } from './chat.indexing';
+import { abrirOuReusarSessaoCom, registarObservacaoCom } from '@/modules/memory/memory.service';
 import {
     concluirDestilacaoJobCom,
     criarDestilacaoJobCom,
@@ -39,6 +40,17 @@ export async function ask(
     // Garante uma conversa: reutiliza a recebida (após confirmar a posse, #68)
     // ou cria uma nova se a UI ainda não tem id.
     const convId = await garantirConversaCom(db, user.id, question, conversationId);
+    let agentSessionId: string | undefined;
+    try {
+        const sessao = await abrirOuReusarSessaoCom(db, {
+            conversationId: convId,
+            operator: 'web',
+            runner: 'chat',
+        });
+        agentSessionId = sessao.id;
+    } catch (e) {
+        console.error('abrir sessão de memória falhou:', e);
+    }
 
     // Janela de conversa ANTES de inserir a mensagem atual (anáfora: "eles",
     // "deles" resolvem-se pelo fio; a mensagem atual vai explícita no prompt).
@@ -52,6 +64,17 @@ export async function ask(
         .single();
     if (userMsg.error || !userMsg.data) {
         throw new Error(`guardar mensagem falhou: ${userMsg.error?.message ?? 'sem id'}`);
+    }
+    try {
+        await registarObservacaoCom(db, {
+            sessionId: agentSessionId,
+            conversationId: convId,
+            type: 'user-prompt',
+            content: question,
+            metadata: { messageId: String(userMsg.data.id) },
+        });
+    } catch (e) {
+        console.error('observação user-prompt falhou:', e);
     }
 
     const result = await respond(question, historico);
@@ -77,6 +100,24 @@ export async function ask(
         .single();
     if (asstMsg.error || !asstMsg.data) {
         throw new Error(`guardar resposta falhou: ${asstMsg.error?.message ?? 'sem id'}`);
+    }
+    try {
+        await registarObservacaoCom(db, {
+            sessionId: agentSessionId,
+            conversationId: convId,
+            type: 'assistant-response',
+            content: result.answer,
+            metadata: {
+                messageId: String(asstMsg.data.id),
+                provider: result.provider,
+                modeloPedido: result.modeloPedido ?? null,
+                modelo: result.modelo ?? null,
+                sourcesCount: result.sources.length,
+                latencyMs: result.latencyMs,
+            },
+        });
+    } catch (e) {
+        console.error('observação assistant-response falhou:', e);
     }
 
     // Indexa o turno DEPOIS do retrieval para a pergunta não contaminar a própria
@@ -154,10 +195,42 @@ export async function processarDestilacaoJob(jobIdInput: string): Promise<TurnoD
             },
         );
         await concluirDestilacaoJobCom(db, job.id, result);
+        try {
+            const sessao = await abrirOuReusarSessaoCom(db, {
+                conversationId: job.payload.conversationId,
+                operator: 'web',
+                runner: 'distillation',
+            });
+            await registarObservacaoCom(db, {
+                sessionId: sessao.id,
+                conversationId: job.payload.conversationId,
+                type: 'job-result',
+                content: 'Job de destilação concluído.',
+                metadata: { jobId: job.id, status: 'done', result },
+            });
+        } catch (obsErro) {
+            console.error('observação job-result falhou:', obsErro);
+        }
         return result;
     } catch (e) {
         const msg = mensagemErro(e);
         await falharDestilacaoJobCom(db, job.id, msg);
+        try {
+            const sessao = await abrirOuReusarSessaoCom(db, {
+                conversationId: job.payload.conversationId,
+                operator: 'web',
+                runner: 'distillation',
+            });
+            await registarObservacaoCom(db, {
+                sessionId: sessao.id,
+                conversationId: job.payload.conversationId,
+                type: 'job-result',
+                content: 'Job de destilação falhou.',
+                metadata: { jobId: job.id, status: 'failed', error: msg },
+            });
+        } catch (obsErro) {
+            console.error('observação job-result falhada falhou:', obsErro);
+        }
         throw new Error(msg);
     }
 }

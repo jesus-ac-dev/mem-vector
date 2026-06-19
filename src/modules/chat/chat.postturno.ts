@@ -25,6 +25,7 @@ import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
 import { blocoKernelCom } from '@/agent/kernel';
+import { abrirOuReusarSessaoCom, registarObservacaoCom } from '@/modules/memory/memory.service';
 
 // Miolo do pós-turno, extraído de chat.actions (M2, #38): importável por
 // scripts e pela suite de evals sem passar pelo runtime de server actions.
@@ -33,6 +34,39 @@ import { blocoKernelCom } from '@/agent/kernel';
 export interface ContextoConversaJob {
     conversationId: string;
     excluirIds: string[]; // o par pergunta/resposta atual, que já vai explícito
+}
+
+async function registarEscritaAgenteNaoFatal(
+    db: SupabaseClient,
+    result: TurnoDestilado,
+    contexto?: ContextoConversaJob,
+): Promise<void> {
+    if (!contexto) return;
+    try {
+        const sessao = await abrirOuReusarSessaoCom(db, {
+            conversationId: contexto.conversationId,
+            operator: 'web',
+            runner: 'distillation',
+        });
+        await registarObservacaoCom(db, {
+            sessionId: sessao.id,
+            conversationId: contexto.conversationId,
+            type: 'agent-write',
+            content:
+                `Destilação: ${result.notas.length} nota(s), ` +
+                `${result.daily ? 'daily' : 'sem daily'}, ` +
+                `${result.tarefas?.criadas.length ?? 0} tarefa(s) criada(s), ` +
+                `${result.tarefas?.concluidas.length ?? 0} tarefa(s) concluída(s).`,
+            metadata: {
+                notas: result.notas,
+                daily: result.daily,
+                tarefas: result.tarefas ?? null,
+                sourceMessageIds: contexto.excluirIds,
+            },
+        });
+    } catch (e) {
+        console.error('observação agent-write falhou:', e);
+    }
 }
 
 export async function executarDestilacaoTurnoCom(
@@ -123,7 +157,7 @@ export async function executarDestilacaoTurnoCom(
     // tools MCP — sem fallback para o one-shot (um erro aqui falha o job,
     // visível, em vez de mascarar).
     if (metodoAgentic) {
-        return destilarTurnoAgenticCom(db, {
+        const result = await destilarTurnoAgenticCom(db, {
             question,
             answer,
             candidatos,
@@ -131,6 +165,8 @@ export async function executarDestilacaoTurnoCom(
             historico,
             kernel,
         });
+        await registarEscritaAgenteNaoFatal(db, result, contexto);
+        return result;
     }
 
     // Uma só chamada ao CLI para o pós-turno (resumo do daily + decisão de nota).
@@ -219,9 +255,11 @@ export async function executarDestilacaoTurnoCom(
         }
     }
 
-    return {
+    const result = {
         notas,
         daily,
         tarefas: tarefas.criadas.length || tarefas.concluidas.length ? tarefas : null,
     };
+    await registarEscritaAgenteNaoFatal(db, result, contexto);
+    return result;
 }
