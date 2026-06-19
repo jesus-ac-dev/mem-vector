@@ -797,12 +797,20 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             )}
 
             {/* Lista de mensagens — coladas ao fundo, crescem para cima */}
-            <div className="flex-1 overflow-y-auto rounded-lg border p-4">
+            <div className="flex-1 overflow-y-auto rounded-lg border bg-gradient-to-b from-background to-muted/20 p-4">
                 <div className="flex min-h-full flex-col justify-end space-y-3">
                     {messages.length === 0 && (
-                        <p className="text-sm text-muted-foreground">
-                            Faz uma pergunta sobre o mem-vector...
-                        </p>
+                        <div className="flex flex-1 flex-col items-center justify-center space-y-6 text-center duration-1000 animate-in fade-in zoom-in-95">
+                            <div className="max-w-[240px] space-y-2">
+                                <h2 className="bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+                                    mem-vector
+                                </h2>
+                                <p className="text-balance text-xs text-muted-foreground">
+                                    O teu segundo cérebro está pronto para processar o teu
+                                    conhecimento.
+                                </p>
+                            </div>
+                        </div>
                     )}
                     {messages.map((m) => (
                         <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
