@@ -12,6 +12,9 @@ espelha a `DefinicoesModal`) aberto pelo item **Perfil** do menu do badge.
   (`new_email`) até o clique no link; DESLIGADO (autoconfirm, ex.: dev local)
   muda **já e em silêncio**. A action `atualizarEmail` devolve `{ pendente }` e a
   UI mostra a mensagem certa — não promete um email de confirmação que não vem.
+  **Proteção contra typo (typo = lockout):** mudar email passa por um
+  `AlertDialog` de confirmação que mostra o novo email; a password escreve-se
+  **em duplicado** (Guardar só ativa se as duas coincidirem).
 - **Avatar** → Supabase **Storage**, bucket `avatars`:
   - leitura **pública** (identidade visual, não sensível; ajuda a reconhecer nos grupos);
   - escrita só do **próprio**, na pasta `{uid}/` — RLS em `storage.objects`

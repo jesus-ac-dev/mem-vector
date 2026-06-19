@@ -14,6 +14,16 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
     atualizarNome,
     atualizarEmail,
     atualizarPassword,
@@ -38,11 +48,25 @@ export function PerfilModal({
     const [displayName, setDisplayName] = useState(perfil.displayName);
     const [email, setEmail] = useState(perfil.email);
     const [password, setPassword] = useState('');
+    const [passwordConfirm, setPasswordConfirm] = useState('');
     const [avatarUrl, setAvatarUrl] = useState(perfil.avatarUrl);
     const [estado, setEstado] = useState<Estado>({ tipo: 'idle' });
     const [aGravar, setAGravar] = useState<string | null>(null);
+    const [confirmarEmail, setConfirmarEmail] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const iniciais = displayName.slice(0, 2).toUpperCase() || '?';
+
+    function guardarEmail() {
+        setConfirmarEmail(false);
+        void correr(
+            'email',
+            () => atualizarEmail({ email }),
+            (r) =>
+                (r as { pendente: boolean }).pendente
+                    ? 'Confirma no email novo para efetivar o novo login.'
+                    : 'Email alterado — passas a entrar com o novo.',
+        );
+    }
 
     async function correr(
         area: string,
@@ -80,151 +104,178 @@ export function PerfilModal({
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Perfil</DialogTitle>
-                    <DialogDescription>A tua conta e identidade.</DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Perfil</DialogTitle>
+                        <DialogDescription>A tua conta e identidade.</DialogDescription>
+                    </DialogHeader>
 
-                <div className="space-y-5">
-                    {/* Avatar */}
-                    <div className="flex items-center gap-4">
-                        <Avatar className="h-16 w-16">
-                            {avatarUrl ? <AvatarImage src={avatarUrl} alt="Avatar" /> : null}
-                            <AvatarFallback>{iniciais}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                            {/* eslint-disable-next-line no-restricted-syntax -- file input sem componente shadcn, ver .claude/skills/padroes-ui.md */}
-                            <input
-                                ref={fileRef}
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp"
-                                className="hidden"
-                                onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (f) void escolherAvatar(f);
-                                    e.target.value = '';
-                                }}
-                            />
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={aGravar === 'avatar'}
-                                onClick={() => fileRef.current?.click()}
-                            >
-                                {aGravar === 'avatar' ? 'A enviar…' : 'Mudar avatar'}
-                            </Button>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                PNG, JPG ou WebP, até 2 MB.
-                            </p>
+                    <div className="space-y-5">
+                        {/* Avatar */}
+                        <div className="flex items-center gap-4">
+                            <Avatar className="h-16 w-16">
+                                {avatarUrl ? <AvatarImage src={avatarUrl} alt="Avatar" /> : null}
+                                <AvatarFallback>{iniciais}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                {/* eslint-disable-next-line no-restricted-syntax -- file input sem componente shadcn, ver .claude/skills/padroes-ui.md */}
+                                <input
+                                    ref={fileRef}
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) void escolherAvatar(f);
+                                        e.target.value = '';
+                                    }}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={aGravar === 'avatar'}
+                                    onClick={() => fileRef.current?.click()}
+                                >
+                                    {aGravar === 'avatar' ? 'A enviar…' : 'Mudar avatar'}
+                                </Button>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    PNG, JPG ou WebP, até 2 MB.
+                                </p>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Nome */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Nome</label>
-                        <div className="flex gap-2">
-                            <Input
-                                value={displayName}
-                                onChange={(e) => setDisplayName(e.target.value)}
-                            />
-                            <Button
-                                disabled={aGravar === 'nome' || !displayName.trim()}
-                                onClick={() =>
-                                    void correr(
-                                        'nome',
-                                        () => atualizarNome({ displayName }),
-                                        'Nome guardado.',
-                                    )
-                                }
-                            >
-                                Guardar
-                            </Button>
+                        {/* Nome */}
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Nome</label>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                />
+                                <Button
+                                    disabled={aGravar === 'nome' || !displayName.trim()}
+                                    onClick={() =>
+                                        void correr(
+                                            'nome',
+                                            () => atualizarNome({ displayName }),
+                                            'Nome guardado.',
+                                        )
+                                    }
+                                >
+                                    Guardar
+                                </Button>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Email — é o login (#92): a mensagem segue o que o Supabase fez
+                        {/* Email — é o login (#92): a mensagem segue o que o Supabase fez
                         mesmo (pendente de confirmação vs mudança imediata). */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Email</label>
-                        <div className="flex gap-2">
-                            <Input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                            />
-                            <Button
-                                disabled={aGravar === 'email' || email === perfil.email}
-                                onClick={() =>
-                                    void correr(
-                                        'email',
-                                        () => atualizarEmail({ email }),
-                                        (r) =>
-                                            (r as { pendente: boolean }).pendente
-                                                ? 'Confirma no email novo para efetivar o novo login.'
-                                                : 'Email alterado — passas a entrar com o novo.',
-                                    )
-                                }
-                            >
-                                Guardar
-                            </Button>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Email</label>
+                            <div className="flex gap-2">
+                                <Input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                                <Button
+                                    disabled={aGravar === 'email' || email === perfil.email}
+                                    onClick={() => setConfirmarEmail(true)}
+                                >
+                                    Guardar
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">O email é o teu login.</p>
                         </div>
-                        <p className="text-xs text-muted-foreground">O email é o teu login.</p>
-                    </div>
 
-                    {/* Password */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Nova password</label>
-                        <div className="flex gap-2">
+                        {/* Password — em duplicado (#92): escrever 2x evita ficar
+                        trancado fora por um typo. */}
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Nova password</label>
                             <Input
                                 type="password"
                                 value={password}
                                 placeholder="Mínimo 8 caracteres"
                                 onChange={(e) => setPassword(e.target.value)}
                             />
-                            <Button
-                                disabled={aGravar === 'password' || password.length < 8}
-                                onClick={() =>
-                                    void correr(
-                                        'password',
-                                        async () => {
-                                            await atualizarPassword({ password });
-                                            setPassword('');
-                                        },
-                                        'Password alterada.',
-                                    )
+                            <div className="flex gap-2">
+                                <Input
+                                    type="password"
+                                    value={passwordConfirm}
+                                    placeholder="Repetir a password"
+                                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                                />
+                                <Button
+                                    disabled={
+                                        aGravar === 'password' ||
+                                        password.length < 8 ||
+                                        password !== passwordConfirm
+                                    }
+                                    onClick={() =>
+                                        void correr(
+                                            'password',
+                                            async () => {
+                                                await atualizarPassword({ password });
+                                                setPassword('');
+                                                setPasswordConfirm('');
+                                            },
+                                            'Password alterada.',
+                                        )
+                                    }
+                                >
+                                    Guardar
+                                </Button>
+                            </div>
+                            {password && passwordConfirm && password !== passwordConfirm ? (
+                                <p className="text-xs text-destructive">
+                                    As passwords não coincidem.
+                                </p>
+                            ) : null}
+                        </div>
+
+                        {estado.tipo !== 'idle' ? (
+                            <p
+                                className={
+                                    estado.tipo === 'ok'
+                                        ? 'text-sm text-muted-foreground'
+                                        : 'text-sm text-destructive'
                                 }
                             >
-                                Guardar
-                            </Button>
+                                {estado.msg}
+                            </p>
+                        ) : null}
+
+                        <hr className="border-border" />
+
+                        {/* Pagamentos: placeholder (vendas vêm depois). */}
+                        <div className="space-y-1">
+                            <h3 className="text-sm font-medium">Pagamentos</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Subscrição e faturação ficam disponíveis quando o produto for
+                                comercializado.
+                            </p>
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
 
-                    {estado.tipo !== 'idle' ? (
-                        <p
-                            className={
-                                estado.tipo === 'ok'
-                                    ? 'text-sm text-muted-foreground'
-                                    : 'text-sm text-destructive'
-                            }
-                        >
-                            {estado.msg}
-                        </p>
-                    ) : null}
-
-                    <hr className="border-border" />
-
-                    {/* Pagamentos: placeholder (vendas vêm depois). */}
-                    <div className="space-y-1">
-                        <h3 className="text-sm font-medium">Pagamentos</h3>
-                        <p className="text-sm text-muted-foreground">
-                            Subscrição e faturação ficam disponíveis quando o produto for
-                            comercializado.
-                        </p>
-                    </div>
-                </div>
-            </DialogContent>
-        </Dialog>
+            <AlertDialog open={confirmarEmail} onOpenChange={(o) => !o && setConfirmarEmail(false)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Mudar o email de login?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            O email é o teu login. Vais passar a entrar com{' '}
+                            <span className="font-medium text-foreground">{email}</span>. Confirma
+                            que está bem escrito.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={guardarEmail}>Mudar email</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
