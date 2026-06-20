@@ -269,17 +269,17 @@ describe('definições (#60, integração RLS)', () => {
                 matchCount: 5,
                 webHabilitada: false,
                 cruzamentos: {
-                    dev: { principal: 'codex', validador: 'claude' },
-                    analise: { principal: 'claude', validador: 'none' },
+                    dev: { principal: 'codex', validadores: ['claude'] },
+                    analise: { principal: 'claude', validadores: [] },
                 },
                 agentes: {},
             });
-            expect(vista.cruzamentos.dev).toEqual({ principal: 'codex', validador: 'claude' });
+            expect(vista.cruzamentos.dev).toEqual({ principal: 'codex', validadores: ['claude'] });
 
             const servidor = await lerDefinicoesServidorCom(alice);
             expect(servidor.cruzamentos.analise).toEqual({
                 principal: 'claude',
-                validador: 'none',
+                validadores: [],
             });
 
             // Regravar sem cruzamentos (undefined) mantém os atuais.
@@ -292,7 +292,7 @@ describe('definições (#60, integração RLS)', () => {
                 agentes: {},
             });
             const depois = await lerDefinicoesVistaCom(alice);
-            expect(depois.cruzamentos.dev).toEqual({ principal: 'codex', validador: 'claude' });
+            expect(depois.cruzamentos.dev).toEqual({ principal: 'codex', validadores: ['claude'] });
         },
     );
 

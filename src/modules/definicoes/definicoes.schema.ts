@@ -218,15 +218,16 @@ export const CRUZAMENTO_LABEL: Record<Cruzamento, string> = {
     auditoria: 'Auditoria',
 };
 
-// Double-tap (glossário): 'none' = só principal; 'self' = o mesmo provider
-// revê-se; um Provider = cross (linhagem diferente valida, anti-árvore-torta).
-export const ValidadorSchema = z.union([z.enum(PROVIDERS), z.literal('self'), z.literal('none')]);
+// Um validador é o MESMO provider ('self') ou outro de linhagem diferente (cross —
+// anti-árvore-torta). O double-tap escala para N: lista vazia = só principal (sem
+// validação); 1 = double-tap; 2+ = painel adversarial (cada um tenta derrubar).
+export const ValidadorSchema = z.union([z.enum(PROVIDERS), z.literal('self')]);
 export type Validador = z.infer<typeof ValidadorSchema>;
 
-// Config de UM cruzamento: quem PRODUZ (principal) e quem VALIDA (validador).
+// Config de UM cruzamento: quem PRODUZ (principal) e quem VALIDA (N validadores).
 export const CruzamentoConfigSchema = z.object({
     principal: z.enum(PROVIDERS),
-    validador: ValidadorSchema.default('none'),
+    validadores: z.array(ValidadorSchema).max(4).default([]),
 });
 export type CruzamentoConfig = z.infer<typeof CruzamentoConfigSchema>;
 

@@ -22,8 +22,6 @@ describe('relayConfigurado', () => {
     });
 
     it('true com ao menos um cruzamento', () => {
-        expect(relayConfigurado(defs({ dev: { principal: 'codex', validador: 'none' } }))).toBe(
-            true,
-        );
+        expect(relayConfigurado(defs({ dev: { principal: 'codex', validadores: [] } }))).toBe(true);
     });
 });

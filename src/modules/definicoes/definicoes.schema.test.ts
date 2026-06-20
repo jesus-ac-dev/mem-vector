@@ -52,16 +52,18 @@ describe('DefinicoesSchema cruzamentos (relay)', () => {
         expect(DefinicoesSchema.parse({ agentes: {} }).cruzamentos).toBeUndefined();
     });
 
-    it('aceita principal + validador por cruzamento; validador omitido = none', () => {
+    it('aceita principal + N validadores; omitido = lista vazia', () => {
         const d = DefinicoesSchema.parse({
             agentes: {},
             cruzamentos: {
-                dev: { principal: 'codex', validador: 'claude' },
+                dev: { principal: 'codex', validadores: ['claude'] },
+                auditoria: { principal: 'codex', validadores: ['claude', 'gemini'] },
                 analise: { principal: 'claude' },
             },
         });
-        expect(d.cruzamentos?.dev).toEqual({ principal: 'codex', validador: 'claude' });
-        expect(d.cruzamentos?.analise).toEqual({ principal: 'claude', validador: 'none' });
+        expect(d.cruzamentos?.dev).toEqual({ principal: 'codex', validadores: ['claude'] });
+        expect(d.cruzamentos?.auditoria?.validadores).toEqual(['claude', 'gemini']);
+        expect(d.cruzamentos?.analise).toEqual({ principal: 'claude', validadores: [] });
     });
 
     it('rejeita um provider desconhecido como principal', () => {

@@ -18,8 +18,8 @@ export interface PapelResolvido {
 export interface CruzamentoResolvido {
     cruzamento: Cruzamento;
     principal: PapelResolvido;
-    // null = double-tap 'none' (só principal, sem validação). 'self'/<provider> resolvem aqui.
-    validador: PapelResolvido | null;
+    // [] = sem validação (lista vazia). N = painel adversarial ('self' resolve ao principal).
+    validadores: PapelResolvido[];
 }
 
 export function resolverCruzamento(
@@ -40,10 +40,7 @@ export function resolverCruzamento(
     };
 
     const principal = papel(cfg.principal);
+    const validadores = cfg.validadores.map((v) => papel(v === 'self' ? cfg.principal : v));
 
-    let validador: PapelResolvido | null = null;
-    if (cfg.validador === 'self') validador = papel(cfg.principal);
-    else if (cfg.validador !== 'none') validador = papel(cfg.validador);
-
-    return { cruzamento, principal, validador };
+    return { cruzamento, principal, validadores };
 }

@@ -52,17 +52,36 @@ export async function executarCruzamento(
 ): Promise<ResultadoCruzamento> {
     const r = resolverCruzamento(defs, cruzamento);
     const principal = criarProvider(r.principal.provider, r.principal.config);
-    const validador = r.validador ? criarProvider(r.validador.provider, r.validador.config) : null;
+    const validadores = r.validadores.map((v) => criarProvider(v.provider, v.config));
 
     return correrCruzamento({
         maxRondas,
         produzir: async (feedback) =>
             (await principal.gerar(promptPrincipal(cruzamento, spec, feedback))).text,
-        validar: validador
-            ? async (output) =>
-                  parseVeredito(
-                      (await validador.gerar(promptValidador(cruzamento, spec, output))).text,
-                  )
-            : null,
+        // Painel adversarial: cada validador tenta DERRUBAR (em paralelo). Qualquer
+        // objeção real (algum não-ok) = não passou; juntam-se os feedbacks para a
+        // próxima ronda. Lista vazia = sem validação. (Agregação any-rejeita por agora
+        // — a forma fina, ver árvore-torta/adjudicação, fica para a discussão.)
+        validar:
+            validadores.length === 0
+                ? null
+                : async (output) => {
+                      const vereditos = await Promise.all(
+                          validadores.map(async (vp) =>
+                              parseVeredito(
+                                  (await vp.gerar(promptValidador(cruzamento, spec, output))).text,
+                              ),
+                          ),
+                      );
+                      const objecoes = vereditos.filter((v) => !v.ok);
+                      if (objecoes.length === 0) return { ok: true };
+                      return {
+                          ok: false,
+                          feedback: objecoes
+                              .map((o) => o.feedback)
+                              .filter(Boolean)
+                              .join('\n'),
+                      };
+                  },
     });
 }

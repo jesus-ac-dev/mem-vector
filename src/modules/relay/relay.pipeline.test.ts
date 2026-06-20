@@ -29,9 +29,9 @@ describe('correrPipeline (o circuito das atividades)', () => {
         const correram: Cruzamento[] = [];
         const r = await correrPipeline({
             defs: defs({
-                auditoria: { principal: 'claude', validador: 'none' },
-                analise: { principal: 'claude', validador: 'none' },
-                dev: { principal: 'codex', validador: 'claude' },
+                auditoria: { principal: 'claude', validadores: [] },
+                analise: { principal: 'claude', validadores: [] },
+                dev: { principal: 'codex', validadores: ['claude'] },
             }),
             spec: 'tarefa',
             executar: async (c) => {
@@ -49,8 +49,8 @@ describe('correrPipeline (o circuito das atividades)', () => {
         const specsVistos: Record<string, string> = {};
         await correrPipeline({
             defs: defs({
-                analise: { principal: 'claude', validador: 'none' },
-                dev: { principal: 'codex', validador: 'none' },
+                analise: { principal: 'claude', validadores: [] },
+                dev: { principal: 'codex', validadores: [] },
             }),
             spec: 'tarefa-base',
             executar: async (c, s) => {
@@ -65,9 +65,9 @@ describe('correrPipeline (o circuito das atividades)', () => {
     it('pára e marca incompleto quando um cruzamento não valida (kill switch)', async () => {
         const r = await correrPipeline({
             defs: defs({
-                analise: { principal: 'claude', validador: 'none' },
-                dev: { principal: 'codex', validador: 'claude' },
-                docs: { principal: 'claude', validador: 'none' },
+                analise: { principal: 'claude', validadores: [] },
+                dev: { principal: 'codex', validadores: ['claude'] },
+                docs: { principal: 'claude', validadores: [] },
             }),
             spec: 'tarefa',
             executar: async (c) =>

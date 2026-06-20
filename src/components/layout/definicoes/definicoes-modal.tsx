@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -223,13 +224,20 @@ export function DefinicoesModal({
         editar({ ...defs, githubRepos: defs.githubRepos.filter((x) => x !== r) });
     }
 
-    // Relay: muda o principal/validador de um cruzamento (cria a entrada se não existe).
+    // Relay: muda o principal/validadores de um cruzamento (cria a entrada se não existe).
     function mudarCruzamento(c: Cruzamento, patch: Partial<CruzamentoConfig>) {
         const atual: CruzamentoConfig = defs.cruzamentos[c] ?? {
             principal: 'claude',
-            validador: 'none',
+            validadores: [],
         };
         editar({ ...defs, cruzamentos: { ...defs.cruzamentos, [c]: { ...atual, ...patch } } });
+    }
+
+    // Liga/desliga um validador (self ou um provider) no painel de um cruzamento.
+    function toggleValidador(c: Cruzamento, v: Validador, on: boolean) {
+        const atual = defs.cruzamentos[c]?.validadores ?? [];
+        const validadores = on ? [...new Set([...atual, v])] : atual.filter((x) => x !== v);
+        mudarCruzamento(c, { validadores });
     }
 
     function desligarCruzamento(c: Cruzamento) {
@@ -378,7 +386,6 @@ export function DefinicoesModal({
                         </p>
                         {itemMenu('comportamento', 'Comportamento')}
                         {itemMenu('agentes', 'Agentes')}
-                        {itemMenu('cruzamentos', 'Cruzamentos')}
                         {itemMenu('modulos', 'Módulos')}
                         {defs.modulosAtivos.length > 0 && (
                             <>
@@ -684,10 +691,12 @@ export function DefinicoesModal({
                         ) : pagina === 'cruzamentos' ? (
                             <div className="max-w-lg space-y-4">
                                 <div>
-                                    <h3 className="text-sm font-medium">Cruzamentos (relay)</h3>
+                                    <h3 className="text-sm font-medium">
+                                        Cruzamentos — pipeline de dev
+                                    </h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Quem PRODUZ (principal) e quem VALIDA (validador) em cada
-                                        passo do pipeline. Config, não código. Validador de linhagem
+                                        Quem PRODUZ (principal) e quem VALIDA (N validadores) em
+                                        cada passo. Só providers ativos. Validadores de linhagem
                                         diferente = defesa máxima contra o erro que escapa.
                                     </p>
                                 </div>
@@ -727,36 +736,9 @@ export function DefinicoesModal({
                                                             <SelectValue placeholder="—" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {PROVIDERS.map((p) => (
-                                                                <SelectItem key={p} value={p}>
-                                                                    {PROVIDER_LABEL[p]}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        validador
-                                                    </span>
-                                                    <Select
-                                                        value={cfg?.validador ?? 'none'}
-                                                        onValueChange={(v) =>
-                                                            mudarCruzamento(c, {
-                                                                validador: v as Validador,
-                                                            })
-                                                        }
-                                                        disabled={!cfg}
-                                                    >
-                                                        <SelectTrigger className="h-8 w-28 text-xs">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">
-                                                                nenhum
-                                                            </SelectItem>
-                                                            <SelectItem value="self">
-                                                                o mesmo
-                                                            </SelectItem>
-                                                            {PROVIDERS.map((p) => (
+                                                            {PROVIDERS.filter(
+                                                                (p) => defs.agentes[p]?.ativo,
+                                                            ).map((p) => (
                                                                 <SelectItem key={p} value={p}>
                                                                     {PROVIDER_LABEL[p]}
                                                                 </SelectItem>
@@ -764,10 +746,53 @@ export function DefinicoesModal({
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
+                                                {cfg && (
+                                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            validadores
+                                                        </span>
+                                                        {(
+                                                            [
+                                                                'self',
+                                                                ...PROVIDERS.filter(
+                                                                    (p) => defs.agentes[p]?.ativo,
+                                                                ),
+                                                            ] as Validador[]
+                                                        ).map((v) => (
+                                                            <label
+                                                                key={v}
+                                                                className="flex items-center gap-1.5 text-xs"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={cfg.validadores.includes(
+                                                                        v,
+                                                                    )}
+                                                                    onCheckedChange={(on) =>
+                                                                        toggleValidador(
+                                                                            c,
+                                                                            v,
+                                                                            on === true,
+                                                                        )
+                                                                    }
+                                                                />
+                                                                {v === 'self'
+                                                                    ? 'o mesmo'
+                                                                    : PROVIDER_LABEL[v as Provider]}
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </li>
                                         );
                                     })}
                                 </ul>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPagina('github')}
+                                >
+                                    Voltar ao GitHub
+                                </Button>
                             </div>
                         ) : pagina === 'modulos' ? (
                             <div className="max-w-md space-y-4">
@@ -912,6 +937,22 @@ export function DefinicoesModal({
                                                     Ligar
                                                 </Button>
                                             </div>
+                                        </div>
+                                        <div className="space-y-1 border-t pt-3">
+                                            <label className="text-xs font-medium">
+                                                Pipeline de dev (cruzamentos)
+                                            </label>
+                                            <p className="text-xs text-muted-foreground">
+                                                Quem produz e quem valida em cada passo do relay.
+                                            </p>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setPagina('cruzamentos')}
+                                                className="h-8 text-xs"
+                                            >
+                                                Configurar cruzamentos →
+                                            </Button>
                                         </div>
                                     </div>
                                 ) : (
