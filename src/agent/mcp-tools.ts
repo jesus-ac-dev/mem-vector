@@ -45,6 +45,9 @@ const GITHUB_REPOS = (process.env.MEMVECTOR_AGENT_GITHUB_REPOS || '')
     .split(',')
     .map((r) => r.trim())
     .filter(Boolean);
+// As tools de issue só se registam com token E ao menos 1 repo ligado (defensivo
+// — o chat.service já só entrega o token quando o github está ativo).
+const GITHUB_ON = !!GITHUB_TOKEN && GITHUB_REPOS.length > 0;
 
 // A nota escrita neste turno entra na entrada do daily (paridade com o formato
 // do caminho one-shot: "Estado escrito: [[slug]]"). Vive num contexto por
@@ -551,9 +554,9 @@ async function main(): Promise<void> {
         { capabilities: { tools: {} } },
     );
 
-    // M7: as tools de issue só aparecem na sessão quando há token (módulo ligado).
+    // M7: as tools de issue só aparecem com token + ao menos 1 repo ligado.
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: GITHUB_TOKEN ? [...TOOLS, ...GITHUB_TOOLS] : TOOLS,
+        tools: GITHUB_ON ? [...TOOLS, ...GITHUB_TOOLS] : TOOLS,
     }));
 
     server.setRequestHandler(CallToolRequestSchema, async (req) => {

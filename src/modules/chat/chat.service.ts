@@ -423,8 +423,9 @@ export async function respondStream(
                 if (nome.startsWith('mcp__'))
                     onFase?.({ fase: 'ferramenta', label: labelFerramenta(nome) });
             },
-            // M7: o token do user vira GH_TOKEN no subprocesso; repos ligados limitam o alcance.
-            { token: t.githubToken, repos: t.githubRepos },
+            // M7: só se entrega o token quando o github está mesmo ativo (módulo +
+            // token + repos) — assim o subprocesso nunca recebe token sem repos.
+            { token: t.githubAtivo ? t.githubToken : undefined, repos: t.githubRepos },
         );
         // #100: r.text já saiu token-a-token por onTextDelta durante a geração
         // (o indicador de fase fecha quando o texto começa); não reemitir o bloco.

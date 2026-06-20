@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildIssueArgs } from './github';
+import { buildIssueArgs, extrairUrl } from './github';
 
 // M7: o arg-builder do gh é o núcleo testável do transporte (o spawn é fino).
 describe('github buildIssueArgs (M7)', () => {
@@ -55,5 +55,23 @@ describe('github buildIssueArgs (M7)', () => {
         expect(() =>
             buildIssueArgs({ op: 'criar', repo: 'sembarra', title: 'T', body: 'B' }),
         ).toThrow(/owner\/nome/);
+    });
+});
+
+describe('github extrairUrl (M7)', () => {
+    it('extrai o URL mesmo com preâmbulo no stdout', () => {
+        expect(extrairUrl('Creating issue...\nhttps://github.com/o/r/issues/12\n')).toBe(
+            'https://github.com/o/r/issues/12',
+        );
+    });
+
+    it('só o URL → devolve-o', () => {
+        expect(extrairUrl('https://github.com/o/r/issues/3')).toBe(
+            'https://github.com/o/r/issues/3',
+        );
+    });
+
+    it('sem URL → devolve o stdout aparado (fallback)', () => {
+        expect(extrairUrl('  algo inesperado  ')).toBe('algo inesperado');
     });
 });

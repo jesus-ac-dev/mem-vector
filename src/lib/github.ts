@@ -63,12 +63,18 @@ function corrGh(args: string[], token: string): Promise<string> {
     });
 }
 
+/** O URL github do stdout do gh (create/comment imprimem-no; defende de preâmbulos). */
+export function extrairUrl(out: string): string {
+    const m = out.match(/https:\/\/github\.com\/\S+/);
+    return m ? m[0] : out.trim();
+}
+
 export async function criarIssue(
     token: string,
     p: { repo: string; title: string; body: string },
 ): Promise<string> {
-    // gh imprime o URL da issue criada no stdout.
-    return corrGh(buildIssueArgs({ op: 'criar', ...p }), token);
+    // gh imprime o URL da issue criada no stdout — extrai-o (não o resto).
+    return extrairUrl(await corrGh(buildIssueArgs({ op: 'criar', ...p }), token));
 }
 
 export async function lerIssues(
@@ -83,5 +89,5 @@ export async function comentarIssue(
     token: string,
     p: { repo: string; number: number; body: string },
 ): Promise<string> {
-    return corrGh(buildIssueArgs({ op: 'comentar', ...p }), token);
+    return extrairUrl(await corrGh(buildIssueArgs({ op: 'comentar', ...p }), token));
 }

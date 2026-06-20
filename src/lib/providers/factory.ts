@@ -734,7 +734,12 @@ export async function providerDoChatCom(db: SupabaseClient): Promise<{
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
             webKey: defs.webKey,
-            githubAtivo: defs.modulosAtivos.includes('github') && !!defs.githubToken,
+            // M7: "ativo" exige módulo + token + ao menos 1 repo ligado — senão
+            // não há nada para o agente tocar (evita tools que só dão erro).
+            githubAtivo:
+                defs.modulosAtivos.includes('github') &&
+                !!defs.githubToken &&
+                defs.githubRepos.length > 0,
             githubToken: defs.githubToken,
             githubRepos: defs.githubRepos,
         };

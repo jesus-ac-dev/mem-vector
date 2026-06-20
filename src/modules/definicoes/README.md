@@ -77,7 +77,21 @@ models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
   não implica runner agentic.
 - **Módulos** (`modulos_ativos`) — toggles: `github` (disponível), `emails`,
   `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão
-  do calendário).
+  do calendário). **GitHub (M7 Fatia 1):** a página do módulo liga a conta com um
+  **PAT fine-grained** (`github_token_cifrada`, cifrado at rest como as keys dos
+  providers, máscara na vista) + a lista de **repos ligados** (`github_repos`,
+  "owner/nome"). O transporte é o **`gh` CLI** (requisito declarado no README do
+  repo); o token vira `GH_TOKEN` no subprocesso = a conta do utilizador do SaaS,
+  não o `gh` do host (passa o fresh-pc-test — requisito declarado ≠ andaime
+  acumulado). Com o módulo ligado + token, o **responder com tools**
+  (`responder-tools.ts`) ganha 3 tools de issue (`ler_issues`/`criar_issue`/
+  `comentar_issue`, via `src/lib/github.ts`) e a convenção **modelo-2.2** no system
+  prompt (tarefa durável de projeto ligado → issue; **promoção assistida**:
+  propõe → confirma antes de escrever). A rota two-phase (#85) passa a abrir com
+  `web_habilitada` **OU** github ativo; a escalação (`escalada.ts`) aprende
+  intenções GitHub. O agente só toca em repos ligados.
+  `MEMVECTOR_AGENT_GITHUB_TOKEN`/`_REPOS` levam token+repos ao subprocesso (como o
+  `MEMVECTOR_AGENT_WEB_KEY`), via `providerDoChatCom` → `responderComToolsCom`.
 
 ## Ficheiros
 
@@ -93,4 +107,6 @@ UI: `src/components/layout/definicoes-modal.tsx` (aberta pelo `profile-menu.tsx`
 
 Tabela `definicoes` (migração `20260612200000`): `owner_id` (PK, FK auth.users),
 `metodo_destilacao` (check), `modulos_ativos text[]`, `updated_at`. RLS só-dono
-(definições não se partilham com grupos).
+(definições não se partilham com grupos). Colunas posteriores: `web_key_cifrada`
+(#45), `comportamento` (#122), e **M7** (`20260620120000`) `github_token_cifrada`
++ `github_repos jsonb` (connection GitHub por-utilizador).
