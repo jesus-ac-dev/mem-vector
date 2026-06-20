@@ -1,0 +1,81 @@
+import { describe, it, expect } from 'vitest';
+
+import { correrPipeline } from './relay.pipeline';
+import type { ResultadoCruzamento } from './relay.runner';
+import type { Cruzamento, DefinicoesServidor } from '@/modules/definicoes/definicoes.schema';
+
+function defs(cruzamentos: DefinicoesServidor['cruzamentos']): DefinicoesServidor {
+    return {
+        metodoDestilacao: 'one-shot',
+        modulosAtivos: [],
+        chatProvider: 'claude',
+        matchCount: 5,
+        webHabilitada: false,
+        githubRepos: [],
+        cruzamentos,
+        agentes: {},
+    };
+}
+
+const ok = (output: string): ResultadoCruzamento => ({
+    output,
+    rondas: 1,
+    validado: true,
+    historico: [],
+});
+
+describe('correrPipeline (o circuito das atividades)', () => {
+    it('só corre os cruzamentos CONFIGURADOS, na ordem canónica', async () => {
+        const correram: Cruzamento[] = [];
+        const r = await correrPipeline({
+            defs: defs({
+                auditoria: { principal: 'claude', validador: 'none' },
+                analise: { principal: 'claude', validador: 'none' },
+                dev: { principal: 'codex', validador: 'claude' },
+            }),
+            spec: 'tarefa',
+            executar: async (c) => {
+                correram.push(c);
+                return ok(`out-${c}`);
+            },
+        });
+        // docs não estava configurado; a ordem é canónica (analise→dev→auditoria).
+        expect(r.ordem).toEqual(['analise', 'dev', 'auditoria']);
+        expect(correram).toEqual(['analise', 'dev', 'auditoria']);
+        expect(r.completo).toBe(true);
+    });
+
+    it('estrela: os de execução recebem o output da Análise', async () => {
+        const specsVistos: Record<string, string> = {};
+        await correrPipeline({
+            defs: defs({
+                analise: { principal: 'claude', validador: 'none' },
+                dev: { principal: 'codex', validador: 'none' },
+            }),
+            spec: 'tarefa-base',
+            executar: async (c, s) => {
+                specsVistos[c] = s;
+                return ok(c === 'analise' ? 'PLANO-X' : 'feito');
+            },
+        });
+        expect(specsVistos.analise).toBe('tarefa-base'); // a Análise recebe a tarefa crua
+        expect(specsVistos.dev).toContain('PLANO-X'); // o dev recebe a Análise como referência
+    });
+
+    it('pára e marca incompleto quando um cruzamento não valida (kill switch)', async () => {
+        const r = await correrPipeline({
+            defs: defs({
+                analise: { principal: 'claude', validador: 'none' },
+                dev: { principal: 'codex', validador: 'claude' },
+                docs: { principal: 'claude', validador: 'none' },
+            }),
+            spec: 'tarefa',
+            executar: async (c) =>
+                c === 'dev'
+                    ? { output: 'meh', rondas: 3, validado: false, historico: [] }
+                    : ok(`out-${c}`),
+        });
+        expect(r.ordem).toEqual(['analise', 'dev']); // parou no dev, docs não correu
+        expect(r.completo).toBe(false);
+    });
+});
