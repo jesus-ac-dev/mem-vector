@@ -105,6 +105,51 @@ describe('knowledge versions (#119)', () => {
         expect(depois.length).toBe(versoes.length + 1);
     }, 60_000);
 
+    it('restaura também o título/slug quando o H1 da versão antiga é diferente', async () => {
+        const {
+            escreverNotaCom,
+            listarVersoesCom,
+            renomearNotaPorIdCom,
+            restaurarVersaoKnowledgeCom,
+        } = await import('@/modules/knowledge/knowledge.service');
+
+        const criada = await escreverNotaCom(
+            alice,
+            {
+                title: 'Restauro Nome Antigo',
+                content_md: '# Restauro Nome Antigo\n\ncorpo inicial',
+                links: [],
+                reason: 'teste restore titulo',
+            },
+            'user',
+        );
+
+        await renomearNotaPorIdCom(alice, criada.id, 'Restauro Nome Novo', criada.slug);
+        await alice.rpc('write_knowledge_entry_by_id', {
+            p_id: criada.id,
+            p_content_md: '# Restauro Nome Novo\n\ncorpo novo',
+            p_author: 'user',
+            p_frontmatter_patch: null,
+        });
+
+        const versoes = await listarVersoesCom(alice, criada.id);
+        const antiga = versoes.find((v) => v.contentMd.startsWith('# Restauro Nome Antigo'));
+        expect(antiga).toBeTruthy();
+
+        await restaurarVersaoKnowledgeCom(alice, antiga!.id);
+
+        const nota = await alice
+            .from('knowledge')
+            .select('title, slug, content_md')
+            .eq('id', criada.id)
+            .single();
+        expect(nota.data).toMatchObject({
+            title: 'Restauro Nome Antigo',
+            slug: 'restauro-nome-antigo',
+            content_md: '# Restauro Nome Antigo\n\ncorpo inicial',
+        });
+    }, 60_000);
+
     it('reconcilia o link-fantasma quando o alvo nasce (#121)', async () => {
         const { escreverNotaCom } = await import('@/modules/knowledge/knowledge.service');
 

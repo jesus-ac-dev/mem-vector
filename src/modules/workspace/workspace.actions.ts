@@ -180,10 +180,10 @@ export async function guardarFicheiro(
 // reabrir/refrescar.
 export async function restaurarVersaoAction(
     versionId: string,
-): Promise<{ ok: true; chave: string } | { ok: false; erro: string }> {
+): Promise<{ ok: true; chave: string; titulo: string } | { ok: false; erro: string }> {
     try {
         const r = await restaurarVersaoKnowledge(versionId);
-        return { ok: true, chave: r.slug };
+        return { ok: true, chave: r.slug, titulo: r.title };
     } catch (e) {
         return { ok: false, erro: e instanceof Error ? e.message : 'erro ao restaurar' };
     }

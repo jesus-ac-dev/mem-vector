@@ -313,11 +313,12 @@ function FicheiroVista({ ficheiro }: { ficheiro: FicheiroAberto }) {
         }
         setEstado((prev) => ({
             tipo: 'ok',
-            titulo: prev.tipo === 'ok' ? prev.titulo : (ficheiro.titulo ?? ficheiro.chave),
+            titulo: res.titulo,
             contentMd: conteudoRestaurado,
             folderId: prev.tipo === 'ok' ? prev.folderId : null,
             propriedades: prev.tipo === 'ok' ? prev.propriedades : undefined,
         }));
+        atualizarFicheiroAberto(ficheiroKey, { chave: res.chave, titulo: res.titulo });
         setRascunho(conteudoRestaurado);
         setBaseId(null);
         setVista('conteudo');

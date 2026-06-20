@@ -5,6 +5,7 @@ import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projec
 import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT, COR_CONVERSA_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
+import { primeiroTituloMarkdown } from './knowledge.title';
 import {
     limitarQueryFts,
     normalizarTags,
@@ -1115,7 +1116,17 @@ export async function restaurarVersaoKnowledgeCom(
     if (!data) throw new Error('versão não encontrada');
     if (data.entity_type !== 'knowledge') throw new Error('só notas têm restauro de versão');
 
-    return atualizarNotaPorIdCom(db, String(data.entity_id), String(data.content_md), 'user');
+    const entityId = String(data.entity_id);
+    const contentMd = String(data.content_md);
+    const tituloH1 = primeiroTituloMarkdown(contentMd);
+    if (tituloH1) {
+        const notaAtual = await getNotaPorIdCom(db, entityId);
+        if (notaAtual && tituloH1 !== notaAtual.title) {
+            await renomearNotaPorIdCom(db, entityId, tituloH1, notaAtual.slug);
+        }
+    }
+
+    return atualizarNotaPorIdCom(db, entityId, contentMd, 'user');
 }
 export const restaurarVersaoKnowledge = async (versionId: string) =>
     restaurarVersaoKnowledgeCom(await createClient(), versionId);

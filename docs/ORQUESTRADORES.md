@@ -104,3 +104,14 @@ Como (`src/lib/claude.ts`, `HOST_ISOLATION`, nos 4 builders):
 
 Provado empiricamente: com o isolamento o agente responde `ISOLADO`; sem ele, vê
 o CLAUDE.md global **e** o do projeto.
+
+## Isolamento do provider codex vs `~/.codex` do host
+
+O mesmo princípio para o provider Codex (`codex exec`, `src/lib/providers/factory.ts`, `buildCodexCliArgs`): corre num tempdir efémero, sandbox `read-only`, e ignora a config **e** as rules do host.
+
+- **`--ignore-user-config`** → não lê o `~/.codex` (config/auth pessoal).
+- **`--ignore-rules`** → ignora as rules/AGENTS.md do host — o equivalente ao `Skill` proibido do lado Claude.
+- **`--ephemeral` + `--sandbox read-only` + `-C <tempdir>`** → sessão descartável, sem escrita, fora de qualquer repo.
+- **`codex debug models --bundled`** → a dropdown de modelos usa o catálogo embutido no binário, não o config/rede local (host-independente, bom para o teste do PC novo).
+
+Builder extraído (`buildCodexCliArgs`) para ser testável; flags confirmados no binário (codex-cli 0.141.0). Autoria: Codex (review cruzado da Ponte A).

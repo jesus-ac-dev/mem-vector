@@ -371,6 +371,31 @@ function providerClaude(cfg: AgenteServidor): ProviderLLM {
 }
 
 // ── codex (cli) — padrão do skills-compare: exec efémero, quota dita alto ──
+export function buildCodexCliArgs(cfg: AgenteServidor, tempDir: string, outputPath: string) {
+    const args = ['--ask-for-approval', 'never'];
+    if (cfg.esforco) {
+        args.push('--config', `model_reasoning_effort="${cfg.esforco}"`);
+    }
+    args.push(
+        'exec',
+        // O exec corre num tempdir (não é repo git): sem isto o codex recusa
+        // com "Not inside a trusted directory".
+        '--skip-git-repo-check',
+        '--ignore-user-config',
+        '--ignore-rules',
+        '--sandbox',
+        'read-only',
+        '--ephemeral',
+        '--color',
+        'never',
+        '-C',
+        tempDir,
+    );
+    if (cfg.modelo) args.push('--model', cfg.modelo);
+    args.push('--output-last-message', outputPath, '-');
+    return args;
+}
+
 function providerCodex(cfg: AgenteServidor): ProviderLLM {
     if (cfg.modo === 'api') return providerCodexApi(cfg);
     return {
@@ -379,26 +404,7 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
             const tempDir = await mkdtemp(join(tmpdir(), 'memvector-codex-'));
             const outputPath = join(tempDir, 'last-message.txt');
             try {
-                const args = ['--ask-for-approval', 'never'];
-                if (cfg.esforco) {
-                    args.push('--config', `model_reasoning_effort="${cfg.esforco}"`);
-                }
-                args.push(
-                    'exec',
-                    // O exec corre num tempdir (não é repo git): sem isto o
-                    // codex recusa com "Not inside a trusted directory".
-                    '--skip-git-repo-check',
-                    '--ignore-user-config',
-                    '--sandbox',
-                    'read-only',
-                    '--ephemeral',
-                    '--color',
-                    'never',
-                    '-C',
-                    tempDir,
-                );
-                if (cfg.modelo) args.push('--model', cfg.modelo);
-                args.push('--output-last-message', outputPath, '-');
+                const args = buildCodexCliArgs(cfg, tempDir, outputPath);
 
                 const { code, stdout, stderr } = await execComando('codex', args, prompt);
                 if (code !== 0) {
@@ -446,7 +452,7 @@ function providerCodex(cfg: AgenteServidor): ProviderLLM {
             try {
                 const { code, stdout } = await execComando(
                     'codex',
-                    ['debug', 'models'],
+                    ['debug', 'models', '--bundled'],
                     undefined,
                     30_000,
                 );
