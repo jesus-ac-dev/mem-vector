@@ -30,15 +30,20 @@ import {
     MODULO_LABEL,
     MODULOS,
     modoEfetivo,
+    CRUZAMENTO_LABEL,
+    CRUZAMENTOS,
     PROVIDER_LABEL,
     PROVIDERS,
     type AgenteVista,
+    type Cruzamento,
+    type CruzamentoConfig,
     type Definicoes,
     type DefinicoesVista,
     type MetodoDestilacao,
     type ModoAgente,
     type Modulo,
     type Provider,
+    type Validador,
 } from '@/modules/definicoes/definicoes.schema';
 import { ProviderIcon } from '@/components/layout/chat/provider-icon';
 import { providersPorForcarTeste } from '@/components/layout/definicoes/definicoes-modal.logic';
@@ -49,7 +54,7 @@ import { providersPorForcarTeste } from '@/components/layout/definicoes/definico
 // não testados são testados à força (mudar modelo/key ou desativar não dispara).
 // A ESCOLHA do provider/modelo do chat vive na mini-modal do link sobre o Enviar.
 
-type Pagina = 'comportamento' | 'agentes' | 'modulos' | Modulo;
+type Pagina = 'comportamento' | 'agentes' | 'cruzamentos' | 'modulos' | Modulo;
 
 export const ABRIR_DEFINICOES_EVENT = 'memvector:abrir-definicoes';
 // Emitido ao guardar com sucesso: o composer do chat lê o provider/modelo das
@@ -218,6 +223,15 @@ export function DefinicoesModal({
         editar({ ...defs, githubRepos: defs.githubRepos.filter((x) => x !== r) });
     }
 
+    // Relay: muda o principal/validador de um cruzamento (cria a entrada se não existe).
+    function mudarCruzamento(c: Cruzamento, patch: Partial<CruzamentoConfig>) {
+        const atual: CruzamentoConfig = defs.cruzamentos[c] ?? {
+            principal: 'claude',
+            validador: 'none',
+        };
+        editar({ ...defs, cruzamentos: { ...defs.cruzamentos, [c]: { ...atual, ...patch } } });
+    }
+
     async function correrTeste(p: Provider): Promise<boolean> {
         setTestes((t) => ({ ...t, [p]: 'a-testar' }));
         // O teste leva a config PENDENTE do form (r9) — modo/modelo/key por
@@ -287,6 +301,8 @@ export function DefinicoesModal({
             // M7: mesmo contrato do token; os repos viajam como a lista atual.
             githubToken: githubTokenNova,
             githubRepos: defs.githubRepos,
+            // relay: o mapa cruzamento→provider (config, não código).
+            cruzamentos: defs.cruzamentos,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -357,6 +373,7 @@ export function DefinicoesModal({
                         </p>
                         {itemMenu('comportamento', 'Comportamento')}
                         {itemMenu('agentes', 'Agentes')}
+                        {itemMenu('cruzamentos', 'Cruzamentos')}
                         {itemMenu('modulos', 'Módulos')}
                         {defs.modulosAtivos.length > 0 && (
                             <>
@@ -658,6 +675,82 @@ export function DefinicoesModal({
                                     As keys cifram-se na base de dados (AES-256-GCM) e nunca voltam
                                     ao browser.
                                 </p>
+                            </div>
+                        ) : pagina === 'cruzamentos' ? (
+                            <div className="max-w-lg space-y-4">
+                                <div>
+                                    <h3 className="text-sm font-medium">Cruzamentos (relay)</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Quem PRODUZ (principal) e quem VALIDA (validador) em cada
+                                        passo do pipeline. Config, não código. Validador de linhagem
+                                        diferente = defesa máxima contra o erro que escapa.
+                                    </p>
+                                </div>
+                                <ul className="space-y-3">
+                                    {CRUZAMENTOS.map((c) => {
+                                        const cfg = defs.cruzamentos[c];
+                                        return (
+                                            <li key={c} className="rounded-md border p-3">
+                                                <p className="text-sm font-medium">
+                                                    {CRUZAMENTO_LABEL[c]}
+                                                </p>
+                                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground">
+                                                        principal
+                                                    </span>
+                                                    <Select
+                                                        value={cfg?.principal ?? ''}
+                                                        onValueChange={(v) =>
+                                                            mudarCruzamento(c, {
+                                                                principal: v as Provider,
+                                                            })
+                                                        }
+                                                    >
+                                                        <SelectTrigger className="h-8 w-28 text-xs">
+                                                            <SelectValue placeholder="—" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {PROVIDERS.map((p) => (
+                                                                <SelectItem key={p} value={p}>
+                                                                    {PROVIDER_LABEL[p]}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        validador
+                                                    </span>
+                                                    <Select
+                                                        value={cfg?.validador ?? 'none'}
+                                                        onValueChange={(v) =>
+                                                            mudarCruzamento(c, {
+                                                                validador: v as Validador,
+                                                            })
+                                                        }
+                                                        disabled={!cfg}
+                                                    >
+                                                        <SelectTrigger className="h-8 w-28 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">
+                                                                nenhum
+                                                            </SelectItem>
+                                                            <SelectItem value="self">
+                                                                o mesmo
+                                                            </SelectItem>
+                                                            {PROVIDERS.map((p) => (
+                                                                <SelectItem key={p} value={p}>
+                                                                    {PROVIDER_LABEL[p]}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
                             </div>
                         ) : pagina === 'modulos' ? (
                             <div className="max-w-md space-y-4">
