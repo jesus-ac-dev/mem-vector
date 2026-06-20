@@ -26,6 +26,7 @@ import {
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
+import { criarIssue, lerIssues, comentarIssue } from '../lib/github';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
 // o kernel (procurar/ler/criar/continuar nota, daily). Lançado pelo claude CLI
@@ -37,6 +38,13 @@ const RESULT_FILE = process.env.MEMVECTOR_AGENT_RESULT_FILE ?? '';
 // #45: key Tavily opcional (cifrada nas Definições, passada por env). Sem ela, o
 // procurar_web cai no DuckDuckGo sem-key (flaky → avisa para configurar a key).
 const WEB_KEY = process.env.MEMVECTOR_AGENT_WEB_KEY || undefined;
+// M7: token + repos ligados do GitHub (por env, como o WEB_KEY). Sem token, as
+// tools de issue nem se registam — o módulo está desligado para esta sessão.
+const GITHUB_TOKEN = process.env.MEMVECTOR_AGENT_GITHUB_TOKEN || undefined;
+const GITHUB_REPOS = (process.env.MEMVECTOR_AGENT_GITHUB_REPOS || '')
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
 
 // A nota escrita neste turno entra na entrada do daily (paridade com o formato
 // do caminho one-shot: "Estado escrito: [[slug]]"). Vive num contexto por
@@ -241,6 +249,54 @@ const TOOLS = [
     },
 ];
 
+// M7: tools de issue via gh (só entram quando há token). A guarda da escrita é a
+// promoção assistida — descrita aqui e reforçada no system prompt do responder.
+const GITHUB_TOOLS = [
+    {
+        name: 'ler_issues',
+        description:
+            'Lista as issues abertas de um repositório LIGADO (number, title, state, url). Usa antes de criar (não duplicar) e para responder sobre o estado do trabalho.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Repo "owner/nome" da lista ligada' },
+            },
+            required: ['repo'],
+        },
+    },
+    {
+        name: 'criar_issue',
+        description:
+            'Cria uma issue num repositório LIGADO — promove uma tarefa/bug durável de um projeto para o GitHub (modelo 2.2). Só depois de o utilizador confirmar (promoção assistida). O body leva enquadramento completo, não uma linha. Devolve o URL.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Repo "owner/nome" da lista ligada' },
+                title: { type: 'string', description: 'Título curto (verbo + objeto)' },
+                body: {
+                    type: 'string',
+                    description: 'Corpo markdown com enquadramento completo',
+                },
+            },
+            required: ['repo', 'title', 'body'],
+        },
+    },
+    {
+        name: 'comentar_issue',
+        description:
+            'Comenta numa issue existente de um repositório LIGADO (relay entre agentes, atualização de estado). Só depois de o utilizador confirmar. Devolve o URL do comentário.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Repo "owner/nome" da lista ligada' },
+                number: { type: 'number', description: 'Número da issue' },
+                body: { type: 'string', description: 'Comentário em markdown' },
+            },
+            required: ['repo', 'number', 'body'],
+        },
+    },
+];
+
 type Args = Record<string, unknown>;
 
 function texto(args: Args, campo: string): string {
@@ -253,6 +309,18 @@ function listaStrings(args: Args, campo: string): string[] {
     const v = args[campo];
     if (!Array.isArray(v)) throw new Error(`"${campo}" tem de ser uma lista`);
     return v.map(String);
+}
+
+// M7: o agente só toca em repos LIGADOS (defesa — não inventa um repo fora do
+// connect). GITHUB_TOKEN está garantido nas cases (a tool só existe com ele).
+function repoLigado(args: Args): string {
+    const repo = texto(args, 'repo');
+    if (!GITHUB_REPOS.includes(repo)) {
+        throw new Error(
+            `repo "${repo}" não está ligado. Ligados: ${GITHUB_REPOS.join(', ') || '(nenhum — liga em Definições > GitHub)'}.`,
+        );
+    }
+    return repo;
 }
 
 async function executarTool(
@@ -446,6 +514,30 @@ async function executarTool(
                 return `Erro ao ler ${url}: ${e instanceof Error ? e.message : 'desconhecido'}`;
             }
         }
+        case 'ler_issues': {
+            const issues = await lerIssues(GITHUB_TOKEN!, { repo: repoLigado(args) });
+            if (!issues.length) return 'Sem issues abertas nesse repo.';
+            return JSON.stringify(issues, null, 2);
+        }
+        case 'criar_issue': {
+            const url = await criarIssue(GITHUB_TOKEN!, {
+                repo: repoLigado(args),
+                title: texto(args, 'title'),
+                body: texto(args, 'body'),
+            });
+            return `Issue criada: ${url}`;
+        }
+        case 'comentar_issue': {
+            const n = Number(args.number);
+            if (!Number.isInteger(n) || n <= 0)
+                throw new Error('"number" tem de ser o nº da issue');
+            const url = await comentarIssue(GITHUB_TOKEN!, {
+                repo: repoLigado(args),
+                number: n,
+                body: texto(args, 'body'),
+            });
+            return `Comentário publicado: ${url}`;
+        }
         default:
             throw new Error(`tool desconhecida: ${name}`);
     }
@@ -459,7 +551,10 @@ async function main(): Promise<void> {
         { capabilities: { tools: {} } },
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+    // M7: as tools de issue só aparecem na sessão quando há token (módulo ligado).
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+        tools: GITHUB_TOKEN ? [...TOOLS, ...GITHUB_TOOLS] : TOOLS,
+    }));
 
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const { name, arguments: args } = req.params;

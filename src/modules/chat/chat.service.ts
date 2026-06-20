@@ -13,7 +13,7 @@ import { classificarIntencao } from './chat.intencao';
 import { expandirFontesCom } from './chat.expand';
 import { blocoKernelCom } from '@/agent/kernel';
 import { responderComToolsCom } from '@/agent/responder-tools';
-import { criarDetetorEscalada, INSTRUCAO_ESCALADA, SENTINELA_ESCALAR } from './escalada';
+import { criarDetetorEscalada, construirInstrucaoEscalada, SENTINELA_ESCALAR } from './escalada';
 import { destilar as destilarReal } from '@/modules/knowledge/knowledge.destilar';
 import {
     escreverNota as escreverNotaReal,
@@ -233,6 +233,9 @@ interface TurnoPreparado {
     prompt: string;
     webHabilitada: boolean; // #45
     webKey?: string; // #45: key Tavily das Definições (cifrada), p/ a pesquisa web
+    githubAtivo: boolean; // M7: módulo github ligado + token presente
+    githubToken?: string; // M7: vira o GH_TOKEN do subprocesso (a conta do user)
+    githubRepos: string[]; // M7: repos que o agente pode tocar
 }
 
 // Fase do turno para o indicador dinâmico (#66): consultar → gerar. A fase 'web'
@@ -255,6 +258,9 @@ const LABEL_FERRAMENTA: Record<string, string> = {
     ler_daily: 'a ler a daily',
     ler_daily_hoje: 'a ler a daily de hoje',
     listar_tarefas_abertas: 'a ver as tarefas',
+    ler_issues: 'a ver as issues',
+    criar_issue: 'a abrir uma issue',
+    comentar_issue: 'a comentar numa issue',
 };
 
 export function labelFerramenta(nome: string): string {
@@ -273,8 +279,16 @@ async function prepararTurno(
     const db = await createClient();
     // #67: lê o provider + o nº de fontes ANTES do retrieval — fail-fast sem
     // provider e o match_count (configurável) vem da mesma leitura de definições.
-    const { instancia, modeloPedido, matchCount, webHabilitada, webKey } =
-        await providerDoChatCom(db);
+    const {
+        instancia,
+        modeloPedido,
+        matchCount,
+        webHabilitada,
+        webKey,
+        githubAtivo,
+        githubToken,
+        githubRepos,
+    } = await providerDoChatCom(db);
     onFase?.({ fase: 'consultar' });
     const queryEmbedding = await embedQuery(question);
 
@@ -315,7 +329,18 @@ async function prepararTurno(
     );
     // Retrieval pronto: a partir daqui é o modelo a gerar (a espera longa).
     onFase?.({ fase: 'gerar', fontes: sources.length });
-    return { db, instancia, modeloPedido, sources, prompt, webHabilitada, webKey };
+    return {
+        db,
+        instancia,
+        modeloPedido,
+        sources,
+        prompt,
+        webHabilitada,
+        webKey,
+        githubAtivo,
+        githubToken,
+        githubRepos,
+    };
 }
 
 function montarResultado(resp: RespostaLLM, t: TurnoPreparado, latencyMs: number): ChatResult {
@@ -361,9 +386,13 @@ export async function respondStream(
     // cold-start agentic — perguntas do workspace respondem rápido, sem escalar. O
     // detetor segura os primeiros chars do stream para decidir sem deixar passar o
     // marcador. Web OFF (default) = caminho de sempre, intocado.
-    if (t.webHabilitada) {
+    if (t.webHabilitada || t.githubAtivo) {
         const detetor = criarDetetorEscalada(SENTINELA_ESCALAR, onTextDelta);
-        const promptRapido = `${t.prompt}\n\n${INSTRUCAO_ESCALADA}`;
+        const instrucao = construirInstrucaoEscalada({
+            web: t.webHabilitada,
+            github: t.githubAtivo,
+        });
+        const promptRapido = `${t.prompt}\n\n${instrucao}`;
         const respRapida = t.instancia.gerarStream
             ? await t.instancia.gerarStream(promptRapido, (d) => detetor.processar(d))
             : await t.instancia.gerar(promptRapido).then((r) => {
@@ -377,7 +406,9 @@ export async function respondStream(
         // Escalou: o agente-com-tools trata (loop agentic; pesquisa a internet de
         // verdade). Key Tavily das Definições; env como fallback de operação.
         // Agora já se sabe que vai à net — anuncia a fase (#96 smoke).
-        onFase?.({ fase: 'web' });
+        // "web" só se anuncia quando a web está mesmo ligada; com github-only a
+        // narração por-tool (a abrir uma issue…) dá o passo certo.
+        if (t.webHabilitada) onFase?.({ fase: 'web' });
         const webKey = t.webKey || process.env.MEMVECTOR_AGENT_WEB_KEY;
         const r = await responderComToolsCom(
             t.db,
@@ -392,6 +423,8 @@ export async function respondStream(
                 if (nome.startsWith('mcp__'))
                     onFase?.({ fase: 'ferramenta', label: labelFerramenta(nome) });
             },
+            // M7: o token do user vira GH_TOKEN no subprocesso; repos ligados limitam o alcance.
+            { token: t.githubToken, repos: t.githubRepos },
         );
         // #100: r.text já saiu token-a-token por onTextDelta durante a geração
         // (o indicador de fase fecha quando o texto começa); não reemitir o bloco.
