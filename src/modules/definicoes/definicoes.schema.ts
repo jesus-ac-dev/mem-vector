@@ -203,6 +203,40 @@ export const TestarProviderSchema = z.object({
     config: AgenteConfigSchema.optional(),
 });
 
+// --- Relay (módulo de dev): cruzamentos config-driven ----------------------
+// O pipeline é um percurso de CRUZAMENTOS, cada um com um papel, parametrizado
+// por {principal, validador} — CONFIG, não código (glossário). Roles canónicos.
+export const CRUZAMENTOS = ['analise', 'dev', 'docs', 'auditoria'] as const;
+export type Cruzamento = (typeof CRUZAMENTOS)[number];
+
+export const CRUZAMENTO_LABEL: Record<Cruzamento, string> = {
+    analise: 'Análise',
+    dev: 'Desenvolvimento',
+    docs: 'Documentação',
+    auditoria: 'Auditoria',
+};
+
+// Double-tap (glossário): 'none' = só principal; 'self' = o mesmo provider
+// revê-se; um Provider = cross (linhagem diferente valida, anti-árvore-torta).
+export const ValidadorSchema = z.union([z.enum(PROVIDERS), z.literal('self'), z.literal('none')]);
+export type Validador = z.infer<typeof ValidadorSchema>;
+
+// Config de UM cruzamento: quem PRODUZ (principal) e quem VALIDA (validador).
+export const CruzamentoConfigSchema = z.object({
+    principal: z.enum(PROVIDERS),
+    validador: ValidadorSchema.default('none'),
+});
+export type CruzamentoConfig = z.infer<typeof CruzamentoConfigSchema>;
+
+// O mapa cruzamento→provider (espelha AgentesSchema: cada um opcional).
+const CruzamentosSchema = z.object({
+    analise: CruzamentoConfigSchema.optional(),
+    dev: CruzamentoConfigSchema.optional(),
+    docs: CruzamentoConfigSchema.optional(),
+    auditoria: CruzamentoConfigSchema.optional(),
+});
+export type Cruzamentos = z.infer<typeof CruzamentosSchema>;
+
 // Input de gravação (a porta valida isto).
 export const DefinicoesSchema = z.object({
     metodoDestilacao: z.enum(METODOS_DESTILACAO).default('one-shot'),
@@ -230,6 +264,8 @@ export const DefinicoesSchema = z.object({
         .array(z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'usa o formato owner/nome'))
         .max(50)
         .optional(),
+    // Relay (módulo de dev): o mapa cruzamento→provider — config, não código.
+    cruzamentos: CruzamentosSchema.optional(),
     agentes: AgentesSchema,
 });
 
