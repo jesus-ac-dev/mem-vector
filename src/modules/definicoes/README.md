@@ -79,8 +79,11 @@ models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
   `google-workspace`, `campanhas` (reservados, do roadmap do brief §5 + visão
   do calendário). **GitHub (M7 Fatia 1):** a página do módulo liga a conta com um
   **PAT fine-grained** (`github_token_cifrada`, cifrado at rest como as keys dos
-  providers, máscara na vista) + a lista de **repos ligados** (`github_repos`,
-  "owner/nome"). O transporte é o **`gh` CLI** (requisito declarado no README do
+  providers, máscara na vista) + a lista de **repos ligados** (`github_repos`).
+  **UX:** botão **"Testar ligação"** valida o token (`gh api user`) e guarda em sucesso
+  (não "guardar e rezar"); os repos escolhem-se por **checkbox** (carregados via
+  `gh repo list`, ações `testarGithub`/`listarReposGithub`), não à mão. Os **cruzamentos**
+  (config do relay) vivem DENTRO desta página (add-on de dev), não no menu de topo. O transporte é o **`gh` CLI** (requisito declarado no README do
   repo); o token vira `GH_TOKEN` no subprocesso = a conta do utilizador do SaaS,
   não o `gh` do host (passa o fresh-pc-test — requisito declarado ≠ andaime
   acumulado). Com o módulo ligado + token, o **responder com tools**
