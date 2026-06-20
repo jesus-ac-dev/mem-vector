@@ -36,6 +36,8 @@ interface DefinicoesRow {
     web_habilitada?: boolean | null;
     web_key_cifrada?: string | null;
     comportamento?: string | null;
+    github_token_cifrada?: string | null;
+    github_repos?: string[] | null;
     agentes: Record<string, AgenteRow> | null;
 }
 
@@ -43,15 +45,22 @@ async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
         .select(
-            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, comportamento, agentes',
+            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, comportamento, github_token_cifrada, github_repos, agentes',
         )
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
     return data as DefinicoesRow | null;
 }
 
-function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes' | 'webKey'> {
-    const parsed = DefinicoesSchema.omit({ agentes: true, webKey: true }).safeParse({
+function normalizar(
+    row: DefinicoesRow,
+): Omit<DefinicoesServidor, 'agentes' | 'webKey' | 'githubToken' | 'githubRepos'> {
+    const parsed = DefinicoesSchema.omit({
+        agentes: true,
+        webKey: true,
+        githubToken: true,
+        githubRepos: true,
+    }).safeParse({
         metodoDestilacao: row.metodo_destilacao,
         modulosAtivos: (row.modulos_ativos ?? []).filter((m: string) =>
             (MODULOS as readonly string[]).includes(m),
@@ -108,10 +117,14 @@ export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<Definic
         };
     }
     const webKey = row.web_key_cifrada ? decifrar(row.web_key_cifrada) : undefined;
+    const githubToken = row.github_token_cifrada ? decifrar(row.github_token_cifrada) : undefined;
     return {
         ...base,
         webTemKey: Boolean(webKey),
         webKeySufixo: webKey ? sufixoKey(webKey) : undefined,
+        githubTemToken: Boolean(githubToken),
+        githubKeySufixo: githubToken ? sufixoKey(githubToken) : undefined,
+        githubRepos: row.github_repos ?? [],
         agentes,
     };
 }
@@ -127,6 +140,7 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
             chatProvider: 'claude',
             matchCount: 5,
             webHabilitada: false,
+            githubRepos: [],
             agentes: {},
         };
     }
@@ -143,7 +157,8 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
         };
     }
     const webKey = row.web_key_cifrada ? decifrar(row.web_key_cifrada) : undefined;
-    return { ...base, webKey, agentes };
+    const githubToken = row.github_token_cifrada ? decifrar(row.github_token_cifrada) : undefined;
+    return { ...base, webKey, githubToken, githubRepos: row.github_repos ?? [], agentes };
 }
 
 /** Grava o input do cliente. apiKey: undefined = manter; '' = limpar; string = cifrar. */
@@ -196,6 +211,17 @@ export async function gravarDefinicoesCom(
         webKeyCifrada = cifrar(definicoes.webKey);
     }
 
+    // M7: token GitHub — mesmo contrato (undefined mantém a cifrada, '' limpa,
+    // string cifra). Os repos: undefined mantém os atuais, lista (mesmo []) escreve.
+    let githubTokenCifrada: string | undefined;
+    if (definicoes.githubToken === undefined) {
+        githubTokenCifrada = row?.github_token_cifrada
+            ? cifrar(decifrar(row.github_token_cifrada))
+            : undefined;
+    } else if (definicoes.githubToken !== '') {
+        githubTokenCifrada = cifrar(definicoes.githubToken);
+    }
+
     const { error } = await db.from('definicoes').upsert({
         owner_id: user.id,
         metodo_destilacao: definicoes.metodoDestilacao,
@@ -205,6 +231,8 @@ export async function gravarDefinicoesCom(
         web_habilitada: definicoes.webHabilitada,
         web_key_cifrada: webKeyCifrada ?? null,
         comportamento: definicoes.comportamento?.trim() || null,
+        github_token_cifrada: githubTokenCifrada ?? null,
+        github_repos: definicoes.githubRepos ?? row?.github_repos ?? [],
         agentes,
         updated_at: new Date().toISOString(),
     });

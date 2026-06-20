@@ -152,6 +152,10 @@ export interface DefinicoesVista {
     webTemKey: boolean;
     webKeySufixo?: string;
     comportamento?: string; // #122: como o agente-autor age (texto livre)
+    // M7: connection GitHub — o token nunca volta ao browser (só máscara).
+    githubTemToken: boolean;
+    githubKeySufixo?: string;
+    githubRepos: string[];
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -173,6 +177,8 @@ export interface DefinicoesServidor {
     webHabilitada: boolean;
     webKey?: string; // #45: decifrada, p/ a pesquisa web; nunca serializada p/ fora
     comportamento?: string; // #122: injetado no prompt do agente a seguir ao Kernel
+    githubToken?: string; // M7: decifrado, vira o GH_TOKEN do subprocesso; nunca serializado p/ fora
+    githubRepos: string[]; // M7: repos ligados ("owner/nome")
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -215,6 +221,15 @@ export const DefinicoesSchema = z.object({
     // (o equivalente web a editar o CLAUDE.md). Injetado no prompt a seguir ao
     // Kernel. Cap alinhado com o do Kernel para não engolir o prompt.
     comportamento: z.string().max(4000).optional(),
+    // M7 Fatia 1: token GitHub (PAT fine-grained) — MESMO contrato das keys:
+    // undefined = manter a cifrada; '' = limpar; string = cifrar. Decifrado vira
+    // o GH_TOKEN do subprocesso gh (a conta do user do SaaS, não o gh do host).
+    githubToken: z.string().optional(),
+    // Repos ligados que o agente pode usar ("owner/nome"); não são segredo.
+    githubRepos: z
+        .array(z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'usa o formato owner/nome'))
+        .max(50)
+        .optional(),
     agentes: AgentesSchema,
 });
 
@@ -230,5 +245,7 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     matchCount: 5,
     webHabilitada: false,
     webTemKey: false,
+    githubTemToken: false,
+    githubRepos: [],
     agentes: {},
 };

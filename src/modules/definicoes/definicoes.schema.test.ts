@@ -19,3 +19,29 @@ describe('DefinicoesSchema matchCount (#67)', () => {
         expect(() => DefinicoesSchema.parse({ agentes: {}, matchCount: 3.5 })).toThrow();
     });
 });
+
+// M7 Fatia 1: connection GitHub — token (mesmo contrato das keys) + repos ligados.
+describe('DefinicoesSchema github (M7)', () => {
+    it('githubToken e githubRepos são opcionais (undefined = manter/ausente)', () => {
+        const d = DefinicoesSchema.parse({ agentes: {} });
+        expect(d.githubToken).toBeUndefined();
+        expect(d.githubRepos).toBeUndefined();
+    });
+
+    it('aceita repos no formato owner/nome e o token como string', () => {
+        const d = DefinicoesSchema.parse({
+            agentes: {},
+            githubToken: 'github_pat_x',
+            githubRepos: ['jesus-ac-dev/mem-vector', 'org/repo'],
+        });
+        expect(d.githubToken).toBe('github_pat_x');
+        expect(d.githubRepos).toEqual(['jesus-ac-dev/mem-vector', 'org/repo']);
+    });
+
+    it('rejeita repos malformados (sem barra ou com espaço)', () => {
+        expect(() => DefinicoesSchema.parse({ agentes: {}, githubRepos: ['sembarra'] })).toThrow();
+        expect(() =>
+            DefinicoesSchema.parse({ agentes: {}, githubRepos: ['owner /repo'] }),
+        ).toThrow();
+    });
+});
