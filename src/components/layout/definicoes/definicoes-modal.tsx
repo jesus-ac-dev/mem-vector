@@ -584,7 +584,7 @@ export function DefinicoesModal({
                                                     <p className="flex items-center gap-2 text-sm font-medium">
                                                         <ProviderIcon provider={p} />
                                                         {PROVIDER_LABEL[p]}
-                                                        {p === 'claude' && (
+                                                        {p === defs.chatProvider && cfg.ativo && (
                                                             <span className="ml-1 text-xs font-normal text-muted-foreground">
                                                                 o orquestrador atual
                                                             </span>

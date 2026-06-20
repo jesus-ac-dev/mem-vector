@@ -126,7 +126,7 @@ export function EscolhaModeloModal({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {(ativos.length ? ativos : (['claude'] as Provider[])).map((p) => (
+                                {ativos.map((p) => (
                                     <SelectItem key={p} value={p}>
                                         <span className="flex items-center gap-2">
                                             <ProviderIcon provider={p} className="h-5 w-5" />

@@ -114,19 +114,12 @@ export async function validarToken(token: string): Promise<string> {
     return corrGh(['api', 'user', '-q', '.login'], token);
 }
 
-/** Lista os repos "owner/nome" a que o token tem acesso (para o picker de checkboxes). */
-export async function listarRepos(token: string, limite = 200): Promise<string[]> {
+/** Lista TODOS os repos "owner/nome" a que o token tem acesso — privados e de
+ *  organização incluídos (`/user/repos` traz affiliation owner+collaborator+org_member
+ *  e visibility=all por defeito; `gh repo list` só trazia os públicos do próprio). */
+export async function listarRepos(token: string): Promise<string[]> {
     const out = await corrGh(
-        [
-            'repo',
-            'list',
-            '--limit',
-            String(limite),
-            '--json',
-            'nameWithOwner',
-            '-q',
-            '.[].nameWithOwner',
-        ],
+        ['api', '--paginate', 'user/repos?per_page=100&sort=full_name', '-q', '.[].full_name'],
         token,
     );
     return out
