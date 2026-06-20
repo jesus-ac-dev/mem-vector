@@ -1,4 +1,13 @@
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
+
+// #123 (Ponte G): o modelo (e5-small, ~191M) é o coração do RAG — não pode
+// depender de descarregar da HuggingFace para dentro do node_modules em runtime.
+// MEMVECTOR_MODEL_CACHE aponta o cache a um dir ESTÁVEL (vendorável / volume de
+// deploy), pré-povoável no build. Sem a env, mantém o default do transformers.js
+// (não muda nada para o dev local). É o lado "embutir" da política de host.
+if (process.env.MEMVECTOR_MODEL_CACHE) {
+    env.cacheDir = process.env.MEMVECTOR_MODEL_CACHE;
+}
 
 // Tipo mínimo do extractor (evita lutar com os tipos do transformers.js).
 type Extractor = (
