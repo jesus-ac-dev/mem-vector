@@ -18,7 +18,8 @@ definições (`cruzamentos`) → `resolverCruzamento` (resolve quem produz/valid
   passa com "APROVADO" explícito (default-to-refuted — o erro não escapa por ambiguidade).
 - **Estrela:** os cruzamentos de execução leem o output da **Análise** (fonte de verdade), não
   a narrativa do anterior (não propaga a árvore torta).
-- **Kill switch:** cruzamento não validado em N rondas → pára e volta ao humano (não finge sucesso).
+- **Kill switch:** cruzamento não validado em N rondas → pára (`completo: false`), não finge sucesso.
+  - **A DISCUTIR (Carlos):** o "volta ao humano" — como/onde o humano é chamado e o que pode fazer — ainda não está fechado. Por agora só pára.
 
 ## Ficheiros
 

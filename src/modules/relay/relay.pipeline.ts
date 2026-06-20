@@ -37,7 +37,10 @@ export async function correrPipeline(opts: {
         porCruzamento[c] = r;
         ordem.push(c);
         if (c === 'analise') analise = r.output;
-        // Kill switch: um cruzamento que não valida pára o circuito (volta ao humano).
+        // Kill switch: um cruzamento que não valida pára o circuito.
+        // NOTA (decisão por discutir — Carlos 2026-06-20): o que "volta ao humano"
+        // significa exatamente (como/onde o humano é chamado e o que pode fazer)
+        // ainda não está fechado. Por agora só pára e marca `completo: false`.
         if (!r.validado) return { ordem, porCruzamento, analise, completo: false };
     }
 
