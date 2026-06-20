@@ -25,3 +25,13 @@ export function avaliarCriarNota(
     }
     return { ok: true };
 }
+
+// #121: o caminho one-shot (default) NÃO pode recusar (não há sessão para
+// retentar; recusar perdia a nota). Em vez de bloquear, LIGA aditivamente: uma
+// nota nova sem [[ligações]] ganha uma referência ao vizinho mais relacionado —
+// integra em vez de deixar a ilha, sem perder nada. Já tem link → não mexe.
+// Pura: a chamada que computa o candidato vive no pós-turno.
+export function adicionarRelacionado(contentMd: string, candidato: { slug: string }): string {
+    if (parseWikilinks(contentMd).length > 0) return contentMd;
+    return `${contentMd.trimEnd()}\n\n**Relacionado:** [[${candidato.slug}]]\n`;
+}

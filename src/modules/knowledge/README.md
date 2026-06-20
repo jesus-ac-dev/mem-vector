@@ -102,7 +102,9 @@ O `content_md` faz **overwrite** em cada escrita (não é aditivo como as tags).
 
 O "grafo sem órfãos" do vault era só prompt (o #104). `avaliarCriarNota` (`knowledge.guards.ts`, pura) põe um **gate em código** no caminho agentic: a tool `criar_nota` computa as candidatas (busca híbrida) e, se a nota nova **não tem nenhum `[[wikilink]]` E há vizinhos para ligar**, devolve ao agente uma mensagem com sugestões (`[[slug]]`) em vez de aceitar a ilha — recusa **recuperável**, o agente cria de novo com a ligação. Sem candidatas não força (a 1.ª nota de um assunto novo não tem a quem ligar).
 
-Cobre o caminho **agentic**. O one-shot (default) não pode ter um gate duro (não há sessão para retentar; recusar perdia a nota) — continua no nudge do prompt. Anti-duplicado + reconciliação de edges pendentes ficam por decidir/fazer (ver #121).
+**Os dois caminhos ficam cobertos**, com mecanismos diferentes porque o risco é diferente: o **agentic** recusa (há sessão — o agente retenta com a ligação); o **one-shot** (default), que não tem retry, **liga aditivamente** (`adicionarRelacionado` acrescenta `**Relacionado:** [[x]]` ao vizinho mais próximo) — integra em vez de perder a nota. Ao nascer uma nota, `reconciliarEdgesPendentesCom` (no projector) resolve os **links-fantasma** que apontavam para o seu slug, quando inequívoco (homónimos ficam pendentes, como no `regenerar`).
+
+**Anti-duplicado parqueado:** um falso-positivo de similaridade fundiria tópicos distintos (pior que um duplicado) — espera limiar conservador + dados. O `criar_nota` continua a continuar a candidata por título (`notaCandidataCorrespondente`).
 
 ## Dependências
 

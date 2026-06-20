@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 import { reindexEntity } from '@/lib/indexing';
-import { regenerarEdgesCom } from '@/modules/knowledge/edges';
+import { regenerarEdgesCom, reconciliarEdgesPendentesCom } from '@/modules/knowledge/edges';
 import { parseWikilinkTargets } from '@/modules/knowledge/knowledge.links';
 
 export const derivedIndexPayloadSchema = z.object({
@@ -155,6 +155,8 @@ export async function projectarIndicesEntityCom(
             fromId: nota.id,
             alvos: parseWikilinkTargets(nota.content_md),
         });
+        // #121: resolve os links-fantasma que apontavam para este slug.
+        await reconciliarEdgesPendentesCom(db, user.id, nota.slug, nota.id);
         return { ...payload, skipped: null };
     }
 

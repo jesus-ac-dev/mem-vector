@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { slugify } from './knowledge.links';
+import { adicionarRelacionado } from './knowledge.guards';
 import type { EscritaKnowledge, NotaCandidata } from './knowledge.schema';
 import { tagsDoAgente, unirTags } from './knowledge.props';
 import { resolverProjetoCom } from '@/modules/projetos/projetos.service';
@@ -47,10 +48,15 @@ export async function escreverOuContinuarNotaCom(
     // Nota nova (#96): o agente indica o projeto (Pessoal default quando é sobre o
     // utilizador) → ancora à pasta desse projeto. Sem projeto = Knowledge (raiz).
     // O placement não precisa de ser perfeito — o utilizador refina com drag-drop.
-    const projeto = input.projeto?.trim();
+    // #121: o one-shot não recusa órfãos (sem retry) — liga aditivamente ao
+    // vizinho mais relacionado antes de escrever (não mexe se já tem link).
+    const inputNovo = candidatos.length
+        ? { ...input, content_md: adicionarRelacionado(input.content_md, candidatos[0]) }
+        : input;
+    const projeto = inputNovo.projeto?.trim();
     if (projeto) {
         const { folderId } = await resolverProjetoCom(db, projeto);
-        if (folderId) return escreverNotaEmPastaCom(db, input, folderId, author);
+        if (folderId) return escreverNotaEmPastaCom(db, inputNovo, folderId, author);
     }
-    return escreverNotaCom(db, input, author);
+    return escreverNotaCom(db, inputNovo, author);
 }

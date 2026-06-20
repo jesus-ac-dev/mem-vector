@@ -104,4 +104,46 @@ describe('knowledge versions (#119)', () => {
         const depois = await listarVersoesCom(alice, id);
         expect(depois.length).toBe(versoes.length + 1);
     }, 60_000);
+
+    it('reconcilia o link-fantasma quando o alvo nasce (#121)', async () => {
+        const { escreverNotaCom } = await import('@/modules/knowledge/knowledge.service');
+
+        // A liga a [[alvo-tardio]], que ainda não existe → edge pendente (to_id null).
+        const a = await escreverNotaCom(
+            alice,
+            {
+                title: 'Origem Link',
+                content_md: '# Origem Link\nliga a [[alvo-tardio]] que ainda não existe.',
+                links: [],
+                reason: 'teste #121',
+            },
+            'agent',
+        );
+        const pend = await alice
+            .from('edges')
+            .select('to_id')
+            .eq('from_id', a.id)
+            .eq('to_slug', 'alvo-tardio')
+            .single();
+        expect(pend.data?.to_id).toBeNull();
+
+        // Nasce o alvo (slug 'alvo-tardio') → o projector resolve a edge pendente.
+        const b = await escreverNotaCom(
+            alice,
+            {
+                title: 'Alvo Tardio',
+                content_md: '# Alvo Tardio\no conteúdo do alvo.',
+                links: [],
+                reason: 'teste #121',
+            },
+            'agent',
+        );
+        const resolvida = await alice
+            .from('edges')
+            .select('to_id')
+            .eq('from_id', a.id)
+            .eq('to_slug', 'alvo-tardio')
+            .single();
+        expect(resolvida.data?.to_id).toBe(b.id);
+    }, 60_000);
 });
