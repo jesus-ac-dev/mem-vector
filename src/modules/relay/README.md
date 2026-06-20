@@ -30,5 +30,12 @@ definições (`cruzamentos`) → `resolverCruzamento` (resolve quem produz/valid
 | `relay.executar.ts` | 1 cruzamento e2e: prompts (gerativo/adversarial) + providers reais |
 | `relay.pipeline.ts` | o circuito das atividades (estrela, kill switch)                  |
 
-A config vive nas definições (`cruzamentos`). A UI para a editar e o **trigger** (issue/goal →
-pipeline) + os handoffs por comentário são os próximos passos.
+A config vive nas definições (`cruzamentos`). O **trigger** (issue/goal → pipeline) + os handoffs
+por comentário são os próximos passos.
+
+## Atualização (2026-06-20)
+
+- **N validadores** (`{principal, validadores: []}`, antes era 1): lista vazia = sem validação; N =
+  painel adversarial (qualquer um que derrube = não passou). `self` + providers ATIVOS.
+- Os cruzamentos são **config do módulo GitHub** (add-on de dev), não genéricos no kernel: a UI
+  vive **dentro da página do módulo GitHub** (gated, com providers ativos), não no menu de topo.
