@@ -18,6 +18,14 @@ Para levantar uma instância:
 
 Variáveis: ver `.env.example` (Supabase, `MEMVECTOR_KEYS_SECRET`, e as de host `MEMVECTOR_MODEL_CACHE`/`CLAUDE_BIN`/`YTDLP_BIN`).
 
+Validação operacional:
+
+```bash
+npm run doctor
+```
+
+O `doctor` é o equivalente prático do "requirements": confirma Node/npm, `.env.local` e as variáveis obrigatórias; Docker, Supabase CLI, `gh`, Python, `yt-dlp` e CLIs dos providers aparecem como dependências recomendadas/opcionais conforme o caminho usado.
+
 ## Suposições de host e política por dependência
 
 Política = uma de **EMBUTIR** (vendorar/pré-cachear), **DEGRADAR** (funciona sem, com aviso) ou **EXTERNALIZAR** (cloud/API por env).

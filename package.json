@@ -16,6 +16,7 @@
         "test:coverage": "vitest run --coverage",
         "test:e2e": "playwright test",
         "test:e2e:ui": "playwright test --ui",
+        "doctor": "node scripts/doctor.mjs",
         "db:up": "~/scripts/supabase-local up mem-vector",
         "db:down": "~/scripts/supabase-local down mem-vector",
         "db:status": "~/scripts/supabase-local status mem-vector",
