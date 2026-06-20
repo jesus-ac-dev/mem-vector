@@ -56,7 +56,8 @@ export async function correrCruzamento(opts: {
 // NÃO passou (default-to-refuted), para o erro não escapar por ambiguidade.
 export function parseVeredito(texto: string): Veredito {
     const t = texto.trim();
-    if (/^\s*APROVADO\b/i.test(t)) return { ok: true };
+    const primeiraLinha = t.split(/\r?\n/, 1)[0]?.trim() ?? '';
+    if (/^APROVADO[.!]?$/i.test(primeiraLinha)) return { ok: true };
     const m = t.match(/REJEITADO[:\s-]*([\s\S]*)/i);
     return { ok: false, feedback: (m?.[1] ?? t).trim() || undefined };
 }

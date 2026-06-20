@@ -5,7 +5,7 @@ import { correrCruzamento, parseVeredito } from './relay.runner';
 describe('parseVeredito (adversarial: só passa com APROVADO)', () => {
     it('APROVADO → ok', () => {
         expect(parseVeredito('APROVADO')).toEqual({ ok: true });
-        expect(parseVeredito('  APROVADO, está sólido')).toEqual({ ok: true });
+        expect(parseVeredito('  APROVADO.')).toEqual({ ok: true });
     });
 
     it('REJEITADO → não ok, com a objeção como feedback', () => {
@@ -17,6 +17,13 @@ describe('parseVeredito (adversarial: só passa com APROVADO)', () => {
 
     it('texto ambíguo sem APROVADO → não ok (default-to-refuted)', () => {
         expect(parseVeredito('isto não me parece bem...').ok).toBe(false);
+    });
+
+    it('APROVADO com ressalva continua rejeitado', () => {
+        expect(parseVeredito('APROVADO, mas falta rever X')).toEqual({
+            ok: false,
+            feedback: 'APROVADO, mas falta rever X',
+        });
     });
 });
 

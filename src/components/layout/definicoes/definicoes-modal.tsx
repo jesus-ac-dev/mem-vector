@@ -232,6 +232,11 @@ export function DefinicoesModal({
         editar({ ...defs, cruzamentos: { ...defs.cruzamentos, [c]: { ...atual, ...patch } } });
     }
 
+    function desligarCruzamento(c: Cruzamento) {
+        const { [c]: _removido, ...restantes } = defs.cruzamentos;
+        editar({ ...defs, cruzamentos: restantes });
+    }
+
     async function correrTeste(p: Provider): Promise<boolean> {
         setTestes((t) => ({ ...t, [p]: 'a-testar' }));
         // O teste leva a config PENDENTE do form (r9) — modo/modelo/key por
@@ -691,9 +696,21 @@ export function DefinicoesModal({
                                         const cfg = defs.cruzamentos[c];
                                         return (
                                             <li key={c} className="rounded-md border p-3">
-                                                <p className="text-sm font-medium">
-                                                    {CRUZAMENTO_LABEL[c]}
-                                                </p>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-sm font-medium">
+                                                        {CRUZAMENTO_LABEL[c]}
+                                                    </p>
+                                                    {cfg && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => desligarCruzamento(c)}
+                                                            className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                                        >
+                                                            Desligar
+                                                        </Button>
+                                                    )}
+                                                </div>
                                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                                     <span className="text-xs text-muted-foreground">
                                                         principal
