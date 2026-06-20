@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
 
-import { correrCruzamento } from './relay.runner';
+import { correrCruzamento, parseVeredito } from './relay.runner';
+
+describe('parseVeredito (adversarial: só passa com APROVADO)', () => {
+    it('APROVADO → ok', () => {
+        expect(parseVeredito('APROVADO')).toEqual({ ok: true });
+        expect(parseVeredito('  APROVADO, está sólido')).toEqual({ ok: true });
+    });
+
+    it('REJEITADO → não ok, com a objeção como feedback', () => {
+        expect(parseVeredito('REJEITADO: falta tratar o null em X')).toEqual({
+            ok: false,
+            feedback: 'falta tratar o null em X',
+        });
+    });
+
+    it('texto ambíguo sem APROVADO → não ok (default-to-refuted)', () => {
+        expect(parseVeredito('isto não me parece bem...').ok).toBe(false);
+    });
+});
 
 describe('correrCruzamento (round-loop do circuito)', () => {
     it("sem validador ('none'): 1 ronda, validado", async () => {

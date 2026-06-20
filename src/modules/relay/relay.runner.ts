@@ -50,3 +50,13 @@ export async function correrCruzamento(opts: {
     // o caller leva-o à Análise (a junta humana), não finge sucesso.
     return { output, rondas: maxRondas, validado: false, historico };
 }
+
+// Lê o veredito do validador a partir do texto. Adversarial: SÓ passa com
+// "APROVADO" explícito — qualquer outra coisa (objeção, dúvida, ruído) conta como
+// NÃO passou (default-to-refuted), para o erro não escapar por ambiguidade.
+export function parseVeredito(texto: string): Veredito {
+    const t = texto.trim();
+    if (/^\s*APROVADO\b/i.test(t)) return { ok: true };
+    const m = t.match(/REJEITADO[:\s-]*([\s\S]*)/i);
+    return { ok: false, feedback: (m?.[1] ?? t).trim() || undefined };
+}
