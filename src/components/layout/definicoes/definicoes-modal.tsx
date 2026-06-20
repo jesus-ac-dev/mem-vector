@@ -76,6 +76,9 @@ const MODULO_DESCRICAO: Record<Modulo, string> = {
     campanhas: 'Campanhas online (marketing) — há de vir.',
 };
 
+// M7: um repo ligado é "owner/nome" (mesmo formato validado no schema).
+const REPO_RE = /^[^/\s]+\/[^/\s]+$/;
+
 const AGENTE_SEM_CONFIG: AgenteVista = { ativo: false, modo: 'cli', temApiKey: false };
 
 // Verde claro no sucesso (pedido do Carlos) — fora do JSX, como o corPrioridade.
@@ -96,6 +99,10 @@ export function DefinicoesModal({
     const [keysNovas, setKeysNovas] = useState<Partial<Record<Provider, string>>>({});
     // #45: key Tavily escrita nesta sessão da modal (undefined=manter; ''=limpar).
     const [webKeyNova, setWebKeyNova] = useState<string | undefined>(undefined);
+    // M7: token GitHub escrito nesta sessão (undefined=manter; ''=limpar). repoNovo
+    // é o campo transitório do "Ligar" um repo.
+    const [githubTokenNova, setGithubTokenNova] = useState<string | undefined>(undefined);
+    const [repoNovo, setRepoNovo] = useState('');
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
     >({});
@@ -127,6 +134,8 @@ export function DefinicoesModal({
             setCarregado(false);
             setKeysNovas({});
             setWebKeyNova(undefined);
+            setGithubTokenNova(undefined);
+            setRepoNovo('');
             setTestes({});
             setLigados(new Set());
             setConfirmados(new Set());
@@ -197,6 +206,18 @@ export function DefinicoesModal({
         if (!ativo && pagina === m) setPagina('modulos');
     }
 
+    // M7: editor dos repos ligados ("owner/nome") — valida o formato e dedup.
+    function adicionarRepo() {
+        const r = repoNovo.trim();
+        if (!REPO_RE.test(r) || defs.githubRepos.includes(r)) return;
+        editar({ ...defs, githubRepos: [...defs.githubRepos, r] });
+        setRepoNovo('');
+    }
+
+    function removerRepo(r: string) {
+        editar({ ...defs, githubRepos: defs.githubRepos.filter((x) => x !== r) });
+    }
+
     async function correrTeste(p: Provider): Promise<boolean> {
         setTestes((t) => ({ ...t, [p]: 'a-testar' }));
         // O teste leva a config PENDENTE do form (r9) — modo/modelo/key por
@@ -263,6 +284,9 @@ export function DefinicoesModal({
             comportamento: defs.comportamento,
             // undefined = manter a key cifrada; '' = limpar; string = cifrar.
             webKey: webKeyNova,
+            // M7: mesmo contrato do token; os repos viajam como a lista atual.
+            githubToken: githubTokenNova,
+            githubRepos: defs.githubRepos,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -674,13 +698,117 @@ export function DefinicoesModal({
                                 </ul>
                             </div>
                         ) : (
-                            <div className="max-w-md space-y-3">
+                            <div className="max-w-md space-y-4">
                                 <h3 className="text-sm font-medium">{MODULO_LABEL[pagina]}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    {pagina === 'github'
-                                        ? 'O módulo está ativo. A configuração (ligar a conta, escolher repositórios, importar projetos e issues) chega com a próxima atividade — a importação GitHub.'
-                                        : 'Configuração deste módulo chega com o próprio módulo.'}
-                                </p>
+                                {pagina === 'github' ? (
+                                    <div className="space-y-4">
+                                        <p className="text-xs text-muted-foreground">
+                                            Liga a tua conta com um token e escolhe os repositórios.
+                                            O agente passa a criar, ler e comentar issues nesses
+                                            repos. O token cifra-se e nunca volta ao browser.
+                                        </p>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium">
+                                                Token de acesso
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="password"
+                                                    autoComplete="new-password"
+                                                    value={githubTokenNova ?? ''}
+                                                    onChange={(e) =>
+                                                        setGithubTokenNova(e.target.value)
+                                                    }
+                                                    placeholder={
+                                                        githubTokenNova === ''
+                                                            ? 'token será removido ao guardar'
+                                                            : defs.githubTemToken
+                                                              ? `token configurado (····${defs.githubKeySufixo})`
+                                                              : 'GitHub PAT fine-grained (issues: read/write)'
+                                                    }
+                                                    className="h-8 flex-1 text-xs"
+                                                />
+                                                {defs.githubTemToken && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setGithubTokenNova('')}
+                                                        className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                                                    >
+                                                        Limpar
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <a
+                                                href="https://github.com/settings/personal-access-tokens"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-primary hover:underline"
+                                            >
+                                                Criar um token fine-grained →
+                                            </a>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium">
+                                                Repositórios ligados
+                                            </label>
+                                            {defs.githubRepos.length > 0 ? (
+                                                <ul className="space-y-1">
+                                                    {defs.githubRepos.map((r) => (
+                                                        <li
+                                                            key={r}
+                                                            className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs"
+                                                        >
+                                                            <span className="truncate font-mono">
+                                                                {r}
+                                                            </span>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => removerRepo(r)}
+                                                                className="h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                                                                aria-label={`Remover ${r}`}
+                                                            >
+                                                                ×
+                                                            </Button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-xs text-muted-foreground">
+                                                    Nenhum repo ligado ainda.
+                                                </p>
+                                            )}
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    value={repoNovo}
+                                                    onChange={(e) => setRepoNovo(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            adicionarRepo();
+                                                        }
+                                                    }}
+                                                    placeholder="owner/nome"
+                                                    className="h-8 flex-1 font-mono text-xs"
+                                                />
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={adicionarRepo}
+                                                    disabled={!REPO_RE.test(repoNovo.trim())}
+                                                    className="h-8 text-xs"
+                                                >
+                                                    Ligar
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        Configuração deste módulo chega com o próprio módulo.
+                                    </p>
+                                )}
                                 <Button
                                     variant="outline"
                                     size="sm"
