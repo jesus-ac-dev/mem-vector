@@ -151,6 +151,7 @@ export interface DefinicoesVista {
     // #45: key Tavily da pesquisa web — máscara (a key nunca volta ao browser).
     webTemKey: boolean;
     webKeySufixo?: string;
+    comportamento?: string; // #122: como o agente-autor age (texto livre)
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -171,6 +172,7 @@ export interface DefinicoesServidor {
     matchCount: number;
     webHabilitada: boolean;
     webKey?: string; // #45: decifrada, p/ a pesquisa web; nunca serializada p/ fora
+    comportamento?: string; // #122: injetado no prompt do agente a seguir ao Kernel
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -209,6 +211,10 @@ export const DefinicoesSchema = z.object({
     // #45: key de pesquisa web (Tavily por omissão; opcional). undefined = manter
     // a cifrada; '' = limpar; string = cifrar. Mesmo contrato das keys dos providers.
     webKey: z.string().optional(),
+    // #122 (Ponte F): texto livre onde o utilizador molda COMO o agente-autor age
+    // (o equivalente web a editar o CLAUDE.md). Injetado no prompt a seguir ao
+    // Kernel. Cap alinhado com o do Kernel para não engolir o prompt.
+    comportamento: z.string().max(4000).optional(),
     agentes: AgentesSchema,
 });
 

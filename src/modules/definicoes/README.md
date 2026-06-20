@@ -18,7 +18,14 @@ onChange, só entre providers já parametrizados.
 ## Secções e opções
 
 - **Comportamento** — COMO o agente-autor age; a secção ACUMULA (ver memória
-  `definicoes-comportamento-acumula`): hoje `metodo_destilacao` (`one-shot`
+  `definicoes-comportamento-acumula`): o campo **`comportamento`** (#122, Ponte F)
+  é **texto livre** onde o utilizador molda o agente (proatividade, estilo,
+  ênfases, o que evitar) — o **equivalente web a editar o `CLAUDE.md`**, sem tocar
+  em config do host. É injetado no prompt a seguir ao Kernel (`blocoComportamento`
+  em `kernel.ts`, lido por `chat.postturno.ts`), por cima do contrato base
+  (`AGENT_CONTRACT`, que já traz a **voz** genérica do produto). Importa a
+  funcionalidade do andaime (regras de comportamento) para dentro do produto.
+  Mais: `metodo_destilacao` (`one-shot`
   default, decisão #38 — ¼ do custo / `agentic`), lido por `chat.postturno.ts`;
   a env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals).
   E `match_count` (#67): nº de fontes do retrieval do chat (1..50, default 5;

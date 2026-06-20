@@ -21,6 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { gravarDefinicoes, testarProvider } from '@/modules/definicoes/definicoes.actions';
 import { getJson } from '@/lib/api-get';
 import {
@@ -258,6 +259,8 @@ export function DefinicoesModal({
             chatProvider: defs.chatProvider,
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
+            // #122: como o agente-autor age (texto livre, injetado no prompt).
+            comportamento: defs.comportamento,
             // undefined = manter a key cifrada; '' = limpar; string = cifrar.
             webKey: webKeyNova,
             agentes: Object.fromEntries(
@@ -350,6 +353,25 @@ export function DefinicoesModal({
                             // secção acumula (proatividade, estilo, personalidade
                             // hão de entrar aqui; ver memória de alto nível).
                             <div className="max-w-md space-y-4">
+                                <div>
+                                    <h3 className="text-sm font-medium">Comportamento do agente</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Em texto livre, como queres que o agente-autor aja —
+                                        proatividade, estilo, ênfases, o que evitar. É injetado nas
+                                        instruções dele (o equivalente web a editar o CLAUDE.md),
+                                        por cima do contrato base e da pasta Kernel.
+                                    </p>
+                                    <Textarea
+                                        value={defs.comportamento ?? ''}
+                                        onChange={(e) =>
+                                            editar({ ...defs, comportamento: e.target.value })
+                                        }
+                                        placeholder="ex.: Sê mais conciso. Prioriza decisões. Não cries tarefas sem eu pedir."
+                                        rows={5}
+                                        maxLength={4000}
+                                        className="mt-2 text-sm"
+                                    />
+                                </div>
                                 <div>
                                     <h3 className="text-sm font-medium">Método de destilação</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">

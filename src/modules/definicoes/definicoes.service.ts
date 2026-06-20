@@ -35,6 +35,7 @@ interface DefinicoesRow {
     match_count?: number | null;
     web_habilitada?: boolean | null;
     web_key_cifrada?: string | null;
+    comportamento?: string | null;
     agentes: Record<string, AgenteRow> | null;
 }
 
@@ -42,7 +43,7 @@ async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
         .select(
-            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, agentes',
+            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, comportamento, agentes',
         )
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
@@ -63,6 +64,7 @@ function normalizar(row: DefinicoesRow): Omit<DefinicoesServidor, 'agentes' | 'w
         // fallback abaixo (linha toda, não só este campo).
         matchCount: row.match_count ?? undefined,
         webHabilitada: row.web_habilitada ?? undefined,
+        comportamento: row.comportamento ?? undefined,
     });
     if (!parsed.success) {
         return {
@@ -202,6 +204,7 @@ export async function gravarDefinicoesCom(
         match_count: definicoes.matchCount,
         web_habilitada: definicoes.webHabilitada,
         web_key_cifrada: webKeyCifrada ?? null,
+        comportamento: definicoes.comportamento?.trim() || null,
         agentes,
         updated_at: new Date().toISOString(),
     });
