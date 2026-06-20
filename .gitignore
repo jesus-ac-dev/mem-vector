@@ -44,3 +44,8 @@ yarn-error.log*
 .playwright-mcp
 /docs/plans
 /docs/superpowers
+
+# #123 (Ponte G): o seed PESSOAL do dono é local-only, nunca replicado para
+# outras máquinas (o teste do PC novo aplicado ao setup do dono). O template
+# kernel-pessoal.example.ts esse fica versionado.
+/scripts/seed-data/kernel-pessoal.ts

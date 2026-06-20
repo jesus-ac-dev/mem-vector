@@ -26,7 +26,18 @@ const DISALLOWED_TOOLS = [
     'Task',
     'TodoWrite',
     'NotebookEdit',
+    // #117: as skills do host vivem nos plugins do ~/.claude e o
+    // --setting-sources não as desliga (não são uma fonte de settings).
+    // Proibir a tool Skill deixa-as inertes — o produto não herda o andaime.
+    'Skill',
 ];
+
+// #117 (o teste do PC novo): o runner corre na subscrição do host, mas NÃO pode
+// herdar o comportamento do andaime. `--setting-sources ''` não carrega nenhuma
+// fonte de settings (user/project/local) → sem CLAUDE.md, hooks nem settings do
+// ~/.claude. O login não é uma fonte, por isso mantém-se. (CLAUDE_CONFIG_DIR
+// próprio isolaria tudo mas perde a auth da subscrição — daí esta via.)
+const HOST_ISOLATION = ['--setting-sources', ''];
 
 export interface Generation {
     text: string;
@@ -185,6 +196,7 @@ export function buildClaudeArgs(model?: string): string[] {
         'text',
         '--output-format',
         'json',
+        ...HOST_ISOLATION,
         '--strict-mcp-config',
         '--system-prompt',
         SYSTEM_PROMPT,
@@ -208,6 +220,7 @@ export function buildClaudeStreamArgs(model?: string): string[] {
         'stream-json',
         '--verbose',
         '--include-partial-messages',
+        ...HOST_ISOLATION,
         '--strict-mcp-config',
         '--system-prompt',
         SYSTEM_PROMPT,
@@ -246,6 +259,7 @@ export function buildClaudeAgenticArgs(cfg: AgenticConfig): string[] {
         'text',
         '--output-format',
         'json',
+        ...HOST_ISOLATION,
         '--strict-mcp-config',
         '--mcp-config',
         cfg.mcpConfig,
@@ -277,6 +291,7 @@ export function buildClaudeAgenticStreamArgs(cfg: AgenticConfig): string[] {
         'stream-json',
         '--verbose',
         '--include-partial-messages',
+        ...HOST_ISOLATION,
         '--strict-mcp-config',
         '--mcp-config',
         cfg.mcpConfig,

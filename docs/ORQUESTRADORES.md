@@ -82,3 +82,36 @@ Essa interface só deve nascer quando houver segundo runner agentic real. Até l
 
 Ao alterar routing/skills, manter a intenção sincronizada e aceitar diferenças
 de mecanismo. Não copiar texto cegamente entre harnesses.
+
+## Isolamento do runner vs `~/.claude` do host (#117)
+
+O runner agentic corre `claude -p` na subscrição do host — o **login** vive no
+`~/.claude`. Mas o produto **não pode herdar o comportamento do andaime**
+(CLAUDE.md, hooks, settings, skills): é o *teste do PC novo* — nada além da
+própria app manda. Sem isto, parte do "bom comportamento" seria o produto ainda
+apoiado no andaime de dev, e qualquer medição de prontidão era uma ilusão.
+
+Como (`src/lib/claude.ts`, `HOST_ISOLATION`, nos 4 builders):
+
+- **`--setting-sources ''`** → não carrega nenhuma fonte de settings
+  (user/project/local) → sem CLAUDE.md, hooks nem settings do host. O login não
+  é uma fonte: mantém-se.
+- **`Skill` em `--disallowedTools`** → as skills dos plugins do `~/.claude`
+  continuam no binário (o `--setting-sources` não as desliga, não são uma fonte
+  de settings), mas ficam inertes — o modelo não as pode invocar.
+- **`CLAUDE_CONFIG_DIR` próprio NÃO serve**: isolaria tudo, mas perde a auth da
+  subscrição (que vive no config dir default).
+
+Provado empiricamente: com o isolamento o agente responde `ISOLADO`; sem ele, vê
+o CLAUDE.md global **e** o do projeto.
+
+## Isolamento do provider codex vs `~/.codex` do host
+
+O mesmo princípio para o provider Codex (`codex exec`, `src/lib/providers/factory.ts`, `buildCodexCliArgs`): corre num tempdir efémero, sandbox `read-only`, e ignora a config **e** as rules do host.
+
+- **`--ignore-user-config`** → não lê o `~/.codex` (config/auth pessoal).
+- **`--ignore-rules`** → ignora as rules/AGENTS.md do host — o equivalente ao `Skill` proibido do lado Claude.
+- **`--ephemeral` + `--sandbox read-only` + `-C <tempdir>`** → sessão descartável, sem escrita, fora de qualquer repo.
+- **`codex debug models --bundled`** → a dropdown de modelos usa o catálogo embutido no binário, não o config/rede local (host-independente, bom para o teste do PC novo).
+
+Builder extraído (`buildCodexCliArgs`) para ser testável; flags confirmados no binário (codex-cli 0.141.0). Autoria: Codex (review cruzado da Ponte A).

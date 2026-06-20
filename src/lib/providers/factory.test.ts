@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { criarProvider } from './factory';
+import { buildCodexCliArgs, criarProvider } from './factory';
 import { confirmacaoModelo, type AgenteServidor } from '@/modules/definicoes/definicoes.schema';
 
 // #60 r9: o modo api tem de ser REAL — uma key ao calhas não pode passar no
@@ -160,6 +160,28 @@ describe('codex em modo api (#60 r9)', () => {
         );
         const p = criarProvider('codex', cfgApi());
         expect(await p.listarModelos()).toEqual(['gpt-5.4-mini', 'gpt-5.5', 'o4-mini']);
+    });
+});
+
+describe('codex em modo cli', () => {
+    it('gera num tempdir sem herdar config/regras pessoais do ~/.codex', () => {
+        const args = buildCodexCliArgs(
+            { ativo: true, modo: 'cli', modelo: 'gpt-5.5', esforco: 'high' },
+            '/tmp/memvector-codex-abc',
+            '/tmp/memvector-codex-abc/last-message.txt',
+        );
+
+        expect(args).toContain('--ignore-user-config');
+        expect(args).toContain('--ignore-rules');
+        expect(args).toContain('--ephemeral');
+        expect(args).toContain('--skip-git-repo-check');
+        expect(args).toContain('--sandbox');
+        expect(args).toContain('read-only');
+        expect(args).toContain('-C');
+        expect(args).toContain('/tmp/memvector-codex-abc');
+        expect(args).toContain('--model');
+        expect(args).toContain('gpt-5.5');
+        expect(args).toContain('model_reasoning_effort="high"');
     });
 });
 

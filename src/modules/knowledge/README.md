@@ -91,6 +91,21 @@ diffLines(before: string, after: string): DiffLine[]
 - Depois reescreve os `[[wikilinks]]` das notas referentes via `escreverNotaCom(..., 'user')`, para versionar o conteúdo alterado e passar essas notas pelo projector.
 - Se a reescrita de backlinks falhar depois da RPC, repetir o rename com o slug antigo completa a correção: a função trata o caso "já renomeado" como retry e procura conteúdo que ainda aponte ao slug antigo.
 
+## Versões: restaurar + guarda de encolhimento (#119)
+
+O `content_md` faz **overwrite** em cada escrita (não é aditivo como as tags). Para a memória não se perder por descuido do modelo, há dois mecanismos:
+
+- **Restaurar versão** (`restaurarVersaoKnowledgeCom` → `restaurarVersaoAction`): repõe o corpo de uma `file_versions` antiga como o atual, reusando `atualizarNotaPorIdCom('user')` — gera uma **nova** versão (o histórico nunca se apaga, por isso o restauro é ele próprio reversível). É o "git revert" de uma nota, exposto pelo botão **Restaurar esta versão** no histórico do file-pane (só knowledge).
+- **Guarda de encolhimento** (trigger `guard_encolhimento_corpo` em `before insert on file_versions`): numa **continuação do agente** (`author='agent'`), se o corpo encolhe para < 50% de um corpo anterior > 280 chars, a escrita é **recusada** (o `raise` aborta a transação do RPC → o overwrite reverte) e o agente reenvia o `content_md` completo. Exempto: criação (sem versão anterior), edições do utilizador (deliberadas, incl. o restauro) e `daily` (aditivo).
+
+## Grafo sem órfãos (#121)
+
+O "grafo sem órfãos" do vault era só prompt (o #104). `avaliarCriarNota` (`knowledge.guards.ts`, pura) põe um **gate em código** no caminho agentic: a tool `criar_nota` computa as candidatas (busca híbrida) e, se a nota nova **não tem nenhum `[[wikilink]]` E há vizinhos para ligar**, devolve ao agente uma mensagem com sugestões (`[[slug]]`) em vez de aceitar a ilha — recusa **recuperável**, o agente cria de novo com a ligação. Sem candidatas não força (a 1.ª nota de um assunto novo não tem a quem ligar).
+
+**Os dois caminhos ficam cobertos**, com mecanismos diferentes porque o risco é diferente: o **agentic** recusa (há sessão — o agente retenta com a ligação); o **one-shot** (default), que não tem retry, **liga aditivamente** (`adicionarRelacionado` acrescenta `**Relacionado:** [[x]]` ao vizinho mais próximo) — integra em vez de perder a nota. Ao nascer uma nota, `reconciliarEdgesPendentesCom` (no projector) resolve os **links-fantasma** que apontavam para o seu slug, quando inequívoco (homónimos ficam pendentes, como no `regenerar`).
+
+**Anti-duplicado parqueado:** um falso-positivo de similaridade fundiria tópicos distintos (pior que um duplicado) — espera limiar conservador + dados. O `criar_nota` continua a continuar a candidata por título (`notaCandidataCorrespondente`).
+
 ## Dependências
 
 - `@/lib/embeddings` — `embedPassage` para gerar o vector do chunk.

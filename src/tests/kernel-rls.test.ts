@@ -178,21 +178,23 @@ describe('onboarding (#40, integração RLS)', () => {
         'dono (incluirPessoal) nasce com o pessoal e não precisa onboarding',
         { timeout: 60_000 },
         async () => {
-            const {
-                garantirKernelCom,
-                lerKernelCom,
-                KERNEL_SEED,
-                MYTHOS_BASE_SEED,
-                precisaOnboardingCom,
-            } = await import('@/agent/kernel');
+            const { garantirKernelCom, lerKernelCom, MYTHOS_BASE_SEED, precisaOnboardingCom } =
+                await import('@/agent/kernel');
             const dono = await userClient('dono-onboarding@test.local', 'pw-dono-123');
             const donoId = (await dono.auth.getUser()).data.user!.id;
             await limparKernelDe(donoId);
 
-            expect(await garantirKernelCom(dono, undefined, true)).toBe(true);
+            // #120: o pessoal já não vive no código — entra como parâmetro (o que o
+            // seed:user carrega do ficheiro de dados do dono). O teste prova o
+            // MECANISMO (Mythos Base + notas pessoais passadas), não o conteúdo.
+            const pessoal = [
+                { title: 'Sobre mim', contentMd: '# Sobre mim\nfixture do dono' },
+                { title: 'Prioridades', contentMd: '# Prioridades\nfixture' },
+            ];
+            expect(await garantirKernelCom(dono, undefined, pessoal)).toBe(true);
             const kernel = await lerKernelCom(dono);
             expect(kernel.map((n) => n.title).sort()).toEqual(
-                [...MYTHOS_BASE_SEED, ...KERNEL_SEED].map((s) => s.title).sort(),
+                [...MYTHOS_BASE_SEED.map((s) => s.title), ...pessoal.map((s) => s.title)].sort(),
             );
             expect(await precisaOnboardingCom(dono)).toBe(false);
         },

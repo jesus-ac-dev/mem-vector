@@ -188,6 +188,35 @@ export async function regenerarEdgesCom(
     if (iErr) throw new Error(`inserir edges: ${iErr.message}`);
 }
 
+// #121: ao escrever uma nota, resolve as edges PENDENTES de OUTRAS notas que
+// apontavam para o seu slug (to_id null) — fecha os links-fantasma que ficavam
+// dormentes até a origem ser reescrita (a resolução só acontecia na escrita da
+// origem). Só quando o slug é inequívoco entre as notas vivas, para não resolver
+// para o homónimo errado (mantém a regra do regenerar: ambíguo fica pendente).
+export async function reconciliarEdgesPendentesCom(
+    db: SupabaseClient,
+    ownerId: string,
+    slug: string,
+    noteId: string,
+): Promise<void> {
+    const { data: vivas, error } = await db
+        .from('knowledge')
+        .select('id')
+        .eq('owner_id', ownerId)
+        .eq('slug', slug)
+        .eq('archived', false);
+    if (error) throw new Error(`reconciliar edges (homónimos): ${error.message}`);
+    if ((vivas ?? []).length !== 1) return; // ambíguo → deixa pendente
+
+    const { error: uErr } = await db
+        .from('edges')
+        .update({ to_id: noteId, to_type: 'knowledge' })
+        .eq('owner_id', ownerId)
+        .eq('to_slug', slug)
+        .is('to_id', null);
+    if (uErr) throw new Error(`reconciliar edges pendentes: ${uErr.message}`);
+}
+
 export interface RegistarEdgeConversaInput {
     ownerId: string;
     dailyId: string;

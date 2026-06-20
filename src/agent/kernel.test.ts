@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blocoKernel, MYTHOS_BASE_SEED } from './kernel';
+import { blocoKernel, blocoComportamento, MYTHOS_BASE_SEED } from './kernel';
 import { buildPrompt } from '@/modules/chat/chat.prompt';
 import { buildTurnoPrompt } from '@/modules/chat/chat.turno';
 
@@ -63,6 +63,32 @@ describe('MYTHOS_BASE_SEED (glossário genérico, #44)', () => {
         for (const n of MYTHOS_BASE_SEED) {
             expect(n.contentMd.length).toBeLessThanOrEqual(4000);
         }
+    });
+
+    it('inclui o esqueleto genérico de voz e método (#120)', () => {
+        const titulos = MYTHOS_BASE_SEED.map((n) => n.title);
+        expect(titulos).toContain('Voz');
+        expect(titulos).toContain('Como trabalho');
+        const corpo = MYTHOS_BASE_SEED.map((n) => n.contentMd)
+            .join('\n')
+            .toLowerCase();
+        // método genérico, não pessoal: update-over-create + teia
+        expect(corpo).toContain('update');
+        expect(corpo).toContain('[[');
+    });
+});
+
+describe('blocoComportamento (#122)', () => {
+    it('vazio/undefined devolve string vazia (sem mudança)', () => {
+        expect(blocoComportamento()).toBe('');
+        expect(blocoComportamento('   ')).toBe('');
+        expect(blocoComportamento(null)).toBe('');
+    });
+
+    it('embrulha o texto do utilizador num bloco de instruções', () => {
+        const b = blocoComportamento('Sê ainda mais conciso e usa bullets.');
+        expect(b).toContain('INSTRUÇÕES DE COMPORTAMENTO');
+        expect(b).toContain('Sê ainda mais conciso e usa bullets.');
     });
 });
 

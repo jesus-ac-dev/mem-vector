@@ -48,6 +48,43 @@ describe('buildClaudeArgs', () => {
     });
 });
 
+describe('isolamento do host (#117)', () => {
+    const cfg = {
+        mcpConfig: '{"mcpServers":{}}',
+        allowedTools: ['mcp__memvector__criar_nota'],
+        systemPrompt: 'contrato',
+    };
+    const builders: Array<[string, () => string[]]> = [
+        ['buildClaudeArgs', () => buildClaudeArgs()],
+        ['buildClaudeStreamArgs', () => buildClaudeStreamArgs()],
+        ['buildClaudeAgenticArgs', () => buildClaudeAgenticArgs(cfg)],
+        ['buildClaudeAgenticStreamArgs', () => buildClaudeAgenticStreamArgs(cfg)],
+    ];
+
+    // O runner usa a subscrição do host (login vive no ~/.claude), mas NÃO pode
+    // herdar o comportamento do andaime: CLAUDE.md, hooks, settings e skills.
+    it.each(builders)(
+        '%s não carrega nenhuma fonte de settings do host (--setting-sources vazio)',
+        (_nome, build) => {
+            const args = build();
+            const i = args.indexOf('--setting-sources');
+            expect(i).toBeGreaterThanOrEqual(0);
+            // string vazia = nenhuma fonte (user/project/local) → sem CLAUDE.md,
+            // hooks nem settings do ~/.claude. O login não é uma fonte: mantém-se.
+            expect(args[i + 1]).toBe('');
+        },
+    );
+
+    it.each(builders)(
+        '%s proíbe a tool Skill (as skills dos plugins do host ficam inertes)',
+        (_nome, build) => {
+            const args = build();
+            expect(args).toContain('--disallowedTools');
+            expect(args).toContain('Skill');
+        },
+    );
+});
+
 describe('buildClaudeAgenticArgs', () => {
     const cfg = {
         mcpConfig: '{"mcpServers":{}}',

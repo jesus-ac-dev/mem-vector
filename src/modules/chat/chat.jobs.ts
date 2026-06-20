@@ -1,6 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { TurnoDestilado } from './chat.service';
+import { executarDestilacaoTurnoCom } from './chat.postturno';
+
+// #118: um 'running' cujo lock passou disto é órfão (processador morto). Alinhado
+// com a condição da claim_agent_job (10 min) — bem além do timeout de 5 min da
+// destilação agentic, para nunca roubar um job que ainda corre mesmo.
+const LOCK_EXPIRADO_MS = 10 * 60 * 1000;
+const MAX_TENTATIVAS = 5; // pára de auto-retentar um job cronicamente partido
+const POLL_INTERVALO_MS = 1000;
+const POLL_TIMEOUT_MS = 330_000; // > timeout da destilação agentic (5 min)
 
 export const distillationJobPayloadSchema = z.object({
     question: z.string().min(1),
@@ -176,4 +185,98 @@ export async function falharDestilacaoJobCom(
         })
         .eq('id', jobId);
     if (error) throw new Error(`marcar job de destilação como falhado: ${error.message}`);
+}
+
+// #118: jobs que o sweeper server-side deve processar — os 'pending' (ainda por
+// começar) e os 'running' órfãos (lock expirado, processador morto). Exclui os
+// cronicamente partidos (attempts >= MAX_TENTATIVAS) para não retentar em loop.
+export async function listarDestilacaoJobsPendentesCom(
+    db: SupabaseClient,
+    limite = 20,
+): Promise<string[]> {
+    const corte = new Date(Date.now() - LOCK_EXPIRADO_MS).toISOString();
+    const { data, error } = await db
+        .from('agent_jobs')
+        .select('id')
+        .eq('type', 'chat_turn_distillation')
+        .lt('attempts', MAX_TENTATIVAS)
+        .or(`status.eq.pending,and(status.eq.running,locked_at.lt.${corte})`)
+        .order('created_at', { ascending: true })
+        .limit(limite);
+    if (error) throw new Error(`listar jobs pendentes falhou: ${error.message}`);
+    return (data ?? []).map((r) => String((r as { id: string }).id));
+}
+
+// Espera a conclusão de um job que outro processador (o servidor via after, ou
+// outra aba) já reclamou — para o chamador receber o resultado em vez de um erro
+// "já está em processamento". O job é durável; isto é só a observação para a UI.
+async function aguardarConclusaoJobCom(db: SupabaseClient, jobId: string): Promise<TurnoDestilado> {
+    const limite = Date.now() + POLL_TIMEOUT_MS;
+    for (;;) {
+        const estado = await estadoDestilacaoJobCom(db, jobId);
+        if (estado.status === 'done' && estado.result) return estado.result;
+        if (estado.status === 'failed') throw new Error(estado.error ?? 'job de destilação falhou');
+        if (Date.now() > limite) throw new Error('a destilação demorou demais');
+        await new Promise((r) => setTimeout(r, POLL_INTERVALO_MS));
+    }
+}
+
+// Reclama e processa um job de destilação. Se a claim falhar porque outro
+// processador já o reclamou (corrida cliente/servidor), observa até concluir.
+export async function processarDestilacaoJobCom(
+    db: SupabaseClient,
+    jobId: string,
+): Promise<TurnoDestilado> {
+    const job = await reclamarDestilacaoJobCom(db, jobId);
+    if (!job) return aguardarConclusaoJobCom(db, jobId);
+
+    try {
+        const result = await executarDestilacaoTurnoCom(
+            db,
+            job.payload.question,
+            job.payload.answer,
+            {
+                conversationId: job.payload.conversationId,
+                excluirIds: [job.payload.userMessageId, job.payload.assistantMessageId].filter(
+                    (id): id is string => Boolean(id),
+                ),
+            },
+        );
+        await concluirDestilacaoJobCom(db, job.id, result);
+        return result;
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : 'erro desconhecido';
+        await falharDestilacaoJobCom(db, job.id, msg);
+        throw new Error(msg);
+    }
+}
+
+// Orquestração pura do sweeper: processa cada job, isolando falhas (uma não
+// derruba as outras). Sem deps de BD — testável com mocks.
+export async function varrerJobsCom(
+    ids: string[],
+    processar: (id: string) => Promise<unknown>,
+): Promise<{ processados: number; falhados: number }> {
+    let processados = 0;
+    let falhados = 0;
+    for (const id of ids) {
+        try {
+            await processar(id);
+            processados += 1;
+        } catch {
+            falhados += 1;
+        }
+    }
+    return { processados, falhados };
+}
+
+// O sweeper server-side: varre os jobs por processar do utilizador (o acabado de
+// criar + órfãos de turnos anteriores) e processa-os. Disparado por after() a
+// seguir à resposta, é a peça determinista que garante que nenhuma interação
+// fica sem rasto, mesmo que a tab feche.
+export async function varrerDestilacaoPendentesCom(
+    db: SupabaseClient,
+): Promise<{ processados: number; falhados: number }> {
+    const ids = await listarDestilacaoJobsPendentesCom(db);
+    return varrerJobsCom(ids, (id) => processarDestilacaoJobCom(db, id));
 }

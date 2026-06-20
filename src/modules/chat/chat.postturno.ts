@@ -21,10 +21,11 @@ import type { TarefasDoTurno } from './chat.service';
 import { escreverOuContinuarNotaCom } from '@/modules/knowledge/knowledge.continuar';
 import { listarProjetosCom } from '@/modules/projetos/projetos.service';
 import { lerDefinicoesCom } from '@/modules/definicoes/definicoes.service';
+import type { DefinicoesServidor } from '@/modules/definicoes/definicoes.schema';
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
-import { blocoKernelCom } from '@/agent/kernel';
+import { blocoKernelCom, blocoComportamento } from '@/agent/kernel';
 
 // Miolo do pós-turno, extraído de chat.actions (M2, #38): importável por
 // scripts e pela suite de evals sem passar pelo runtime de server actions.
@@ -73,7 +74,18 @@ export async function executarDestilacaoTurnoCom(
 
     // Kernel do workspace (#34): identidade/regras do utilizador no arranque
     // da destilação (não-fatal: sem Kernel, comportamento de sempre).
-    const kernel = await blocoKernelCom(db);
+    const kernelBase = await blocoKernelCom(db);
+
+    // #122 (Ponte F): definições do utilizador, lidas UMA vez — o campo
+    // Comportamento (injetado no prompt a seguir ao Kernel) e o método de
+    // destilação saem daqui. Não-fatal: sem leitura, segue nos defaults.
+    let definicoes: DefinicoesServidor | null = null;
+    try {
+        definicoes = await lerDefinicoesCom(db);
+    } catch (e) {
+        console.error('ler definições falhou (segue defaults):', e);
+    }
+    const kernel = kernelBase + blocoComportamento(definicoes?.comportamento);
 
     // Tarefas em aberto (#21): o agente decide criar/concluir com a lista à
     // frente (não duplica, não inventa ids). Não-fatal.
@@ -110,14 +122,8 @@ export async function executarDestilacaoTurnoCom(
     // one-shot é o default (decisão #38: ¼ do custo); agentic é opt-in nas
     // definições. A env flag continua como override (evals/scripts forçam o
     // caminho por célula). Não-fatal: sem leitura, default one-shot.
-    let metodoAgentic = process.env.MEMVECTOR_AGENTIC_DISTILL === '1';
-    if (!metodoAgentic) {
-        try {
-            metodoAgentic = (await lerDefinicoesCom(db)).metodoDestilacao === 'agentic';
-        } catch (e) {
-            console.error('ler definições falhou (segue one-shot):', e);
-        }
-    }
+    const metodoAgentic =
+        process.env.MEMVECTOR_AGENTIC_DISTILL === '1' || definicoes?.metodoDestilacao === 'agentic';
 
     // Caminho agentic (issue #27): a sessão CLI lê as candidatas e escreve via
     // tools MCP — sem fallback para o one-shot (um erro aqui falha o job,

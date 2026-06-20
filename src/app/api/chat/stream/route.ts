@@ -1,9 +1,10 @@
+import { after } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { respondStream } from '@/modules/chat/chat.service';
 import { garantirConversaCom, ultimasMensagensCom } from '@/modules/chat/chat.conversas';
 import { indexarMensagensChatCom } from '@/modules/chat/chat.indexing';
-import { criarDestilacaoJobCom } from '@/modules/chat/chat.jobs';
+import { criarDestilacaoJobCom, varrerDestilacaoPendentesCom } from '@/modules/chat/chat.jobs';
 
 // Streaming do turno (#66): a resposta sai token-a-token por ndjson, em vez de
 // um único valor no fim (server actions não fazem stream). A persistência e o
@@ -130,6 +131,11 @@ export async function POST(request: Request) {
             }
         },
     });
+
+    // #118: a destilação é processada server-side a seguir à resposta (after
+    // corre depois do stream fechar, quando o job já foi criado). O sweeper
+    // apanha este job + órfãos — não depende do cliente sobreviver à resposta.
+    after(() => varrerDestilacaoPendentesCom(db).catch(() => {}));
 
     return new Response(stream, {
         headers: {

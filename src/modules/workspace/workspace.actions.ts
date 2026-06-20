@@ -16,6 +16,7 @@ import {
     reporNota,
     listarArquivados,
     atualizarPropriedadesNota,
+    restaurarVersaoKnowledge,
 } from '@/modules/knowledge/knowledge.service';
 import {
     getDaily,
@@ -171,6 +172,20 @@ export async function guardarFicheiro(
         return { ok: true };
     } catch (e) {
         return { ok: false, erro: e instanceof Error ? e.message : 'erro ao guardar' };
+    }
+}
+
+// #119 (Ponte C): repõe uma versão antiga de uma nota como a atual (o "undo" do
+// corpo). Gera nova versão, não apaga o histórico. Devolve a chave para a UI
+// reabrir/refrescar.
+export async function restaurarVersaoAction(
+    versionId: string,
+): Promise<{ ok: true; chave: string; titulo: string } | { ok: false; erro: string }> {
+    try {
+        const r = await restaurarVersaoKnowledge(versionId);
+        return { ok: true, chave: r.slug, titulo: r.title };
+    } catch (e) {
+        return { ok: false, erro: e instanceof Error ? e.message : 'erro ao restaurar' };
     }
 }
 
