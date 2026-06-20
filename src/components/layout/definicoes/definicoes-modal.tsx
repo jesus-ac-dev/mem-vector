@@ -870,7 +870,7 @@ export function DefinicoesModal({
                                                             ? 'token será removido ao guardar'
                                                             : defs.githubTemToken
                                                               ? `token configurado (····${defs.githubKeySufixo})`
-                                                              : 'GitHub PAT fine-grained (issues: read/write)'
+                                                              : 'GitHub PAT clássico (scopes: repo + read:org)'
                                                     }
                                                     className="h-8 flex-1 text-xs"
                                                 />
@@ -911,12 +911,12 @@ export function DefinicoesModal({
                                                 </p>
                                             )}
                                             <a
-                                                href="https://github.com/settings/personal-access-tokens"
+                                                href="https://github.com/settings/tokens/new?scopes=repo,read:org&description=mem-vector"
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-xs text-primary hover:underline"
                                             >
-                                                Criar um token fine-grained →
+                                                Criar um token clássico (repo + read:org) →
                                             </a>
                                         </div>
                                         <div className="space-y-1">
