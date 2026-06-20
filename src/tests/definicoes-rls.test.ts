@@ -195,6 +195,65 @@ describe('definições (#60, integração RLS)', () => {
         },
     );
 
+    // M7 Fatia 1: o token GitHub (PAT) segue o MESMO contrato das keys — cifra
+    // at rest, máscara na vista, decifra no servidor. github_repos viajam em
+    // claro (não são segredo) e o GH_TOKEN do subprocesso usa o token decifrado.
+    it(
+        'github (M7): token cifra/mascara/decifra + repos ligados',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, lerDefinicoesVistaCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+
+            const vista = await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: ['github'],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: false,
+                githubToken: 'github_pat_de_teste_5678',
+                githubRepos: ['jesus-ac-dev/mem-vector'],
+                agentes: {},
+            });
+            // Vista: o token NUNCA aparece — só a máscara; os repos sim.
+            expect(vista.githubTemToken).toBe(true);
+            expect(vista.githubKeySufixo).toBe('5678');
+            expect(vista.githubRepos).toEqual(['jesus-ac-dev/mem-vector']);
+            expect(JSON.stringify(vista)).not.toContain('github_pat_de_teste');
+
+            // At rest: cifrada (gcm:), nunca plaintext.
+            const { data: row } = await alice
+                .from('definicoes')
+                .select('github_token_cifrada')
+                .single();
+            const cifrada = (row as { github_token_cifrada: string }).github_token_cifrada;
+            expect(cifrada.startsWith('gcm:')).toBe(true);
+            expect(cifrada).not.toContain('github_pat_de_teste');
+
+            // Servidor: decifra (é o que vira GH_TOKEN do subprocesso).
+            const servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.githubToken).toBe('github_pat_de_teste_5678');
+            expect(servidor.githubRepos).toEqual(['jesus-ac-dev/mem-vector']);
+
+            // Regravar sem githubToken (undefined) mantém o token; os repos mudam.
+            await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: ['github'],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: false,
+                githubRepos: ['jesus-ac-dev/mem-vector', 'jesus-ac-dev/mythos-engine'],
+                agentes: {},
+            });
+            const depois = await lerDefinicoesVistaCom(alice);
+            expect(depois.githubTemToken).toBe(true);
+            expect(depois.githubRepos).toEqual([
+                'jesus-ac-dev/mem-vector',
+                'jesus-ac-dev/mythos-engine',
+            ]);
+        },
+    );
+
     // r13: o bug do gemini do Carlos — a config tem de ser respeitada de
     // ponta a ponta (gravar → ler → runtime), e a escolha do chat é
     // CIRÚRGICA (nunca toca em modo/keys que não editou).

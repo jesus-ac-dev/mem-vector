@@ -21,6 +21,11 @@ const TOOLS_RESPOSTA = [
     'mcp__memvector__listar_tarefas_abertas',
     'mcp__memvector__procurar_web',
     'mcp__memvector__ler_url',
+    // M7: tools de issue (só registadas pelo server quando há token — o
+    // whitelist sempre presente é inócuo se o server não as expõe).
+    'mcp__memvector__ler_issues',
+    'mcp__memvector__criar_issue',
+    'mcp__memvector__comentar_issue',
 ];
 
 const SYSTEM_RESPOSTA =
@@ -34,6 +39,19 @@ const SYSTEM_RESPOSTA =
     'SEMPRE os URLs (links markdown). Se devolver LIMITE_WEB, avisa o utilizador.\n' +
     'Não inventes — se a tool não devolver nada, di-lo claramente (ex.: "não há daily de 17/06"). ' +
     'O workspace regista sozinho os factos duráveis, não peças licença para guardar.';
+
+// M7 (modelo 2.2 + promoção assistida): anexa-se ao system prompt SÓ quando o
+// módulo GitHub está ligado (token presente). A guarda da escrita é a confirmação
+// — o agente nunca cria/comenta de surpresa.
+const CONVENCAO_GITHUB =
+    '\n\nGITHUB (modelo 2.2): tens tools de issues nos repos LIGADOS — ler_issues, criar_issue, ' +
+    'comentar_issue. Uma tarefa ou bug DURÁVEL de um projeto ligado pertence a uma ISSUE no repo ' +
+    'desse projeto, não a uma nota. PROMOÇÃO ASSISTIDA: nunca crias nem comentas uma issue de ' +
+    'surpresa — PROPÕE ("queres que eu abra a issue «X» em owner/nome?") e só ages quando o ' +
+    'utilizador CONFIRMA; se ele já pediu claramente ("abre uma issue para isto"), age direto. ' +
+    'O repo é um dos LIGADOS (não inventes outro); antes de criar, usa ler_issues para não ' +
+    'duplicar. O body leva enquadramento completo (contexto, o que fazer, critério de pronto), ' +
+    'não uma linha. Cita o URL da issue na resposta.';
 
 export interface RespostaTools {
     text: string;
@@ -52,6 +70,7 @@ export async function responderComToolsCom(
     model?: string,
     onTextDelta?: (texto: string) => void,
     onFerramenta?: (nome: string) => void,
+    gh?: { token?: string; repos: string[] },
 ): Promise<RespostaTools> {
     const {
         data: { session },
@@ -79,13 +98,21 @@ export async function responderComToolsCom(
         const cfg = {
             mcpConfig,
             allowedTools: TOOLS_RESPOSTA,
-            systemPrompt: SYSTEM_RESPOSTA,
+            // M7: a convenção GitHub só entra com o módulo ligado (token presente) —
+            // senão o agente nem sabe das tools de issue.
+            systemPrompt: gh?.token ? `${SYSTEM_RESPOSTA}${CONVENCAO_GITHUB}` : SYSTEM_RESPOSTA,
             model,
             env: {
                 MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
                 MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,
                 MEMVECTOR_AGENT_RESULT_FILE: resultFile,
                 ...(webKey ? { MEMVECTOR_AGENT_WEB_KEY: webKey } : {}),
+                ...(gh?.token
+                    ? {
+                          MEMVECTOR_AGENT_GITHUB_TOKEN: gh.token,
+                          MEMVECTOR_AGENT_GITHUB_REPOS: (gh.repos ?? []).join(','),
+                      }
+                    : {}),
             },
         };
         // #100: com callback, a resposta escalada streama token-a-token (o

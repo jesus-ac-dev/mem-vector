@@ -2,7 +2,7 @@
 // responde direto (sem [[ESCALAR]]); pergunta do mundo → emite [[ESCALAR]].
 // Corre: npx tsx scripts/probes/two-phase.ts  (precisa do claude CLI logado).
 import { generate } from '../../src/lib/claude';
-import { INSTRUCAO_ESCALADA, SENTINELA_ESCALAR } from '../../src/modules/chat/escalada';
+import { construirInstrucaoEscalada, SENTINELA_ESCALAR } from '../../src/modules/chat/escalada';
 
 const CONTEXTO =
     'CONTEXTO DO WORKSPACE:\n' +
@@ -11,7 +11,8 @@ const CONTEXTO =
     '- Daily 2026-06-17: sessão produtiva no mem-vector.\n';
 
 function prompt(pergunta: string): string {
-    return `${CONTEXTO}\nPERGUNTA: ${pergunta}\n\n${INSTRUCAO_ESCALADA}`;
+    const instrucao = construirInstrucaoEscalada({ web: true, github: false });
+    return `${CONTEXTO}\nPERGUNTA: ${pergunta}\n\n${instrucao}`;
 }
 
 async function caso(rotulo: string, pergunta: string, esperaEscalar: boolean) {

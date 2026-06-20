@@ -718,11 +718,15 @@ export async function providerDoChatCom(db: SupabaseClient): Promise<{
     matchCount: number;
     webHabilitada: boolean;
     webKey?: string;
+    githubAtivo: boolean;
+    githubToken?: string;
+    githubRepos: string[];
 }> {
     const defs = await lerDefinicoesServidorCom(db);
     const escolhido = defs.chatProvider;
     const cfg = defs.agentes[escolhido];
     // #67/#45: nº de fontes + toggle web + key de pesquisa web vêm da mesma leitura de definições.
+    // M7: o módulo GitHub só conta como ativo com o toggle ligado E token presente.
     if (cfg?.ativo) {
         return {
             instancia: criarProvider(escolhido, cfg),
@@ -730,6 +734,14 @@ export async function providerDoChatCom(db: SupabaseClient): Promise<{
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
             webKey: defs.webKey,
+            // M7: "ativo" exige módulo + token + ao menos 1 repo ligado — senão
+            // não há nada para o agente tocar (evita tools que só dão erro).
+            githubAtivo:
+                defs.modulosAtivos.includes('github') &&
+                !!defs.githubToken &&
+                defs.githubRepos.length > 0,
+            githubToken: defs.githubToken,
+            githubRepos: defs.githubRepos,
         };
     }
     // Sem defaults (#40, caminho a): sem provider ativo não se cai na conta da
