@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // M7: transporte GitHub do agente via gh CLI (requisito declarado no README). O
 // token do user vai por GH_TOKEN no env do subprocesso — sobrepõe-se ao gh auth
@@ -6,6 +8,23 @@ import { spawn } from 'node:child_process';
 // arg-builder é puro (núcleo testável); o spawn é fino por cima.
 
 const REPO_RE = /^[^/\s]+\/[^/\s]+$/;
+
+// Isola o gh do config do host (hosts.yml, aliases) — espelha o CLAUDE_CONFIG_DIR
+// do runner do agente (src/lib/claude.ts): a auth vem do GH_TOKEN, não do host.
+const GH_CONFIG_DIR_ISOLADO = join(tmpdir(), 'memvector-gh');
+
+/** Env do subprocesso gh: token do user + isolamento do config do host (puro/testável). */
+export function buildGhEnv(
+    token: string,
+    base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+    return {
+        ...base,
+        GH_TOKEN: token,
+        GH_PROMPT_DISABLED: '1',
+        GH_CONFIG_DIR: GH_CONFIG_DIR_ISOLADO,
+    };
+}
 
 export interface IssueRef {
     number: number;
@@ -46,9 +65,7 @@ export function buildIssueArgs(o: GhOp): string[] {
 /** Corre o gh com o token do user (GH_TOKEN sobrepõe o host). Stdout ou erro. */
 function corrGh(args: string[], token: string): Promise<string> {
     return new Promise((resolve, reject) => {
-        const ps = spawn('gh', args, {
-            env: { ...process.env, GH_TOKEN: token, GH_PROMPT_DISABLED: '1' },
-        });
+        const ps = spawn('gh', args, { env: buildGhEnv(token) });
         let out = '';
         let err = '';
         ps.stdout.on('data', (d) => (out += String(d)));
