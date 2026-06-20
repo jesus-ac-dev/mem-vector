@@ -156,6 +156,7 @@ export interface DefinicoesVista {
     githubTemToken: boolean;
     githubKeySufixo?: string;
     githubRepos: string[];
+    cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -179,6 +180,7 @@ export interface DefinicoesServidor {
     comportamento?: string; // #122: injetado no prompt do agente a seguir ao Kernel
     githubToken?: string; // M7: decifrado, vira o GH_TOKEN do subprocesso; nunca serializado p/ fora
     githubRepos: string[]; // M7: repos ligados ("owner/nome")
+    cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -283,5 +285,6 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     webTemKey: false,
     githubTemToken: false,
     githubRepos: [],
+    cruzamentos: {},
     agentes: {},
 };

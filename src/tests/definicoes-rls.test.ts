@@ -254,6 +254,48 @@ describe('definições (#60, integração RLS)', () => {
         },
     );
 
+    // Relay: o mapa cruzamento→provider faz round-trip (config, não segredo).
+    it(
+        'cruzamentos (relay): config round-trip vista/servidor + keep-on-undefined',
+        { timeout: 30_000 },
+        async () => {
+            const { gravarDefinicoesCom, lerDefinicoesVistaCom, lerDefinicoesServidorCom } =
+                await import('@/modules/definicoes/definicoes.service');
+
+            const vista = await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: false,
+                cruzamentos: {
+                    dev: { principal: 'codex', validador: 'claude' },
+                    analise: { principal: 'claude', validador: 'none' },
+                },
+                agentes: {},
+            });
+            expect(vista.cruzamentos.dev).toEqual({ principal: 'codex', validador: 'claude' });
+
+            const servidor = await lerDefinicoesServidorCom(alice);
+            expect(servidor.cruzamentos.analise).toEqual({
+                principal: 'claude',
+                validador: 'none',
+            });
+
+            // Regravar sem cruzamentos (undefined) mantém os atuais.
+            await gravarDefinicoesCom(alice, {
+                metodoDestilacao: 'one-shot',
+                modulosAtivos: [],
+                chatProvider: 'claude',
+                matchCount: 5,
+                webHabilitada: false,
+                agentes: {},
+            });
+            const depois = await lerDefinicoesVistaCom(alice);
+            expect(depois.cruzamentos.dev).toEqual({ principal: 'codex', validador: 'claude' });
+        },
+    );
+
     // r13: o bug do gemini do Carlos — a config tem de ser respeitada de
     // ponta a ponta (gravar → ler → runtime), e a escolha do chat é
     // CIRÚRGICA (nunca toca em modo/keys que não editou).

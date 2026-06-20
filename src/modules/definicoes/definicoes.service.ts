@@ -7,6 +7,7 @@ import {
     PROVIDERS,
     type AgenteServidor,
     type AgenteVista,
+    type Cruzamentos,
     type Definicoes,
     type DefinicoesServidor,
     type DefinicoesVista,
@@ -38,6 +39,7 @@ interface DefinicoesRow {
     comportamento?: string | null;
     github_token_cifrada?: string | null;
     github_repos?: string[] | null;
+    cruzamentos?: Record<string, unknown> | null;
     agentes: Record<string, AgenteRow> | null;
 }
 
@@ -45,7 +47,7 @@ async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
         .select(
-            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, comportamento, github_token_cifrada, github_repos, agentes',
+            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, comportamento, github_token_cifrada, github_repos, cruzamentos, agentes',
         )
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
@@ -54,12 +56,13 @@ async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
 
 function normalizar(
     row: DefinicoesRow,
-): Omit<DefinicoesServidor, 'agentes' | 'webKey' | 'githubToken' | 'githubRepos'> {
+): Omit<DefinicoesServidor, 'agentes' | 'webKey' | 'githubToken' | 'githubRepos' | 'cruzamentos'> {
     const parsed = DefinicoesSchema.omit({
         agentes: true,
         webKey: true,
         githubToken: true,
         githubRepos: true,
+        cruzamentos: true,
     }).safeParse({
         metodoDestilacao: row.metodo_destilacao,
         modulosAtivos: (row.modulos_ativos ?? []).filter((m: string) =>
@@ -125,6 +128,7 @@ export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<Definic
         githubTemToken: Boolean(githubToken),
         githubKeySufixo: githubToken ? sufixoKey(githubToken) : undefined,
         githubRepos: row.github_repos ?? [],
+        cruzamentos: (row.cruzamentos ?? {}) as Cruzamentos,
         agentes,
     };
 }
@@ -141,6 +145,7 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
             matchCount: 5,
             webHabilitada: false,
             githubRepos: [],
+            cruzamentos: {},
             agentes: {},
         };
     }
@@ -158,7 +163,14 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
     }
     const webKey = row.web_key_cifrada ? decifrar(row.web_key_cifrada) : undefined;
     const githubToken = row.github_token_cifrada ? decifrar(row.github_token_cifrada) : undefined;
-    return { ...base, webKey, githubToken, githubRepos: row.github_repos ?? [], agentes };
+    return {
+        ...base,
+        webKey,
+        githubToken,
+        githubRepos: row.github_repos ?? [],
+        cruzamentos: (row.cruzamentos ?? {}) as Cruzamentos,
+        agentes,
+    };
 }
 
 /** Grava o input do cliente. apiKey: undefined = manter; '' = limpar; string = cifrar. */
@@ -233,6 +245,7 @@ export async function gravarDefinicoesCom(
         comportamento: definicoes.comportamento?.trim() || null,
         github_token_cifrada: githubTokenCifrada ?? null,
         github_repos: definicoes.githubRepos ?? row?.github_repos ?? [],
+        cruzamentos: definicoes.cruzamentos ?? row?.cruzamentos ?? {},
         agentes,
         updated_at: new Date().toISOString(),
     });
