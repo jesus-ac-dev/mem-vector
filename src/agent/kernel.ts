@@ -116,87 +116,53 @@ export const MYTHOS_BASE_SEED: { title: string; contentMd: string }[] = [
             '- **Teia / wikilink** — [[ligações]] entre notas, dailies e conversas; ' +
             'o grafo mostra a rede.\n',
     },
-];
-
-// Notas iniciais do Kernel (#36, personalizadas no #39): nascem com a pasta —
-// e como vêm aí resets de BD, o conteúdo real do Carlos vive AQUI no seeder
-// (pedido dele, 2026-06-11). É a camada PESSOAL (separar para um seed:user
-// dedicado é o #40); por agora, esta é a instância do Carlos.
-export const KERNEL_SEED: { title: string; contentMd: string }[] = [
     {
-        title: 'Sobre mim',
+        title: 'Voz',
         contentMd:
-            '# Sobre mim\n\n' +
-            'Sou o Carlos Jesus, 42 anos, CTO e co-fundador da Além do Código ' +
-            '(alemdocodigo.pt), uma software house AI-first em Faro — somos 3, ' +
-            'co-localizados. Faço a produção e a manutenção dos produtos (as vendas não ' +
-            'são comigo). GitHub: jesus-ac-dev.\n\n' +
-            'Construo o MythosEngine/mem-vector em horas extra para provar a tese da ' +
-            'camada pessoal de produtividade: o modelo é commodity; o contexto, as ' +
-            'especializações e os workflows é que diferenciam.\n\nTrata-me por tu.\n',
+            '# Voz\n\n' +
+            'Como o agente escreve, por defeito (edita à tua medida):\n\n' +
+            '- Frases curtas. Bullets antes de parágrafos.\n' +
+            '- Direto e claro: lidera com o que precisa de ação, sem fluff.\n' +
+            '- Sem em dashes.\n' +
+            '- A língua segue a tua: escreve como tu escreves.\n' +
+            '- Conteúdo para fora (email, cliente, redes): mostra um rascunho antes, ' +
+            'não finjas a tua voz.\n',
     },
     {
-        title: 'Prioridades',
+        title: 'Como trabalho',
         contentMd:
-            '# Prioridades\n\n' +
-            'Trimestre Jun-Ago 2026:\n\n' +
-            '1. **CRMCredito vendável** — o produto-chave (CRM para mediação de crédito + ' +
-            'imobiliárias, em migração Bubble → Next.js). Foco imediato.\n' +
-            '2. **mem-vector** — o núcleo do MythosEngine: chat + agente-autor + RAG + ' +
-            'tasks/daily. Norte: coordenador de agentes com kanban próprio.\n' +
-            '3. **Camada pessoal de produtividade** — contexto + especialização + ' +
-            'workflows como diferenciador.\n\n' +
-            'Foco deste workspace, por agora: desenvolvimento de software. Vendas e ' +
-            'financeiro vêm depois.\n',
-    },
-    {
-        title: 'Regras do agente',
-        contentMd:
-            '# Regras do agente\n\n' +
-            '- Português de Portugal; trata-me por tu.\n' +
-            '- Direto, conciso e claro — zero fluff; lidera com o que precisa de ação.\n' +
-            '- Sê crítico construtivo, não cheerleader: aponta os weak spots e puxa-me a ' +
-            'pensar; não inventes consenso.\n' +
-            '- Proativo a registar factos duráveis — não peças licença; na dúvida, regista ' +
-            '(as versões são a rede).\n' +
-            '- UPDATE > CREATE: continua a nota dona do assunto em vez de criar duplicados.\n' +
+            '# Como trabalho\n\n' +
+            'O método do agente-autor (genérico; o teu pessoal cresce por cima):\n\n' +
+            '- Cada conversa deixa rasto: o agente regista sozinho o que vale (nota, ' +
+            'tarefa, daily, decisão). Não pede licença; na dúvida, regista (as ' +
+            'versões são a rede).\n' +
+            '- UPDATE antes de CREATE: continua a nota dona do assunto em vez de ' +
+            'criar duplicados.\n' +
+            '- O workspace é uma teia: liga as notas com [[título exato]], ' +
+            'liberalmente. Sem ilhas.\n' +
             '- As notas são páginas vivas de wiki: prosa integrada, sem carimbos de ' +
             'proveniência no corpo (o versionamento trata disso).\n' +
-            '- Daily só com o que aconteceu de facto — sem encher.\n',
-    },
-    {
-        title: 'Decisões',
-        contentMd:
-            '# Decisões\n\n' +
-            'Registo de alto nível (importado do vault do MythosEngine; acrescenta aqui — ' +
-            'ou pede ao agente para registar):\n\n' +
-            '- **2026-06-10 — Declarativa sem marcas de pergunta = facto a registar.** Com ' +
-            'hedge ("acho que"), regista na mesma e sinaliza a assunção. Perder factos ' +
-            'custa mais do que registar a mais.\n' +
-            '- **2026-06-10 — Update > create.** O facto novo continua a nota dona do ' +
-            'assunto; notas sobre pessoas têm como título os nomes delas.\n' +
-            '- **2026-06-10 — Estilo de escrita.** A nota é uma página viva, para leitura ' +
-            'humana futura; a proveniência vive no versionamento, não no corpo.\n' +
-            '- **2026-06-11 — Arquivo ≠ esquecimento.** Arquivar tira a nota do espaço de ' +
-            'trabalho, mas a memória (daily/conversas) persiste e pode rematerializar o ' +
-            'assunto.\n' +
-            '- **2026-06-11 — Arquivadas fora do pipeline de escrita.** Nenhuma escrita ' +
-            'aterra numa nota arquivada; repor devolve-lhe a escrita.\n' +
-            '- **2026-06-11 — O Kernel manda.** Esta pasta é lida em todos os arranques ' +
-            'do agente.\n',
+            '- Daily só com o que aconteceu de facto, sem encher.\n',
     },
 ];
+
+// #120 (a migração do Mythos para o produto): a camada PESSOAL do dono SAIU do
+// código. O produto (src/) só conhece o Mythos Base genérico; o conteúdo pessoal
+// (identidade, prioridades, regras, decisões) vive em `scripts/seed-data/` e
+// entra por PARÂMETRO — o seed:user carrega-o. Um user novo nasce só com o
+// Mythos Base e preenche o pessoal pelo onboarding. Assim o produto é
+// multi-utilizador real e o reset não arrasta uma pessoa no binário.
 
 // Seed idempotente (#36): cria a pasta Kernel + notas iniciais quando o
 // workspace ainda não tem NENHUMA pasta Kernel na raiz — em qualquer estado:
 // arquivada conta como opt-out do utilizador e não se recria. Não-fatal.
-// Por defeito semeia só o Mythos Base (genérico); `incluirPessoal` acrescenta a
-// camada pessoal — o atalho do dono via seed:user (#40). Um user novo nasce só
-// com o Mythos Base e preenche o pessoal pelo onboarding.
+// Semeia sempre o Mythos Base (genérico); `notasPessoais` acrescenta a camada
+// pessoal que o seed:user carrega de fora do código (#120). Um user novo nasce
+// só com o Mythos Base e preenche o pessoal pelo onboarding.
 export async function garantirKernelCom(
     db: SupabaseClient,
     userId?: string,
-    incluirPessoal = false,
+    notasPessoais: NotaKernel[] = [],
 ): Promise<boolean> {
     try {
         // O layout já tem o user — aceitar o id poupa um auth.getUser por
@@ -222,8 +188,8 @@ export async function garantirKernelCom(
         const { criarPastaCom } = await import('@/modules/folders/folders.service');
         const { escreverNotaEmPastaCom } = await import('@/modules/knowledge/knowledge.service');
         const pasta = await criarPastaCom(db, 'Kernel');
-        // Mythos Base sempre; o pessoal só no atalho do dono (#40).
-        const seeds = incluirPessoal ? [...MYTHOS_BASE_SEED, ...KERNEL_SEED] : MYTHOS_BASE_SEED;
+        // Mythos Base sempre (genérico); o pessoal só quando o seed:user o passa (#120).
+        const seeds = [...MYTHOS_BASE_SEED, ...notasPessoais];
         for (const seed of seeds) {
             await escreverNotaEmPastaCom(
                 db,

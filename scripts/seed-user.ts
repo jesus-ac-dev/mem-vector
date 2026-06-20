@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { getSupabaseAdmin } from '../src/lib/supabase-admin';
 import { garantirKernelCom } from '../src/agent/kernel';
+import { KERNEL_PESSOAL } from './seed-data/kernel-pessoal';
 import { esperarAuthHealth } from './auth-health';
 
 process.loadEnvFile('.env.local');
@@ -31,7 +32,7 @@ async function main(): Promise<void> {
     const userDb = createClient(url, anon, { auth: { persistSession: false } });
     const { error: e2 } = await userDb.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (e2) throw new Error(`signIn falhou: ${e2.message}`);
-    await garantirKernelCom(userDb, undefined, true);
+    await garantirKernelCom(userDb, undefined, KERNEL_PESSOAL);
 
     console.log(`✅ utilizador de dev: ${EMAIL} (Kernel pessoal semeado)`);
 }

@@ -64,6 +64,18 @@ describe('MYTHOS_BASE_SEED (glossário genérico, #44)', () => {
             expect(n.contentMd.length).toBeLessThanOrEqual(4000);
         }
     });
+
+    it('inclui o esqueleto genérico de voz e método (#120)', () => {
+        const titulos = MYTHOS_BASE_SEED.map((n) => n.title);
+        expect(titulos).toContain('Voz');
+        expect(titulos).toContain('Como trabalho');
+        const corpo = MYTHOS_BASE_SEED.map((n) => n.contentMd)
+            .join('\n')
+            .toLowerCase();
+        // método genérico, não pessoal: update-over-create + teia
+        expect(corpo).toContain('update');
+        expect(corpo).toContain('[[');
+    });
 });
 
 describe('kernel nos prompts de arranque', () => {
