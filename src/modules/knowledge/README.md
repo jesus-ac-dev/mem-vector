@@ -98,6 +98,12 @@ O `content_md` faz **overwrite** em cada escrita (não é aditivo como as tags).
 - **Restaurar versão** (`restaurarVersaoKnowledgeCom` → `restaurarVersaoAction`): repõe o corpo de uma `file_versions` antiga como o atual, reusando `atualizarNotaPorIdCom('user')` — gera uma **nova** versão (o histórico nunca se apaga, por isso o restauro é ele próprio reversível). É o "git revert" de uma nota, exposto pelo botão **Restaurar esta versão** no histórico do file-pane (só knowledge).
 - **Guarda de encolhimento** (trigger `guard_encolhimento_corpo` em `before insert on file_versions`): numa **continuação do agente** (`author='agent'`), se o corpo encolhe para < 50% de um corpo anterior > 280 chars, a escrita é **recusada** (o `raise` aborta a transação do RPC → o overwrite reverte) e o agente reenvia o `content_md` completo. Exempto: criação (sem versão anterior), edições do utilizador (deliberadas, incl. o restauro) e `daily` (aditivo).
 
+## Grafo sem órfãos (#121)
+
+O "grafo sem órfãos" do vault era só prompt (o #104). `avaliarCriarNota` (`knowledge.guards.ts`, pura) põe um **gate em código** no caminho agentic: a tool `criar_nota` computa as candidatas (busca híbrida) e, se a nota nova **não tem nenhum `[[wikilink]]` E há vizinhos para ligar**, devolve ao agente uma mensagem com sugestões (`[[slug]]`) em vez de aceitar a ilha — recusa **recuperável**, o agente cria de novo com a ligação. Sem candidatas não força (a 1.ª nota de um assunto novo não tem a quem ligar).
+
+Cobre o caminho **agentic**. O one-shot (default) não pode ter um gate duro (não há sessão para retentar; recusar perdia a nota) — continua no nudge do prompt. Anti-duplicado + reconciliação de edges pendentes ficam por decidir/fazer (ver #121).
+
 ## Dependências
 
 - `@/lib/embeddings` — `embedPassage` para gerar o vector do chunk.

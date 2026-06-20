@@ -11,6 +11,7 @@ import {
     summaryDoAgente,
 } from '../modules/knowledge/knowledge.service';
 import { normalizarTags, tagsDoAgente } from '../modules/knowledge/knowledge.props';
+import { avaliarCriarNota } from '../modules/knowledge/knowledge.guards';
 import {
     acrescentarAoDailyCom,
     getDailyCom,
@@ -280,11 +281,21 @@ async function executarTool(
             );
         }
         case 'criar_nota': {
+            const content = texto(args, 'content_md');
+            // #121: guard sem-órfãos (recuperável) ANTES de escrever. Se a nota
+            // não liga a nada e há vizinhos para ligar, devolve a sugestão ao
+            // agente em vez de aceitar a ilha. Reusa o pool da busca híbrida.
+            const candidatas = await candidatosParaFactoCom(
+                db,
+                `${texto(args, 'title')}\n${content}`,
+            );
+            const veredito = avaliarCriarNota(content, candidatas);
+            if (!veredito.ok) return veredito.mensagem;
             const r = await escreverNotaCom(
                 db,
                 {
                     title: texto(args, 'title'),
-                    content_md: texto(args, 'content_md'),
+                    content_md: content,
                     links: Array.isArray(args.links) ? listaStrings(args, 'links') : [],
                     reason: texto(args, 'reason'),
                     summary: typeof args.summary === 'string' ? args.summary : undefined,
