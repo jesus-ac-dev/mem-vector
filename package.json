@@ -21,7 +21,6 @@
         "db:status": "~/scripts/supabase-local status mem-vector",
         "db:start": "npm run db:up",
         "db:stop": "npm run db:down",
-        "ingest": "tsx scripts/ingest.ts",
         "seed:user": "tsx scripts/seed-user.ts",
         "seed:fresh": "tsx scripts/seed-fresh.ts",
         "sim-measure": "tsx scripts/sim-measure.ts",
