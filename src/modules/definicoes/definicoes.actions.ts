@@ -14,6 +14,7 @@ import {
     lerDefinicoesServidorCom,
 } from './definicoes.service';
 import { criarProvider } from '@/lib/providers/factory';
+import { validarToken, listarRepos } from '@/lib/github';
 import { createClient } from '@/lib/supabase/server';
 
 // As actions devolvem SEMPRE a vista (keys mascaradas) — a key real nunca
@@ -61,6 +62,35 @@ export async function testarProvider(
         console.error('listar modelos falhou (teste ok na mesma):', e);
     }
     return resultado;
+}
+
+// GitHub: resolve o token a usar — o pendente do form sobrepõe o gravado (decifrado
+// no servidor; nunca vem do browser). '' = sem token.
+async function tokenGithub(pendente?: string): Promise<string | undefined> {
+    if (pendente !== undefined) return pendente || undefined;
+    const defs = await lerDefinicoesServidorCom(await createClient());
+    return defs.githubToken;
+}
+
+// Testar ligação ao GitHub: valida o token (gh api user). O botão guarda em sucesso.
+export async function testarGithub(
+    tokenPendente?: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    const token = await tokenGithub(tokenPendente);
+    if (!token) return { ok: false, detalhe: 'Sem token.' };
+    try {
+        const login = await validarToken(token);
+        return { ok: true, detalhe: login };
+    } catch (e) {
+        return { ok: false, detalhe: e instanceof Error ? e.message : 'token inválido' };
+    }
+}
+
+// Lista os repos do utilizador para o picker (checkboxes), com o token pendente ou gravado.
+export async function listarReposGithub(tokenPendente?: string): Promise<string[]> {
+    const token = await tokenGithub(tokenPendente);
+    if (!token) return [];
+    return listarRepos(token);
 }
 
 // A ESCOLHA do chat (mini-modal, r13): cirúrgica — nunca regrava o que a

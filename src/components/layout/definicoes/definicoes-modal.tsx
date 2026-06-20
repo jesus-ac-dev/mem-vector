@@ -23,7 +23,12 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { gravarDefinicoes, testarProvider } from '@/modules/definicoes/definicoes.actions';
+import {
+    gravarDefinicoes,
+    testarProvider,
+    testarGithub,
+    listarReposGithub,
+} from '@/modules/definicoes/definicoes.actions';
 import { getJson } from '@/lib/api-get';
 import {
     DEFINICOES_VISTA_DEFAULT,
@@ -82,9 +87,6 @@ const MODULO_DESCRICAO: Record<Modulo, string> = {
     campanhas: 'Campanhas online (marketing) — há de vir.',
 };
 
-// M7: um repo ligado é "owner/nome" (mesmo formato validado no schema).
-const REPO_RE = /^[^/\s]+\/[^/\s]+$/;
-
 const AGENTE_SEM_CONFIG: AgenteVista = { ativo: false, modo: 'cli', temApiKey: false };
 
 // Verde claro no sucesso (pedido do Carlos) — fora do JSX, como o corPrioridade.
@@ -105,10 +107,12 @@ export function DefinicoesModal({
     const [keysNovas, setKeysNovas] = useState<Partial<Record<Provider, string>>>({});
     // #45: key Tavily escrita nesta sessão da modal (undefined=manter; ''=limpar).
     const [webKeyNova, setWebKeyNova] = useState<string | undefined>(undefined);
-    // M7: token GitHub escrito nesta sessão (undefined=manter; ''=limpar). repoNovo
-    // é o campo transitório do "Ligar" um repo.
+    // M7: token GitHub escrito nesta sessão (undefined=manter; ''=limpar).
     const [githubTokenNova, setGithubTokenNova] = useState<string | undefined>(undefined);
-    const [repoNovo, setRepoNovo] = useState('');
+    // M7 connection: resultado do "Testar ligação" + repos do user (picker).
+    const [testeGithub, setTesteGithub] = useState<null | { ok: boolean; detalhe: string }>(null);
+    const [reposDisponiveis, setReposDisponiveis] = useState<string[] | null>(null);
+    const [carregandoRepos, setCarregandoRepos] = useState(false);
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
     >({});
@@ -141,7 +145,8 @@ export function DefinicoesModal({
             setKeysNovas({});
             setWebKeyNova(undefined);
             setGithubTokenNova(undefined);
-            setRepoNovo('');
+            setTesteGithub(null);
+            setReposDisponiveis(null);
             setTestes({});
             setLigados(new Set());
             setConfirmados(new Set());
@@ -212,16 +217,29 @@ export function DefinicoesModal({
         if (!ativo && pagina === m) setPagina('modulos');
     }
 
-    // M7: editor dos repos ligados ("owner/nome") — valida o formato e dedup.
-    function adicionarRepo() {
-        const r = repoNovo.trim();
-        if (!REPO_RE.test(r) || defs.githubRepos.includes(r)) return;
-        editar({ ...defs, githubRepos: [...defs.githubRepos, r] });
-        setRepoNovo('');
+    function toggleRepo(r: string, on: boolean) {
+        const repos = on
+            ? [...new Set([...defs.githubRepos, r])]
+            : defs.githubRepos.filter((x) => x !== r);
+        editar({ ...defs, githubRepos: repos });
     }
 
-    function removerRepo(r: string) {
-        editar({ ...defs, githubRepos: defs.githubRepos.filter((x) => x !== r) });
+    // "Testar ligação": valida o token no GitHub e, em SUCESSO, guarda (não "guardar e rezar").
+    async function testarLigacaoGithub() {
+        setTesteGithub({ ok: false, detalhe: 'a testar…' });
+        const r = await testarGithub(githubTokenNova);
+        setTesteGithub(r);
+        if (r.ok) await guardarTudo();
+    }
+
+    // Carrega os repos do user para o picker de checkboxes (token pendente ou gravado).
+    async function carregarRepos() {
+        setCarregandoRepos(true);
+        try {
+            setReposDisponiveis(await listarReposGithub(githubTokenNova));
+        } finally {
+            setCarregandoRepos(false);
+        }
     }
 
     // Relay: muda o principal/validadores de um cruzamento (cria a entrada se não existe).
@@ -786,13 +804,6 @@ export function DefinicoesModal({
                                         );
                                     })}
                                 </ul>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setPagina('github')}
-                                >
-                                    Voltar ao GitHub
-                                </Button>
                             </div>
                         ) : pagina === 'modulos' ? (
                             <div className="max-w-md space-y-4">
@@ -843,7 +854,7 @@ export function DefinicoesModal({
                                             repos. O token cifra-se e nunca volta ao browser.
                                         </p>
                                         <div className="space-y-1">
-                                            <label className="text-xs font-medium">
+                                            <label className="text-sm font-medium">
                                                 Token de acesso
                                             </label>
                                             <div className="flex items-center gap-2">
@@ -863,6 +874,15 @@ export function DefinicoesModal({
                                                     }
                                                     className="h-8 flex-1 text-xs"
                                                 />
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => void testarLigacaoGithub()}
+                                                    disabled={testeGithub?.detalhe === 'a testar…'}
+                                                    className="h-8 text-xs"
+                                                >
+                                                    Testar ligação
+                                                </Button>
                                                 {defs.githubTemToken && (
                                                     <Button
                                                         variant="ghost"
@@ -874,6 +894,22 @@ export function DefinicoesModal({
                                                     </Button>
                                                 )}
                                             </div>
+                                            {testeGithub && (
+                                                <p
+                                                    className={cn(
+                                                        'text-xs',
+                                                        testeGithub.detalhe === 'a testar…'
+                                                            ? 'text-muted-foreground'
+                                                            : corTeste(testeGithub.ok),
+                                                    )}
+                                                >
+                                                    {testeGithub.detalhe === 'a testar…'
+                                                        ? 'A testar…'
+                                                        : testeGithub.ok
+                                                          ? `Ligado como ${testeGithub.detalhe} — guardado.`
+                                                          : `Falhou: ${testeGithub.detalhe}`}
+                                                </p>
+                                            )}
                                             <a
                                                 href="https://github.com/settings/personal-access-tokens"
                                                 target="_blank"
@@ -884,62 +920,52 @@ export function DefinicoesModal({
                                             </a>
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-xs font-medium">
+                                            <label className="text-sm font-medium">
                                                 Repositórios ligados
                                             </label>
-                                            {defs.githubRepos.length > 0 ? (
-                                                <ul className="space-y-1">
-                                                    {defs.githubRepos.map((r) => (
-                                                        <li
-                                                            key={r}
-                                                            className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs"
-                                                        >
-                                                            <span className="truncate font-mono">
-                                                                {r}
-                                                            </span>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => removerRepo(r)}
-                                                                className="h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-                                                                aria-label={`Remover ${r}`}
-                                                            >
-                                                                ×
-                                                            </Button>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <p className="text-xs text-muted-foreground">
-                                                    Nenhum repo ligado ainda.
-                                                </p>
-                                            )}
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    value={repoNovo}
-                                                    onChange={(e) => setRepoNovo(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            adicionarRepo();
-                                                        }
-                                                    }}
-                                                    placeholder="owner/nome"
-                                                    className="h-8 flex-1 font-mono text-xs"
-                                                />
+                                            <p className="text-xs text-muted-foreground">
+                                                {defs.githubRepos.length} ligado(s). Carrega os teus
+                                                repos e escolhe por checkbox.
+                                            </p>
+                                            {reposDisponiveis === null ? (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={adicionarRepo}
-                                                    disabled={!REPO_RE.test(repoNovo.trim())}
+                                                    onClick={() => void carregarRepos()}
+                                                    disabled={carregandoRepos}
                                                     className="h-8 text-xs"
                                                 >
-                                                    Ligar
+                                                    {carregandoRepos
+                                                        ? 'A carregar…'
+                                                        : 'Carregar os meus repos'}
                                                 </Button>
-                                            </div>
+                                            ) : reposDisponiveis.length === 0 ? (
+                                                <p className="text-xs text-muted-foreground">
+                                                    Nenhum repo encontrado (o token tem acesso?).
+                                                </p>
+                                            ) : (
+                                                <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-md border p-2">
+                                                    {reposDisponiveis.map((r) => (
+                                                        <label
+                                                            key={r}
+                                                            className="flex items-center gap-2 text-xs"
+                                                        >
+                                                            <Checkbox
+                                                                checked={defs.githubRepos.includes(
+                                                                    r,
+                                                                )}
+                                                                onCheckedChange={(on) =>
+                                                                    toggleRepo(r, on === true)
+                                                                }
+                                                            />
+                                                            <span className="font-mono">{r}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="space-y-1 border-t pt-3">
-                                            <label className="text-xs font-medium">
+                                        <div className="space-y-1.5 border-t pt-4">
+                                            <label className="text-sm font-medium">
                                                 Pipeline de dev (cruzamentos)
                                             </label>
                                             <p className="text-xs text-muted-foreground">
@@ -960,13 +986,6 @@ export function DefinicoesModal({
                                         Configuração deste módulo chega com o próprio módulo.
                                     </p>
                                 )}
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setPagina('modulos')}
-                                >
-                                    Voltar aos módulos
-                                </Button>
                             </div>
                         )}
                     </div>

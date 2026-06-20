@@ -108,3 +108,29 @@ export async function comentarIssue(
 ): Promise<string> {
     return extrairUrl(await corrGh(buildIssueArgs({ op: 'comentar', ...p }), token));
 }
+
+/** Valida o token: devolve o login do utilizador. Lança se o token for inválido. */
+export async function validarToken(token: string): Promise<string> {
+    return corrGh(['api', 'user', '-q', '.login'], token);
+}
+
+/** Lista os repos "owner/nome" a que o token tem acesso (para o picker de checkboxes). */
+export async function listarRepos(token: string, limite = 200): Promise<string[]> {
+    const out = await corrGh(
+        [
+            'repo',
+            'list',
+            '--limit',
+            String(limite),
+            '--json',
+            'nameWithOwner',
+            '-q',
+            '.[].nameWithOwner',
+        ],
+        token,
+    );
+    return out
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
