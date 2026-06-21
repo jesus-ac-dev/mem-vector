@@ -186,6 +186,9 @@ function tarefa(parcial: Partial<Tarefa> & { id: string }): Tarefa {
         dataFim: null,
         criadaEm: '2026-06-12T00:00:00Z',
         concluidaEm: null,
+        repoGithub: null,
+        issueGithub: null,
+        relayEstado: null,
         ...parcial,
     };
 }

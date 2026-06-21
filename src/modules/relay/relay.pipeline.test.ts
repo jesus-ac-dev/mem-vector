@@ -32,6 +32,7 @@ describe('correrPipeline (o circuito das atividades)', () => {
                 auditoria: { principal: 'claude', validadores: [] },
                 analise: { principal: 'claude', validadores: [] },
                 dev: { principal: 'codex', validadores: ['claude'] },
+                testes: { principal: 'claude', validadores: [] },
             }),
             spec: 'tarefa',
             executar: async (c) => {
@@ -39,9 +40,9 @@ describe('correrPipeline (o circuito das atividades)', () => {
                 return ok(`out-${c}`);
             },
         });
-        // docs não estava configurado; a ordem é canónica (analise→dev→auditoria).
-        expect(r.ordem).toEqual(['analise', 'dev', 'auditoria']);
-        expect(correram).toEqual(['analise', 'dev', 'auditoria']);
+        // docs não estava configurado; a ordem é canónica.
+        expect(r.ordem).toEqual(['analise', 'dev', 'testes', 'auditoria']);
+        expect(correram).toEqual(['analise', 'dev', 'testes', 'auditoria']);
         expect(r.completo).toBe(true);
     });
 
@@ -60,6 +61,31 @@ describe('correrPipeline (o circuito das atividades)', () => {
         });
         expect(specsVistos.analise).toBe('tarefa-base'); // a Análise recebe a tarefa crua
         expect(specsVistos.dev).toContain('PLANO-X'); // o dev recebe a Análise como referência
+    });
+
+    it('retoma cirúrgica: desde + analiseInicial saltam a Análise e usam o goal dado', async () => {
+        const correram: Cruzamento[] = [];
+        const specsVistos: Record<string, string> = {};
+        const r = await correrPipeline({
+            defs: defs({
+                analise: { principal: 'claude', validadores: [] },
+                dev: { principal: 'codex', validadores: [] },
+                auditoria: { principal: 'claude', validadores: [] },
+            }),
+            spec: 'tarefa',
+            desde: 'auditoria',
+            analiseInicial: 'GOAL-GUARDADO',
+            executar: async (c, s) => {
+                correram.push(c);
+                specsVistos[c] = s;
+                return ok(`out-${c}`);
+            },
+        });
+        // Saltou analise e dev (já tinham passado); só correu a auditoria.
+        expect(correram).toEqual(['auditoria']);
+        // A estrela usou o goal guardado, sem redestilar a Análise.
+        expect(specsVistos.auditoria).toContain('GOAL-GUARDADO');
+        expect(r.completo).toBe(true);
     });
 
     it('pára e marca incompleto quando um cruzamento não valida (kill switch)', async () => {

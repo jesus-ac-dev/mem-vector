@@ -28,7 +28,11 @@ import {
     testarProvider,
     testarGithub,
     listarReposGithub,
+    testarProjeto,
+    clonarProjetoGithub,
+    importarProjeto,
 } from '@/modules/definicoes/definicoes.actions';
+import { dispararRelay } from '@/modules/relay/relay.actions';
 import { getJson } from '@/lib/api-get';
 import {
     DEFINICOES_VISTA_DEFAULT,
@@ -112,6 +116,15 @@ export function DefinicoesModal({
     // M7 connection: resultado do "Testar ligação" + repos do user (picker).
     const [testeGithub, setTesteGithub] = useState<null | { ok: boolean; detalhe: string }>(null);
     const [reposDisponiveis, setReposDisponiveis] = useState<string[] | null>(null);
+    // Estado por-repo do "test à dir" (testar → clonar → importar).
+    const [testesProjeto, setTestesProjeto] = useState<
+        Record<string, { ok: boolean; detalhe: string } | 'a-correr'>
+    >({});
+    // Trigger do relay por-repo: nº da issue + estado do disparo.
+    const [relayIssue, setRelayIssue] = useState<Record<string, string>>({});
+    const [relayEstado, setRelayEstado] = useState<
+        Record<string, { ok: boolean; detalhe: string } | 'a-disparar'>
+    >({});
     const [carregandoRepos, setCarregandoRepos] = useState(false);
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
@@ -219,9 +232,56 @@ export function DefinicoesModal({
 
     function toggleRepo(r: string, on: boolean) {
         const repos = on
-            ? [...new Set([...defs.githubRepos, r])]
-            : defs.githubRepos.filter((x) => x !== r);
+            ? defs.githubRepos.some((x) => x.repo === r)
+                ? defs.githubRepos
+                : [...defs.githubRepos, { repo: r }]
+            : defs.githubRepos.filter((x) => x.repo !== r);
         editar({ ...defs, githubRepos: repos });
+    }
+
+    // Path local do working copy de um repo ligado (vazio = por definir).
+    function setPathRepo(r: string, path: string) {
+        const repos = defs.githubRepos.map((x) =>
+            x.repo === r ? { ...x, path: path.trim() || undefined } : x,
+        );
+        editar({ ...defs, githubRepos: repos });
+    }
+
+    // O "test à dir": confirma o working copy no path; se falhar (e há path),
+    // clona para lá; com o projeto presente, importa-o (pasta + nota de resumo
+    // vectorizada no explorer). É a porta entre o repo ligado e o vault.
+    async function prepararProjeto(r: string) {
+        const path = defs.githubRepos.find((x) => x.repo === r)?.path?.trim() ?? '';
+        if (!path) {
+            setTestesProjeto((t) => ({
+                ...t,
+                [r]: { ok: false, detalhe: 'Define o path local.' },
+            }));
+            return;
+        }
+        setTestesProjeto((t) => ({ ...t, [r]: 'a-correr' }));
+        let res = await testarProjeto(r, path);
+        if (!res.ok) {
+            const cl = await clonarProjetoGithub(r, path, githubTokenNova);
+            res = cl.ok ? await testarProjeto(r, path) : cl;
+        }
+        if (res.ok) {
+            const imp = await importarProjeto(r, path);
+            res = imp.ok ? { ok: true, detalhe: 'Projeto pronto e importado.' } : imp;
+        }
+        setTestesProjeto((t) => ({ ...t, [r]: res }));
+    }
+
+    // Dispara o relay para a issue indicada (corre em background; segue-se na issue).
+    async function dispararRelayRepo(r: string) {
+        const n = Number(relayIssue[r]);
+        if (!Number.isInteger(n) || n <= 0) {
+            setRelayEstado((s) => ({ ...s, [r]: { ok: false, detalhe: 'Nº de issue inválido.' } }));
+            return;
+        }
+        setRelayEstado((s) => ({ ...s, [r]: 'a-disparar' }));
+        const res = await dispararRelay(r, n);
+        setRelayEstado((s) => ({ ...s, [r]: res }));
     }
 
     // "Testar ligação": valida o token no GitHub e, em SUCESSO, guarda (não "guardar e rezar").
@@ -709,13 +769,11 @@ export function DefinicoesModal({
                         ) : pagina === 'cruzamentos' ? (
                             <div className="max-w-lg space-y-4">
                                 <div>
-                                    <h3 className="text-sm font-medium">
-                                        Cruzamentos — pipeline de dev
-                                    </h3>
+                                    <h3 className="text-sm font-medium">Relay — pipeline de dev</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Quem PRODUZ (principal) e quem VALIDA (N validadores) em
-                                        cada passo. Só providers ativos. Validadores de linhagem
-                                        diferente = defesa máxima contra o erro que escapa.
+                                        O relay real corre os providers ativos, sequencialmente, em
+                                        Análise, Desenvolvimento, Testes e Documentação. Estes
+                                        campos ficam como override fino por fase.
                                     </p>
                                 </div>
                                 <ul className="space-y-3">
@@ -945,22 +1003,128 @@ export function DefinicoesModal({
                                                 </p>
                                             ) : (
                                                 <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-md border p-2">
-                                                    {reposDisponiveis.map((r) => (
-                                                        <label
-                                                            key={r}
-                                                            className="flex items-center gap-2 text-xs"
-                                                        >
-                                                            <Checkbox
-                                                                checked={defs.githubRepos.includes(
-                                                                    r,
+                                                    {reposDisponiveis.map((r) => {
+                                                        const ligado = defs.githubRepos.find(
+                                                            (x) => x.repo === r,
+                                                        );
+                                                        const tp = testesProjeto[r];
+                                                        const re = relayEstado[r];
+                                                        return (
+                                                            <div key={r} className="space-y-1">
+                                                                <label className="flex items-center gap-2 text-xs">
+                                                                    <Checkbox
+                                                                        checked={Boolean(ligado)}
+                                                                        onCheckedChange={(on) =>
+                                                                            toggleRepo(
+                                                                                r,
+                                                                                on === true,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <span className="font-mono">
+                                                                        {r}
+                                                                    </span>
+                                                                </label>
+                                                                {ligado && (
+                                                                    <div className="flex items-center gap-2 pl-6">
+                                                                        <Input
+                                                                            value={
+                                                                                ligado.path ?? ''
+                                                                            }
+                                                                            onChange={(e) =>
+                                                                                setPathRepo(
+                                                                                    r,
+                                                                                    e.target.value,
+                                                                                )
+                                                                            }
+                                                                            placeholder="path local (ex: ~/src/nome)"
+                                                                            className="h-7 flex-1 text-xs"
+                                                                        />
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() =>
+                                                                                void prepararProjeto(
+                                                                                    r,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                tp === 'a-correr'
+                                                                            }
+                                                                            className="h-7 text-xs"
+                                                                        >
+                                                                            {tp === 'a-correr'
+                                                                                ? 'A preparar…'
+                                                                                : 'Testar'}
+                                                                        </Button>
+                                                                    </div>
                                                                 )}
-                                                                onCheckedChange={(on) =>
-                                                                    toggleRepo(r, on === true)
-                                                                }
-                                                            />
-                                                            <span className="font-mono">{r}</span>
-                                                        </label>
-                                                    ))}
+                                                                {ligado &&
+                                                                    tp &&
+                                                                    tp !== 'a-correr' && (
+                                                                        <p
+                                                                            className={cn(
+                                                                                'pl-6 text-xs',
+                                                                                corTeste(tp.ok),
+                                                                            )}
+                                                                        >
+                                                                            {tp.detalhe}
+                                                                        </p>
+                                                                    )}
+                                                                {ligado && (
+                                                                    <div className="flex items-center gap-2 pl-6">
+                                                                        <Input
+                                                                            value={
+                                                                                relayIssue[r] ?? ''
+                                                                            }
+                                                                            onChange={(e) =>
+                                                                                setRelayIssue(
+                                                                                    (s) => ({
+                                                                                        ...s,
+                                                                                        [r]: e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    }),
+                                                                                )
+                                                                            }
+                                                                            placeholder="nº da issue"
+                                                                            inputMode="numeric"
+                                                                            className="h-7 w-24 text-xs"
+                                                                        />
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() =>
+                                                                                void dispararRelayRepo(
+                                                                                    r,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                re === 'a-disparar'
+                                                                            }
+                                                                            className="h-7 text-xs"
+                                                                        >
+                                                                            {re === 'a-disparar'
+                                                                                ? 'A disparar…'
+                                                                                : '⚡ Disparar relay'}
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                                {ligado &&
+                                                                    re &&
+                                                                    re !== 'a-disparar' && (
+                                                                        <p
+                                                                            className={cn(
+                                                                                'pl-6 text-xs',
+                                                                                corTeste(re.ok),
+                                                                            )}
+                                                                        >
+                                                                            {re.detalhe}
+                                                                        </p>
+                                                                    )}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>

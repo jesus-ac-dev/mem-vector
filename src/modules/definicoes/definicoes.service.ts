@@ -5,6 +5,7 @@ import {
     DefinicoesSchema,
     MODULOS,
     PROVIDERS,
+    RepoLigadoSchema,
     type AgenteServidor,
     type AgenteVista,
     type Cruzamentos,
@@ -13,6 +14,7 @@ import {
     type DefinicoesVista,
     type EscolhaChat,
     type Provider,
+    type RepoLigado,
 } from './definicoes.schema';
 import { cifrar, decifrar, sufixoKey } from '@/lib/cripto';
 
@@ -38,7 +40,7 @@ interface DefinicoesRow {
     web_key_cifrada?: string | null;
     comportamento?: string | null;
     github_token_cifrada?: string | null;
-    github_repos?: string[] | null;
+    github_repos?: (string | { repo: string; path?: string })[] | null;
     cruzamentos?: Record<string, unknown> | null;
     agentes: Record<string, AgenteRow> | null;
 }
@@ -101,6 +103,17 @@ function agentesDaRow(row: DefinicoesRow): Partial<Record<Provider, AgenteRow>> 
     return agentes;
 }
 
+// Repos guardados podem ser strings legadas ("owner/nome") ou objetos {repo,path};
+// o RepoLigadoSchema sobe as strings para {repo} e descarta entradas inválidas.
+function normalizarRepos(raw: DefinicoesRow['github_repos']): RepoLigado[] {
+    const out: RepoLigado[] = [];
+    for (const r of raw ?? []) {
+        const p = RepoLigadoSchema.safeParse(r);
+        if (p.success) out.push(p.data);
+    }
+    return out;
+}
+
 /** Vista do CLIENTE: keys mascaradas (temApiKey + sufixo), nunca o valor. */
 export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<DefinicoesVista> {
     const row = await lerRowCom(db);
@@ -127,7 +140,7 @@ export async function lerDefinicoesVistaCom(db: SupabaseClient): Promise<Definic
         webKeySufixo: webKey ? sufixoKey(webKey) : undefined,
         githubTemToken: Boolean(githubToken),
         githubKeySufixo: githubToken ? sufixoKey(githubToken) : undefined,
-        githubRepos: row.github_repos ?? [],
+        githubRepos: normalizarRepos(row.github_repos),
         cruzamentos: (row.cruzamentos ?? {}) as Cruzamentos,
         agentes,
     };
@@ -167,7 +180,7 @@ export async function lerDefinicoesServidorCom(db: SupabaseClient): Promise<Defi
         ...base,
         webKey,
         githubToken,
-        githubRepos: row.github_repos ?? [],
+        githubRepos: normalizarRepos(row.github_repos),
         cruzamentos: (row.cruzamentos ?? {}) as Cruzamentos,
         agentes,
     };

@@ -16,6 +16,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
     SelectContent,
@@ -25,7 +27,14 @@ import {
 } from '@/components/ui/select';
 import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { apagarTarefa, concluirTarefa, mudarEstadoTarefa } from '@/modules/tarefas/tarefas.actions';
+import {
+    comentarERetomar,
+    dispararRelay,
+    lerComentariosRelay,
+    promoverTarefa,
+} from '@/modules/relay/relay.actions';
 import { getJson } from '@/lib/api-get';
+import type { DefinicoesVista } from '@/modules/definicoes/definicoes.schema';
 import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
 import {
     agruparPorEstado,
@@ -52,10 +61,20 @@ const ESTADO_LABEL: Record<EstadoTarefa, string> = {
     terminado: 'Terminado',
 };
 
+const ESTADOS_TRIGGER_RELAY: EstadoTarefa[] = ['analise', 'desenvolvimento'];
+
 function corPrioridade(p: PrioridadeTarefa): string {
     if (p === 'alta') return 'bg-red-500';
     if (p === 'baixa') return 'bg-blue-800';
     return 'bg-green-700';
+}
+
+// Vista kanban segue o relay: o semáforo escrito pelo orchestrator no cartão.
+function semaforoRelay(estado: string | null): string {
+    if (estado === 'processando') return '🟠';
+    if (estado === 'bloqueado') return '🔴';
+    if (estado === 'pronto') return '🟢';
+    return '';
 }
 
 function CartaoTarefa({
@@ -63,11 +82,15 @@ function CartaoTarefa({
     mae,
     destacada,
     onHoverBloqueio,
+    onPromover,
+    onRetomar,
 }: {
     tarefa: Tarefa;
     mae: Tarefa | null; // a tarefa que bloqueia esta (dependência em aberto)
     destacada: boolean; // esta É a mãe de quem está com o rato no cadeado
     onHoverBloqueio: (maeId: string | null) => void;
+    onPromover: (t: Tarefa) => void; // backlog sem issue → cria + liga
+    onRetomar: (t: Tarefa) => void; // ligada → comentar e re-disparar (pós-🔴)
 }) {
     const concluida = tarefa.estado === 'terminado';
     return (
@@ -135,6 +158,35 @@ function CartaoTarefa({
                     </span>
                 )}
             </div>
+            {/* Relay: ligada a uma issue → badge + retomar; backlog sem issue → promover. */}
+            {!concluida && (tarefa.issueGithub || tarefa.estado === 'backlog') && (
+                <div className="flex items-center gap-2 pl-4 pt-1 text-[0.65rem]">
+                    {tarefa.issueGithub ? (
+                        <>
+                            <span className="text-muted-foreground" title={tarefa.repoGithub ?? ''}>
+                                {semaforoRelay(tarefa.relayEstado)} ⧉ #{tarefa.issueGithub}
+                            </span>
+                            <Button
+                                type="button"
+                                variant="link"
+                                className="h-auto p-0 text-[0.65rem]"
+                                onClick={() => onRetomar(tarefa)}
+                            >
+                                ↻ retomar
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 text-[0.65rem]"
+                            onClick={() => onPromover(tarefa)}
+                        >
+                            ⤴ promover a issue
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -155,6 +207,18 @@ export function KanbanBoard() {
         tipo: 'concluir' | 'apagar';
         tarefa: Tarefa;
     } | null>(null);
+    // Relay: repos ligados (picker da promoção), modais de promover/retomar, e o
+    // aviso do disparo (o estado real vive na issue).
+    const [reposLigados, setReposLigados] = useState<string[]>([]);
+    const [promover, setPromover] = useState<Tarefa | null>(null);
+    const [repoEscolhido, setRepoEscolhido] = useState('');
+    const [retomar, setRetomar] = useState<{
+        tarefa: Tarefa;
+        comentarios: { autor: string; corpo: string }[];
+        texto: string;
+    } | null>(null);
+    const [relayInfo, setRelayInfo] = useState<string | null>(null);
+    const [relayBusy, setRelayBusy] = useState(false);
     const loadSeqRef = useRef(0);
 
     const carregarTarefas = useCallback(() => {
@@ -173,6 +237,51 @@ export function KanbanBoard() {
     useEffect(() => {
         carregarTarefas();
     }, [workspaceVersion, carregarTarefas]);
+
+    // Repos ligados para o picker da promoção (a key nunca vem; só os nomes).
+    useEffect(() => {
+        void runClientAction({ area: 'kanban', action: 'lerReposLigados', meta: {} }, () =>
+            getJson<DefinicoesVista>('/api/definicoes'),
+        ).then((d) => {
+            if (d) setReposLigados(d.githubRepos.map((r) => r.repo));
+        });
+    }, []);
+
+    function abrirPromover(t: Tarefa) {
+        setPromover(t);
+        setRepoEscolhido(reposLigados[0] ?? '');
+    }
+
+    async function confirmarPromover() {
+        if (!promover || !repoEscolhido) return;
+        setRelayBusy(true);
+        const r = await promoverTarefa(promover.id, repoEscolhido);
+        setRelayBusy(false);
+        setRelayInfo(r.detalhe);
+        setPromover(null);
+        if (r.ok) {
+            carregarTarefas();
+            notificarWorkspaceMudou();
+        }
+    }
+
+    async function abrirRetomar(t: Tarefa) {
+        setRetomar({ tarefa: t, comentarios: [], texto: '' });
+        if (t.repoGithub && t.issueGithub) {
+            const cs = await lerComentariosRelay(t.repoGithub, t.issueGithub);
+            setRetomar((r) => (r && r.tarefa.id === t.id ? { ...r, comentarios: cs } : r));
+        }
+    }
+
+    async function confirmarRetomar() {
+        const alvo = retomar?.tarefa;
+        if (!alvo?.repoGithub || !alvo.issueGithub || !retomar) return;
+        setRelayBusy(true);
+        const r = await comentarERetomar(alvo.repoGithub, alvo.issueGithub, retomar.texto);
+        setRelayBusy(false);
+        setRelayInfo(r.detalhe);
+        setRetomar(null);
+    }
 
     const abertasIds = new Set(abertas.map((t) => t.id));
     const visiveis = abertas.filter(
@@ -219,7 +328,25 @@ export function KanbanBoard() {
             setConfirmar({ tipo: 'concluir', tarefa: t });
             return;
         }
+        const relayAlvo =
+            ESTADOS_TRIGGER_RELAY.includes(estado) && t.repoGithub && t.issueGithub
+                ? { repo: t.repoGithub, issue: t.issueGithub }
+                : null;
+        if (relayAlvo) {
+            // Checa precedências antes de mudar de coluna: bloqueada não entra no relay.
+            if (bloqueadaPorDependencia(t)) {
+                setRelayInfo('Relay não disparado: a tarefa está bloqueada por uma dependência.');
+                return;
+            }
+        }
         mutacao('mudarEstadoTarefa', { id: t.id, estado }, () => mudarEstadoTarefa(t.id, estado));
+        // Trigger do relay: arrastar para Análise ou Em Desenvolvimento dispara
+        // o pipeline para a issue ligada. Cartões leves (sem issue) só mudam de coluna.
+        if (relayAlvo) {
+            void dispararRelay(relayAlvo.repo, relayAlvo.issue).then((r) =>
+                setRelayInfo(r.detalhe),
+            );
+        }
     }
 
     function executarConfirmacao() {
@@ -311,6 +438,8 @@ export function KanbanBoard() {
                                     }
                                     destacada={maeDestacada === t.id}
                                     onHoverBloqueio={setMaeDestacada}
+                                    onPromover={abrirPromover}
+                                    onRetomar={abrirRetomar}
                                 />
                             ))}
                         </div>
@@ -339,6 +468,105 @@ export function KanbanBoard() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Promoção assistida: cartão de backlog → issue ligada (depois arrasta-se p/ Análise). */}
+            <AlertDialog open={!!promover} onOpenChange={(o) => !o && setPromover(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Promover a issue</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            «{promover?.titulo}» vira uma issue no repo escolhido e o cartão fica
+                            ligado. Arrasta-o depois para Análise para o relay correr.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {reposLigados.length === 0 ? (
+                        <p className="text-sm text-destructive">
+                            Sem repos ligados — liga um em Definições &gt; módulo GitHub.
+                        </p>
+                    ) : (
+                        <Select value={repoEscolhido} onValueChange={setRepoEscolhido}>
+                            <SelectTrigger className="text-xs">
+                                <SelectValue placeholder="Escolhe o repo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {reposLigados.map((r) => (
+                                    <SelectItem key={r} value={r}>
+                                        {r}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmarPromover}
+                            disabled={!repoEscolhido || relayBusy}
+                        >
+                            {relayBusy ? 'A criar…' : 'Criar issue'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Retoma (chat-under-kanban): vê o trace na issue, comenta a correção e re-dispara. */}
+            <AlertDialog open={!!retomar} onOpenChange={(o) => !o && setRetomar(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Retomar {retomar?.tarefa.repoGithub} #{retomar?.tarefa.issueGithub}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Comenta a correção (vai para a issue como humano) e o relay retoma,
+                            relendo os comentários.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {retomar && retomar.comentarios.length > 0 && (
+                        <div className="max-h-40 space-y-2 overflow-y-auto rounded border p-2 text-xs">
+                            {retomar.comentarios.slice(-6).map((c, i) => (
+                                <p
+                                    key={i}
+                                    className="whitespace-pre-wrap border-b pb-1 last:border-0"
+                                >
+                                    {c.corpo.split('\n')[0]}
+                                </p>
+                            ))}
+                        </div>
+                    )}
+                    <Textarea
+                        value={retomar?.texto ?? ''}
+                        onChange={(e) =>
+                            setRetomar((r) => (r ? { ...r, texto: e.target.value } : r))
+                        }
+                        placeholder="A correção / o que falta…"
+                        className="h-24 text-xs"
+                    />
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmarRetomar}
+                            disabled={!retomar?.texto.trim() || relayBusy}
+                        >
+                            {relayBusy ? 'A retomar…' : 'Comentar e retomar'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {relayInfo && (
+                <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border bg-background px-3 py-2 text-xs shadow-md">
+                    {relayInfo}{' '}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 h-auto p-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setRelayInfo(null)}
+                    >
+                        ✕
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }

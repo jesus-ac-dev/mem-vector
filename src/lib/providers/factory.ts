@@ -741,7 +741,8 @@ export async function providerDoChatCom(db: SupabaseClient): Promise<{
                 !!defs.githubToken &&
                 defs.githubRepos.length > 0,
             githubToken: defs.githubToken,
-            githubRepos: defs.githubRepos,
+            // As tools de issue querem "owner/nome" — o path local não interessa aqui.
+            githubRepos: defs.githubRepos.map((r) => r.repo),
         };
     }
     // Sem defaults (#40, caminho a): sem provider ativo não se cai na conta da

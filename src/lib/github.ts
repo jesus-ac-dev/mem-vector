@@ -36,7 +36,11 @@ export interface IssueRef {
 export type GhOp =
     | { op: 'criar'; repo: string; title: string; body: string }
     | { op: 'ler'; repo: string; state?: 'open' | 'closed' | 'all'; limit?: number }
-    | { op: 'comentar'; repo: string; number: number; body: string };
+    | { op: 'comentar'; repo: string; number: number; body: string }
+    | { op: 'ver'; repo: string; number: number }
+    | { op: 'labels'; repo: string; number: number; add?: string[]; remove?: string[] }
+    | { op: 'label'; repo: string; name: string; color: string; description: string }
+    | { op: 'pr'; repo: string; base: string; head: string; title: string; body: string };
 
 /** Args do gh para cada operação (puro — o núcleo testável). */
 export function buildIssueArgs(o: GhOp): string[] {
@@ -59,6 +63,50 @@ export function buildIssueArgs(o: GhOp): string[] {
             ];
         case 'comentar':
             return ['issue', 'comment', String(o.number), '--repo', o.repo, '--body', o.body];
+        case 'ver':
+            return [
+                'issue',
+                'view',
+                String(o.number),
+                '--repo',
+                o.repo,
+                '--json',
+                'title,body,comments,labels',
+            ];
+        case 'labels': {
+            const args = ['issue', 'edit', String(o.number), '--repo', o.repo];
+            for (const l of o.add ?? []) args.push('--add-label', l);
+            for (const l of o.remove ?? []) args.push('--remove-label', l);
+            return args;
+        }
+        case 'label':
+            return [
+                'label',
+                'create',
+                o.name,
+                '--repo',
+                o.repo,
+                '--color',
+                o.color,
+                '--description',
+                o.description,
+                '--force',
+            ];
+        case 'pr':
+            return [
+                'pr',
+                'create',
+                '--repo',
+                o.repo,
+                '--base',
+                o.base,
+                '--head',
+                o.head,
+                '--title',
+                o.title,
+                '--body',
+                o.body,
+            ];
     }
 }
 
@@ -84,6 +132,12 @@ function corrGh(args: string[], token: string): Promise<string> {
 export function extrairUrl(out: string): string {
     const m = out.match(/https:\/\/github\.com\/\S+/);
     return m ? m[0] : out.trim();
+}
+
+/** O número da issue/PR do URL (.../issues/123 ou .../pull/123). null se não bate. */
+export function numeroDoUrl(url: string): number | null {
+    const m = url.match(/\/(?:issues|pull)\/(\d+)/);
+    return m ? Number(m[1]) : null;
 }
 
 export async function criarIssue(
@@ -126,4 +180,139 @@ export async function listarRepos(token: string): Promise<string[]> {
         .split(/\r?\n/)
         .map((s) => s.trim())
         .filter(Boolean);
+}
+
+// --- Import de projeto: o working copy LOCAL de um repo ligado --------------
+
+/** Args do `gh repo clone` (puro — testável). gh leva o GH_TOKEN no env. */
+export function buildCloneArgs(repo: string, path: string): string[] {
+    if (!REPO_RE.test(repo)) throw new Error(`repo inválido (usa owner/nome): ${repo}`);
+    if (!path.trim()) throw new Error('path local vazio');
+    return ['repo', 'clone', repo, path];
+}
+
+/** Args do `git -C <path> remote get-url origin` (o "test à dir", puro). */
+export function buildRemoteCheckArgs(path: string): string[] {
+    return ['-C', path, 'remote', 'get-url', 'origin'];
+}
+
+/** O origin do working copy "bate" com o repo ligado? Aceita https e ssh, com
+ *  ou sem `.git` (github.com/owner/nome ou git@github.com:owner/nome). */
+export function remoteBate(remoteUrl: string, repo: string): boolean {
+    const alvo = repo.toLowerCase();
+    const norm = remoteUrl
+        .trim()
+        .toLowerCase()
+        .replace(/\.git$/, '');
+    return norm.endsWith(`/${alvo}`) || norm.endsWith(`:${alvo}`);
+}
+
+/** Corre um binário e devolve código+saída SEM rejeitar em código !=0 (o
+ *  caller decide o que é falha — ex.: path sem repo não é exceção, é "testa
+ *  falhou"). O `error` (binário em falta) ainda rejeita. */
+function corrBin(
+    bin: string,
+    args: string[],
+    env: NodeJS.ProcessEnv = process.env,
+): Promise<{ code: number; out: string; err: string }> {
+    return new Promise((resolve, reject) => {
+        const ps = spawn(bin, args, { env });
+        let out = '';
+        let err = '';
+        ps.stdout.on('data', (d) => (out += String(d)));
+        ps.stderr.on('data', (d) => (err += String(d)));
+        ps.on('error', (e) => reject(new Error(`${bin} indisponível: ${e.message}`)));
+        ps.on('close', (code) => resolve({ code: code ?? -1, out: out.trim(), err: err.trim() }));
+    });
+}
+
+/** O "test à dir": o path local é um repo git com o origin a apontar ao repo? */
+export async function testarProjetoLocal(
+    path: string,
+    repo: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    if (!path.trim()) return { ok: false, detalhe: 'sem path local' };
+    let r: { code: number; out: string; err: string };
+    try {
+        r = await corrBin('git', buildRemoteCheckArgs(path));
+    } catch (e) {
+        return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+    }
+    if (r.code !== 0) return { ok: false, detalhe: 'não há repositório git neste path' };
+    if (!remoteBate(r.out, repo)) {
+        return { ok: false, detalhe: `origin aqui é ${r.out || '(vazio)'}, não ${repo}` };
+    }
+    return { ok: true, detalhe: 'projeto presente' };
+}
+
+/** Clona o repo para o path local com o token do user (GH_TOKEN). */
+export async function clonarProjeto(token: string, repo: string, path: string): Promise<void> {
+    const r = await corrBin('gh', buildCloneArgs(repo, path), buildGhEnv(token));
+    if (r.code !== 0) throw new Error(`clone falhou: ${r.err || r.out || `gh saiu ${r.code}`}`);
+}
+
+// --- Orchestrator do relay: a issue como trigger + estado -------------------
+
+/** Lê a issue (título + corpo + comentários + labels) — goal + retoma + estado. */
+export async function verIssue(
+    token: string,
+    p: { repo: string; number: number },
+): Promise<{
+    title: string;
+    body: string;
+    comentarios: { autor: string; corpo: string }[];
+    labels: string[];
+}> {
+    const out = await corrGh(buildIssueArgs({ op: 'ver', ...p }), token);
+    const j = JSON.parse(out) as {
+        title?: string;
+        body?: string;
+        comments?: { author?: { login?: string }; body?: string }[];
+        labels?: { name?: string }[];
+    };
+    return {
+        title: j.title ?? '',
+        body: j.body ?? '',
+        comentarios: (j.comments ?? []).map((c) => ({
+            autor: c.author?.login ?? '',
+            corpo: c.body ?? '',
+        })),
+        labels: (j.labels ?? []).map((l) => l.name ?? '').filter(Boolean),
+    };
+}
+
+/** O ramo default REAL do repo (não assumir "main" — há repos em "master"). */
+export async function ramoPrincipal(token: string, repo: string): Promise<string> {
+    const out = await corrGh(
+        ['repo', 'view', repo, '--json', 'defaultBranchRef', '-q', '.defaultBranchRef.name'],
+        token,
+    );
+    return out.trim() || 'main';
+}
+
+/** Move os semáforos/estado da issue por label (a vista kanban segue as labels). */
+export async function editarLabels(
+    token: string,
+    p: { repo: string; number: number; add?: string[]; remove?: string[] },
+): Promise<void> {
+    await corrGh(buildIssueArgs({ op: 'labels', ...p }), token);
+}
+
+/** Garante labels antes de as aplicar a issues; `--force` torna a operação idempotente. */
+export async function garantirLabels(
+    token: string,
+    repo: string,
+    labels: { name: string; color: string; description: string }[],
+): Promise<void> {
+    for (const label of labels) {
+        await corrGh(buildIssueArgs({ op: 'label', repo, ...label }), token);
+    }
+}
+
+/** Abre o PR do branch da issue (v1 sem auto-merge — pára para o smoke humano). */
+export async function criarPR(
+    token: string,
+    p: { repo: string; base: string; head: string; title: string; body: string },
+): Promise<string> {
+    return extrairUrl(await corrGh(buildIssueArgs({ op: 'pr', ...p }), token));
 }
