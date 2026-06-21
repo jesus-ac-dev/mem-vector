@@ -90,9 +90,11 @@ por-issue), e cada substep deixa rasto.
 - **Docs de volta no SaaS:** no verde, o orchestrator escreve uma **nota no projeto** (vectorizada) com
   a issue + o PR — não só os `docs/` do repo (`registarNoSaasCom`).
 - **Vista kanban ↔ labels:** o semáforo da issue espelha-se no cartão (`relay_estado`).
-- **Agregação fina:** any-rejeita move as rondas (uma objeção não é votada para fora); um **split**
-  (uns aprovam, outros objetam) que não converge chega ao humano rotulado **"SEM CONSENSO"** com os
-  dois lados — a adjudicação humana do kill-switch (NÃO maioria; adjudicador-agente fica p/ depois).
+- **Agregação fina:** os **N providers configurados debatem** nas rondas — any-rejeita move-as (uma
+  objeção não é votada para fora; um validador a apanhar um bug real não é silenciado). Se ao fim das
+  rondas (N, configurável por `maxRondas`) os N agentes **não chegam a consenso**, é "sem consenso" →
+  🔴 → **o humano decide** (a paragem do kill-switch). Um **split** (uns aprovam, outros objetam) chega
+  rotulado **"SEM CONSENSO"** com os dois lados. NÃO há maioria nem um 4.º agente a desempatar.
 - **Retoma cirúrgica:** o kill-switch grava a fase numa label `relay:fase:<c>`; o re-disparo recomeça
   **nessa fase** (não na Análise), reusando o goal da Análise dos comentários (`faseDeRetoma`/
   `goalDaAnalise`/`correrPipeline({desde, analiseInicial})`). Sem goal guardado → recomeça do início.
@@ -101,9 +103,7 @@ por-issue), e cada substep deixa rasto.
   relay no mesmo path). Resetar apagava-o (achado do Audit).
 
 **Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); um
-`Set` em memória trava disparos concorrentes no mesmo path (v1 single-process). Lock durável
-quando o relay for distribuído.
+`Set` em memória trava disparos concorrentes no mesmo path.
 
-**Falta (fora do v1):** **skills por fase reais** (do [[agent-skills-compare]] — hoje prompts inline);
-**adjudicador-agente** (3.º provider a desempatar splits sem chamar o humano); lock durável
-(distribuído); o **smoke vivo** end-to-end.
+**Falta:** **skills por fase reais** (do [[agent-skills-compare]] — hoje prompts inline); o
+**smoke vivo** end-to-end.

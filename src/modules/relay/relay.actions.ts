@@ -12,8 +12,7 @@ import { getTarefaCom, ligarIssueTarefaCom } from '@/modules/tarefas/tarefas.ser
 import { orquestrar } from './relay.orchestrator';
 
 // Lock de um-relay-por-repo (working copy partilhado): dois disparos no mesmo
-// path pisavam-se. Single-process self-hosted → um Set em memória chega para a
-// v1. (Quando o relay for distribuído, vira um lock durável.)
+// path pisavam-se. Um Set em memória trava o segundo até o primeiro terminar.
 const relaysAtivos = new Set<string>();
 
 type DefsValidadas =
