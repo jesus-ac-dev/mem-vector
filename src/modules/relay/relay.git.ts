@@ -89,3 +89,25 @@ export async function diffDoRepo(cwd: string): Promise<string> {
     const r = await correrGit(cwd, ['--no-pager', 'diff']);
     return r.stdout;
 }
+
+/** O comando de testes do repo (RELAY_TEST_CMD; default `npm test`). */
+export function comandoTestes(envValue = process.env.RELAY_TEST_CMD): string {
+    return envValue?.trim() || 'npm test';
+}
+
+/** Test-gate: corre a suite do repo no cwd. Vermelho aqui = devolver ao principal
+ *  ANTES de gastar o validador (espelha o pytest-gate do POC). Via shell para
+ *  aceitar comandos compostos (`npm test`, `pnpm -s test`, ...). */
+export function correrTestes(cwd: string): Promise<{ ok: boolean; output: string }> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(comandoTestes(), { cwd, env: process.env, shell: true });
+        let out = '';
+        child.stdout.on('data', (c: Buffer) => (out += c.toString()));
+        child.stderr.on('data', (c: Buffer) => (out += c.toString()));
+        child.on('error', (e: NodeJS.ErrnoException) =>
+            reject(new Error(`testes não arrancaram: ${e.message}`)),
+        );
+        // Cauda do output: o que interessa do fim (falhas) sem encher o comentário.
+        child.on('exit', (code) => resolve({ ok: code === 0, output: out.trim().slice(-2000) }));
+    });
+}

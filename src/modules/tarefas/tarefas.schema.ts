@@ -84,6 +84,9 @@ export interface Tarefa {
     dataFim: string | null; // AAAA-MM-DD
     criadaEm: string; // ISO
     concluidaEm: string | null; // ISO
+    // Relay: a issue de código a que o cartão está ligado (null = tarefa leve).
+    repoGithub: string | null;
+    issueGithub: number | null;
 }
 
 // Id curto à vista (#58, ideia do Carlos): o início do uuid identifica a

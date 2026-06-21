@@ -7,7 +7,7 @@ import { correrNoRepo, type RespostaRepo } from '@/lib/providers/escrita-no-repo
 import { comentarIssue, criarPR, editarLabels, ramoPrincipal, verIssue } from '@/lib/github';
 
 import { construirHandoff } from './relay.handoff';
-import { abrirBranch, commitPush, diffDoRepo, nomeBranch } from './relay.git';
+import { abrirBranch, commitPush, correrTestes, diffDoRepo, nomeBranch } from './relay.git';
 import { correrPipeline, type ResultadoPipeline } from './relay.pipeline';
 import { resolverCruzamento } from './relay.resolver';
 import { correrCruzamento, parseVeredito, type ResultadoCruzamento } from './relay.runner';
@@ -93,6 +93,9 @@ export interface IoOrquestrador {
     criarPR(p: { head: string; title: string; body: string }): Promise<string>;
     // Corre o provider DENTRO do repo (escrever=true principal, false validador).
     correr(provider: Provider, prompt: string, escrever: boolean): Promise<RespostaRepo>;
+    // Test-gate opcional: corre a suite do repo (vermelho = devolve ao principal
+    // antes de gastar o validador). Ausente = sem gate (só validação por LLM).
+    testar?(): Promise<{ ok: boolean; output: string }>;
 }
 
 export type ResultadoOrquestracao =
@@ -139,6 +142,21 @@ export async function orquestrarCruzamentoCom(opts: {
             validadores.length === 0
                 ? null
                 : async (output) => {
+                      // Test-gate (cruzamentos de escrita): a suite do repo é o juiz
+                      // objetivo antes do validador-LLM. Vermelho = devolve já ao
+                      // principal com o output dos testes (não gasta o validador).
+                      if (escreve && io.testar) {
+                          const t = await io.testar();
+                          await io.comentar(
+                              `— Testes · gate · ${cruzamento} · ronda ${ronda}\n\n` +
+                                  (t.ok
+                                      ? '✅ suite verde'
+                                      : `❌ suite vermelha:\n\n\`\`\`\n${t.output}\n\`\`\``),
+                          );
+                          if (!t.ok) {
+                              return { ok: false, feedback: `Testes vermelhos:\n${t.output}` };
+                          }
+                      }
                       // Execução valida o DIFF (o que se escreveu); análise/auditoria
                       // validam o OUTPUT (o texto produzido).
                       const referencia = escreve ? await io.diff() : output;
@@ -267,6 +285,7 @@ export function construirIo(opts: {
             }),
         abrirBranch: (branch) => abrirBranch(cwd, branch, base, token),
         diff: () => diffDoRepo(cwd),
+        testar: () => correrTestes(cwd),
         commitPush: (branch, mensagem) => commitPush(cwd, branch, mensagem, token),
         criarPR: (p) => criarPR(token, { repo, base, head: p.head, title: p.title, body: p.body }),
         correr: (provider, prompt, escrever) => {

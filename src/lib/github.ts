@@ -120,6 +120,12 @@ export function extrairUrl(out: string): string {
     return m ? m[0] : out.trim();
 }
 
+/** O número da issue/PR do URL (.../issues/123 ou .../pull/123). null se não bate. */
+export function numeroDoUrl(url: string): number | null {
+    const m = url.match(/\/(?:issues|pull)\/(\d+)/);
+    return m ? Number(m[1]) : null;
+}
+
 export async function criarIssue(
     token: string,
     p: { repo: string; title: string; body: string },

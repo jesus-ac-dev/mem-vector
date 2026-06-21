@@ -138,6 +138,28 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
         ).toBe(true);
     });
 
+    it('test-gate: suite vermelha rejeita ANTES do validador LLM (não o corre)', async () => {
+        const validadorCorrido = vi.fn();
+        const { io } = fakeIo({
+            testar: vi.fn(async () => ({ ok: false, output: 'FAIL x.test' })),
+            correr: vi.fn(async (_provider: Provider, _p: string, escrever: boolean) => {
+                if (!escrever) validadorCorrido();
+                return resp(escrever ? 'escrevi' : 'APROVADO');
+            }),
+        });
+        const r = await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: ['claude'],
+            maxRondas: 1,
+            io,
+        });
+        expect(r.validado).toBe(false);
+        // O validador LLM nunca correu — o gate dos testes barrou antes.
+        expect(validadorCorrido).not.toHaveBeenCalled();
+    });
+
     it('analise: read-only (principal escrever=false), valida o output', async () => {
         const { corridas } = await (async () => {
             const f = fakeIo();

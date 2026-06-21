@@ -62,19 +62,28 @@ por-issue), e cada substep deixa rasto.
   --permission-mode acceptEdits` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
   Só modo `cli` escreve (api → erro). Bypass do sandbox por env em kernels onde o bwrap rebenta.
 - **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; ramo default REAL (não assume
-  `main`); push com o `GH_TOKEN` do user.
+  `main`); push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default
+  `npm test`): a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
-- **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (semáforos)/`criarPR`/`ramoPrincipal`.
+- **`relay.actions.ts`** — `dispararRelay` (trigger, com **lock** de um-relay-por-repo) ·
+  `promoverTarefa` (cartão→issue) · `comentarERetomar` (retoma) · `lerComentariosRelay`.
+- **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (semáforos)/`criarPR`/`ramoPrincipal`/`numeroDoUrl`.
 
 **Semáforos** (labels): `relay:🟠` processa · `relay:🔴` bloqueado · `relay:🟢` pronto.
 
-**Trigger na UI:** página do módulo GitHub (Definições) — por repo preparado, nº da issue +
-**⚡ Disparar relay**. Acompanha-se na issue (comentários + semáforos).
+## Trigger no kanban (2026-06-21) — o fluxo do Carlos
 
-**Um relay de cada vez por repo:** o working copy é partilhado — dois disparos concorrentes no
-mesmo path pisavam-se (`checkout -B` + `add -A`). v1 é manual/single-operator (um de cada vez);
-um lock por repo entra quando o relay for autónomo.
+- **Promoção** (cartão→issue): num cartão de Backlog, **⤴ promover a issue** cria a issue do
+  título+descrição e liga o cartão (`tarefas.repo_github`/`issue_github`).
+- **Arrastar Backlog→Análise** dispara o relay para a issue ligada (cartões leves só mudam de coluna).
+- **Retoma** (chat-under-kanban): num cartão ligado, **↻ retomar** mostra os comentários da issue +
+  caixa de correção → comenta como humano e re-dispara (o `montarSpec` relê e integra).
+- Disparo alternativo direto: página do módulo GitHub (Definições) — repo + nº da issue + **⚡ Disparar**.
+- O estado vive na issue (handoffs + semáforos); a UI só dispara e segue-se no GitHub.
 
-**Falta (próximas fatias):** trigger por **arrastar** Backlog→Análise no kanban (precisa do link
-card↔issue da promoção assistida); o **test-gate externo** (correr a suite do repo entre rondas);
-a retoma com **chat-under-kanban** (UI de grill sobre os comentários). Smoke vivo por fazer.
+**Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); um
+`Set` em memória trava disparos concorrentes no mesmo path (v1 single-process). Lock durável
+quando o relay for distribuído.
+
+**Falta:** a promoção **proativa** pelo agente no chat (propõe→confirma — hoje a promoção é o
+botão do cartão); o smoke vivo end-to-end.

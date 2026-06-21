@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildBranchArgs, buildCommitPushArgs, INTERN_NOME, nomeBranch } from './relay.git';
+import {
+    buildBranchArgs,
+    buildCommitPushArgs,
+    comandoTestes,
+    INTERN_NOME,
+    nomeBranch,
+} from './relay.git';
 
 describe('nomeBranch', () => {
     it('feat/issue-N (Intern Rule)', () => {
@@ -24,5 +30,14 @@ describe('buildCommitPushArgs', () => {
         expect(seq[0]).toEqual(['add', '-A']);
         expect(seq[1]).toEqual(['commit', '-m', 'feat: x']);
         expect(seq[2]).toEqual(['push', '-u', 'origin', 'feat/issue-1']);
+    });
+});
+
+describe('comandoTestes', () => {
+    it('default = npm test', () => {
+        expect(comandoTestes(undefined)).toBe('npm test');
+    });
+    it('respeita o RELAY_TEST_CMD', () => {
+        expect(comandoTestes('pnpm -s test')).toBe('pnpm -s test');
     });
 });

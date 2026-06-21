@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCloneArgs, buildIssueArgs, buildRemoteCheckArgs, remoteBate } from './github';
+import {
+    buildCloneArgs,
+    buildIssueArgs,
+    buildRemoteCheckArgs,
+    numeroDoUrl,
+    remoteBate,
+} from './github';
 
 describe('buildCloneArgs', () => {
     it('monta o gh repo clone repo path', () => {
@@ -86,5 +92,17 @@ describe('buildIssueArgs (orchestrator: ver/labels/pr)', () => {
         expect(a.slice(0, 4)).toEqual(['pr', 'create', '--repo', 'o/r']);
         expect(a[a.indexOf('--head') + 1]).toBe('feat/issue-5');
         expect(a[a.indexOf('--base') + 1]).toBe('main');
+    });
+});
+
+describe('numeroDoUrl', () => {
+    it('tira o número de uma issue', () => {
+        expect(numeroDoUrl('https://github.com/o/r/issues/123')).toBe(123);
+    });
+    it('tira o número de um PR', () => {
+        expect(numeroDoUrl('https://github.com/o/r/pull/7')).toBe(7);
+    });
+    it('null quando não bate', () => {
+        expect(numeroDoUrl('https://github.com/o/r')).toBeNull();
     });
 });

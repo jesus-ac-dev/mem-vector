@@ -23,7 +23,7 @@ export interface PainelTarefas {
 
 // #47: o projeto é um FK real; o nome vem por join (display/serializar).
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em';
+    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github';
 
 interface TarefaRow {
     id: string;
@@ -37,6 +37,8 @@ interface TarefaRow {
     data_fim: string | null;
     created_at: string;
     concluida_em: string | null;
+    repo_github: string | null;
+    issue_github: number | null;
 }
 
 function toTarefa(r: TarefaRow): Tarefa {
@@ -52,7 +54,32 @@ function toTarefa(r: TarefaRow): Tarefa {
         dataFim: r.data_fim,
         criadaEm: r.created_at,
         concluidaEm: r.concluida_em,
+        repoGithub: r.repo_github,
+        issueGithub: r.issue_github,
     };
+}
+
+// Liga o cartão a uma issue (a promoção): grava repo + número. Só o dono (RLS).
+export async function ligarIssueTarefaCom(
+    db: SupabaseClient,
+    id: string,
+    repo: string,
+    issue: number,
+): Promise<Tarefa> {
+    const { data, error } = await db
+        .from('tarefas')
+        .update({ repo_github: repo, issue_github: issue })
+        .eq('id', id)
+        .select(COLUNAS)
+        .single();
+    if (error || !data) throw new Error(`ligar issue à tarefa falhou: ${error?.message ?? '?'}`);
+    return toTarefa(data as unknown as TarefaRow);
+}
+
+export async function getTarefaCom(db: SupabaseClient, id: string): Promise<Tarefa | null> {
+    const { data, error } = await db.from('tarefas').select(COLUNAS).eq('id', id).maybeSingle();
+    if (error) throw new Error(`ler tarefa falhou: ${error.message}`);
+    return data ? toTarefa(data as unknown as TarefaRow) : null;
 }
 
 export async function listarTarefasAbertasCom(db: SupabaseClient): Promise<Tarefa[]> {
