@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { expandirHome } from '@/lib/paths';
+
 // M7: transporte GitHub do agente via gh CLI (requisito declarado no README). O
 // token do user vai por GH_TOKEN no env do subprocesso — sobrepõe-se ao gh auth
 // do host, por isso age como a conta do user do SaaS (passa o fresh-pc-test). O
@@ -234,7 +236,7 @@ export async function testarProjetoLocal(
     if (!path.trim()) return { ok: false, detalhe: 'sem path local' };
     let r: { code: number; out: string; err: string };
     try {
-        r = await corrBin('git', buildRemoteCheckArgs(path));
+        r = await corrBin('git', buildRemoteCheckArgs(expandirHome(path)));
     } catch (e) {
         return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
     }
@@ -247,7 +249,7 @@ export async function testarProjetoLocal(
 
 /** Clona o repo para o path local com o token do user (GH_TOKEN). */
 export async function clonarProjeto(token: string, repo: string, path: string): Promise<void> {
-    const r = await corrBin('gh', buildCloneArgs(repo, path), buildGhEnv(token));
+    const r = await corrBin('gh', buildCloneArgs(repo, expandirHome(path)), buildGhEnv(token));
     if (r.code !== 0) throw new Error(`clone falhou: ${r.err || r.out || `gh saiu ${r.code}`}`);
 }
 

@@ -1,6 +1,11 @@
 'use client';
 
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+// Refresh leve do workspace pedido de FORA da árvore (ex.: o modal de Definições
+// após importar um projeto) — dispara este evento e o provider invalida o
+// explorer/sidebar/grafo sem reload manual.
+export const WORKSPACE_MUDOU_EVENT = 'memvector:workspace-mudou';
 
 // ──────────────────────────────────────────────
 // Shape do ficheiro aberto (uma tab no editor)
@@ -47,6 +52,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [chatAberto, setChatAberto] = useState(true);
     const [conversaAberta, setConversaAberta] = useState<string | null>(null);
     const [workspaceVersion, setWorkspaceVersion] = useState(0);
+
+    // Ouve o pedido de refresh de fora da árvore (ex.: import de projeto no modal).
+    useEffect(() => {
+        const refrescar = () => setWorkspaceVersion((v) => v + 1);
+        window.addEventListener(WORKSPACE_MUDOU_EVENT, refrescar);
+        return () => window.removeEventListener(WORKSPACE_MUDOU_EVENT, refrescar);
+    }, []);
 
     function abrirFicheiro(f: FicheiroAberto) {
         // Mesma entidade aberta por chaves diferentes não duplica tab: a daily

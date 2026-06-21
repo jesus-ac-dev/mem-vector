@@ -17,6 +17,7 @@ import {
     verIssue,
 } from '@/lib/github';
 import { blocoKernelCom } from '@/agent/kernel';
+import { expandirHome } from '@/lib/paths';
 import { atualizarRelayEstadoPorIssueCom } from '@/modules/tarefas/tarefas.service';
 import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
 import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
@@ -540,7 +541,7 @@ export async function orquestrar(opts: {
             `Repo "${repo}" sem path local — define-o e corre o Testar nas Definições.`,
         );
     }
-    const cwd = ligado.path;
+    const cwd = expandirHome(ligado.path);
 
     // O ramo default REAL (não assumir "main": o próprio mem-vector está em "master").
     const base = await ramoPrincipal(token, repo);

@@ -29,13 +29,19 @@ describe('construirNotaResumo', () => {
         expect(n.content_md).toContain('(por definir)');
     });
 
-    it('usa o resumo dado como corpo e summary quando existe', () => {
-        const n = construirNotaResumo({ repo: 'o/r', resumo: 'Faz X e Y.' });
-        expect(n.content_md).toContain('Faz X e Y.');
-        expect(n.summary).toBe('Faz X e Y.');
+    it('tags = #projeto + #<nome-curto>', () => {
+        const n = construirNotaResumo({ repo: 'jesus-ac-dev/crmcredito' });
+        expect(n.tags).toEqual(['projeto', 'crmcredito']);
     });
 
-    it('sem resumo, deixa placeholder e um summary derivado do repo', () => {
+    it('usa o README como corpo; summary = 1ª linha de conteúdo (sem #/badges)', () => {
+        const readme = '# crmcredito\n\n![badge](x)\n\nMediação de crédito para imobiliárias.';
+        const n = construirNotaResumo({ repo: 'o/crmcredito', readme });
+        expect(n.content_md).toContain('Mediação de crédito para imobiliárias.');
+        expect(n.summary).toBe('Mediação de crédito para imobiliárias.');
+    });
+
+    it('sem README, deixa placeholder e um summary derivado do repo', () => {
         const n = construirNotaResumo({ repo: 'o/r' });
         expect(n.content_md).toContain('Resumo do projeto por preencher');
         expect(n.summary).toContain('o/r');
