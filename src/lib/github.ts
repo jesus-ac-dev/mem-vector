@@ -127,3 +127,72 @@ export async function listarRepos(token: string): Promise<string[]> {
         .map((s) => s.trim())
         .filter(Boolean);
 }
+
+// --- Import de projeto: o working copy LOCAL de um repo ligado --------------
+
+/** Args do `gh repo clone` (puro — testável). gh leva o GH_TOKEN no env. */
+export function buildCloneArgs(repo: string, path: string): string[] {
+    if (!REPO_RE.test(repo)) throw new Error(`repo inválido (usa owner/nome): ${repo}`);
+    if (!path.trim()) throw new Error('path local vazio');
+    return ['repo', 'clone', repo, path];
+}
+
+/** Args do `git -C <path> remote get-url origin` (o "test à dir", puro). */
+export function buildRemoteCheckArgs(path: string): string[] {
+    return ['-C', path, 'remote', 'get-url', 'origin'];
+}
+
+/** O origin do working copy "bate" com o repo ligado? Aceita https e ssh, com
+ *  ou sem `.git` (github.com/owner/nome ou git@github.com:owner/nome). */
+export function remoteBate(remoteUrl: string, repo: string): boolean {
+    const alvo = repo.toLowerCase();
+    const norm = remoteUrl
+        .trim()
+        .toLowerCase()
+        .replace(/\.git$/, '');
+    return norm.endsWith(`/${alvo}`) || norm.endsWith(`:${alvo}`);
+}
+
+/** Corre um binário e devolve código+saída SEM rejeitar em código !=0 (o
+ *  caller decide o que é falha — ex.: path sem repo não é exceção, é "testa
+ *  falhou"). O `error` (binário em falta) ainda rejeita. */
+function corrBin(
+    bin: string,
+    args: string[],
+    env: NodeJS.ProcessEnv = process.env,
+): Promise<{ code: number; out: string; err: string }> {
+    return new Promise((resolve, reject) => {
+        const ps = spawn(bin, args, { env });
+        let out = '';
+        let err = '';
+        ps.stdout.on('data', (d) => (out += String(d)));
+        ps.stderr.on('data', (d) => (err += String(d)));
+        ps.on('error', (e) => reject(new Error(`${bin} indisponível: ${e.message}`)));
+        ps.on('close', (code) => resolve({ code: code ?? -1, out: out.trim(), err: err.trim() }));
+    });
+}
+
+/** O "test à dir": o path local é um repo git com o origin a apontar ao repo? */
+export async function testarProjetoLocal(
+    path: string,
+    repo: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    if (!path.trim()) return { ok: false, detalhe: 'sem path local' };
+    let r: { code: number; out: string; err: string };
+    try {
+        r = await corrBin('git', buildRemoteCheckArgs(path));
+    } catch (e) {
+        return { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
+    }
+    if (r.code !== 0) return { ok: false, detalhe: 'não há repositório git neste path' };
+    if (!remoteBate(r.out, repo)) {
+        return { ok: false, detalhe: `origin aqui é ${r.out || '(vazio)'}, não ${repo}` };
+    }
+    return { ok: true, detalhe: 'projeto presente' };
+}
+
+/** Clona o repo para o path local com o token do user (GH_TOKEN). */
+export async function clonarProjeto(token: string, repo: string, path: string): Promise<void> {
+    const r = await corrBin('gh', buildCloneArgs(repo, path), buildGhEnv(token));
+    if (r.code !== 0) throw new Error(`clone falhou: ${r.err || r.out || `gh saiu ${r.code}`}`);
+}

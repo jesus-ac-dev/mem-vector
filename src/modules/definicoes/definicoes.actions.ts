@@ -14,7 +14,8 @@ import {
     lerDefinicoesServidorCom,
 } from './definicoes.service';
 import { criarProvider } from '@/lib/providers/factory';
-import { validarToken, listarRepos } from '@/lib/github';
+import { validarToken, listarRepos, testarProjetoLocal, clonarProjeto } from '@/lib/github';
+import { importarProjetoCom } from '@/modules/projeto-importado/projeto-importado.service';
 import { createClient } from '@/lib/supabase/server';
 
 // As actions devolvem SEMPRE a vista (keys mascaradas) — a key real nunca
@@ -91,6 +92,44 @@ export async function listarReposGithub(tokenPendente?: string): Promise<string[
     const token = await tokenGithub(tokenPendente);
     if (!token) return [];
     return listarRepos(token);
+}
+
+// O "test à dir": o working copy do repo está no path local (origin certo)?
+// Sem token — é git local puro.
+export async function testarProjeto(
+    repo: string,
+    path: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    return testarProjetoLocal(path, repo);
+}
+
+// Clona o repo para o path local (quando o teste falhou) com o token do user.
+export async function clonarProjetoGithub(
+    repo: string,
+    path: string,
+    tokenPendente?: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    const token = await tokenGithub(tokenPendente);
+    if (!token) return { ok: false, detalhe: 'Sem token.' };
+    try {
+        await clonarProjeto(token, repo, path);
+        return { ok: true, detalhe: 'clonado' };
+    } catch (e) {
+        return { ok: false, detalhe: e instanceof Error ? e.message : 'clone falhou' };
+    }
+}
+
+// Importa o projeto para o vault: pasta + nota de resumo vectorizada (RAG + wikilinks).
+export async function importarProjeto(
+    repo: string,
+    path?: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    try {
+        await importarProjetoCom(await createClient(), { repo, path });
+        return { ok: true, detalhe: 'importado' };
+    } catch (e) {
+        return { ok: false, detalhe: e instanceof Error ? e.message : 'import falhou' };
+    }
 }
 
 // A ESCOLHA do chat (mini-modal, r13): cirúrgica — nunca regrava o que a

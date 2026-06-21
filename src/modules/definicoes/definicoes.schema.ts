@@ -155,7 +155,7 @@ export interface DefinicoesVista {
     // M7: connection GitHub — o token nunca volta ao browser (só máscara).
     githubTemToken: boolean;
     githubKeySufixo?: string;
-    githubRepos: string[];
+    githubRepos: RepoLigado[];
     cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
@@ -179,7 +179,7 @@ export interface DefinicoesServidor {
     webKey?: string; // #45: decifrada, p/ a pesquisa web; nunca serializada p/ fora
     comportamento?: string; // #122: injetado no prompt do agente a seguir ao Kernel
     githubToken?: string; // M7: decifrado, vira o GH_TOKEN do subprocesso; nunca serializado p/ fora
-    githubRepos: string[]; // M7: repos ligados ("owner/nome")
+    githubRepos: RepoLigado[]; // M7: repos ligados (repo + path local)
     cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
@@ -240,6 +240,17 @@ const CruzamentosSchema = z.object({
 });
 export type Cruzamentos = z.infer<typeof CruzamentosSchema>;
 
+// M7 import: um repo ligado tem um path LOCAL opcional — onde está (ou se quer)
+// o working copy. Strings legadas ("owner/nome") sobem para { repo } (compat).
+export const RepoLigadoSchema = z.preprocess(
+    (v) => (typeof v === 'string' ? { repo: v } : v),
+    z.object({
+        repo: z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'usa o formato owner/nome'),
+        path: z.string().trim().max(500).optional(),
+    }),
+);
+export type RepoLigado = z.infer<typeof RepoLigadoSchema>;
+
 // Input de gravação (a porta valida isto).
 export const DefinicoesSchema = z.object({
     metodoDestilacao: z.enum(METODOS_DESTILACAO).default('one-shot'),
@@ -262,11 +273,9 @@ export const DefinicoesSchema = z.object({
     // undefined = manter a cifrada; '' = limpar; string = cifrar. Decifrado vira
     // o GH_TOKEN do subprocesso gh (a conta do user do SaaS, não o gh do host).
     githubToken: z.string().optional(),
-    // Repos ligados que o agente pode usar ("owner/nome"); não são segredo.
-    githubRepos: z
-        .array(z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'usa o formato owner/nome'))
-        .max(50)
-        .optional(),
+    // Repos ligados que o agente pode usar; cada um com path local opcional
+    // (onde está / se quer o working copy). Não são segredo.
+    githubRepos: z.array(RepoLigadoSchema).max(50).optional(),
     // Relay (módulo de dev): o mapa cruzamento→provider — config, não código.
     cruzamentos: CruzamentosSchema.optional(),
     agentes: AgentesSchema,

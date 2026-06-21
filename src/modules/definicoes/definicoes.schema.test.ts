@@ -28,14 +28,20 @@ describe('DefinicoesSchema github (M7)', () => {
         expect(d.githubRepos).toBeUndefined();
     });
 
-    it('aceita repos no formato owner/nome e o token como string', () => {
+    it('strings legadas "owner/nome" sobem para { repo }; aceita { repo, path }', () => {
         const d = DefinicoesSchema.parse({
             agentes: {},
             githubToken: 'github_pat_x',
-            githubRepos: ['jesus-ac-dev/mem-vector', 'org/repo'],
+            githubRepos: [
+                'jesus-ac-dev/mem-vector',
+                { repo: 'org/repo', path: '/home/x/src/repo' },
+            ],
         });
         expect(d.githubToken).toBe('github_pat_x');
-        expect(d.githubRepos).toEqual(['jesus-ac-dev/mem-vector', 'org/repo']);
+        expect(d.githubRepos).toEqual([
+            { repo: 'jesus-ac-dev/mem-vector' },
+            { repo: 'org/repo', path: '/home/x/src/repo' },
+        ]);
     });
 
     it('rejeita repos malformados (sem barra ou com espaço)', () => {

@@ -28,6 +28,9 @@ import {
     testarProvider,
     testarGithub,
     listarReposGithub,
+    testarProjeto,
+    clonarProjetoGithub,
+    importarProjeto,
 } from '@/modules/definicoes/definicoes.actions';
 import { getJson } from '@/lib/api-get';
 import {
@@ -112,6 +115,10 @@ export function DefinicoesModal({
     // M7 connection: resultado do "Testar ligação" + repos do user (picker).
     const [testeGithub, setTesteGithub] = useState<null | { ok: boolean; detalhe: string }>(null);
     const [reposDisponiveis, setReposDisponiveis] = useState<string[] | null>(null);
+    // Estado por-repo do "test à dir" (testar → clonar → importar).
+    const [testesProjeto, setTestesProjeto] = useState<
+        Record<string, { ok: boolean; detalhe: string } | 'a-correr'>
+    >({});
     const [carregandoRepos, setCarregandoRepos] = useState(false);
     const [testes, setTestes] = useState<
         Partial<Record<Provider, 'a-testar' | { ok: boolean; detalhe: string }>>
@@ -219,9 +226,44 @@ export function DefinicoesModal({
 
     function toggleRepo(r: string, on: boolean) {
         const repos = on
-            ? [...new Set([...defs.githubRepos, r])]
-            : defs.githubRepos.filter((x) => x !== r);
+            ? defs.githubRepos.some((x) => x.repo === r)
+                ? defs.githubRepos
+                : [...defs.githubRepos, { repo: r }]
+            : defs.githubRepos.filter((x) => x.repo !== r);
         editar({ ...defs, githubRepos: repos });
+    }
+
+    // Path local do working copy de um repo ligado (vazio = por definir).
+    function setPathRepo(r: string, path: string) {
+        const repos = defs.githubRepos.map((x) =>
+            x.repo === r ? { ...x, path: path.trim() || undefined } : x,
+        );
+        editar({ ...defs, githubRepos: repos });
+    }
+
+    // O "test à dir": confirma o working copy no path; se falhar (e há path),
+    // clona para lá; com o projeto presente, importa-o (pasta + nota de resumo
+    // vectorizada no explorer). É a porta entre o repo ligado e o vault.
+    async function prepararProjeto(r: string) {
+        const path = defs.githubRepos.find((x) => x.repo === r)?.path?.trim() ?? '';
+        if (!path) {
+            setTestesProjeto((t) => ({
+                ...t,
+                [r]: { ok: false, detalhe: 'Define o path local.' },
+            }));
+            return;
+        }
+        setTestesProjeto((t) => ({ ...t, [r]: 'a-correr' }));
+        let res = await testarProjeto(r, path);
+        if (!res.ok) {
+            const cl = await clonarProjetoGithub(r, path, githubTokenNova);
+            res = cl.ok ? await testarProjeto(r, path) : cl;
+        }
+        if (res.ok) {
+            const imp = await importarProjeto(r, path);
+            res = imp.ok ? { ok: true, detalhe: 'Projeto pronto e importado.' } : imp;
+        }
+        setTestesProjeto((t) => ({ ...t, [r]: res }));
     }
 
     // "Testar ligação": valida o token no GitHub e, em SUCESSO, guarda (não "guardar e rezar").
@@ -945,22 +987,76 @@ export function DefinicoesModal({
                                                 </p>
                                             ) : (
                                                 <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-md border p-2">
-                                                    {reposDisponiveis.map((r) => (
-                                                        <label
-                                                            key={r}
-                                                            className="flex items-center gap-2 text-xs"
-                                                        >
-                                                            <Checkbox
-                                                                checked={defs.githubRepos.includes(
-                                                                    r,
+                                                    {reposDisponiveis.map((r) => {
+                                                        const ligado = defs.githubRepos.find(
+                                                            (x) => x.repo === r,
+                                                        );
+                                                        const tp = testesProjeto[r];
+                                                        return (
+                                                            <div key={r} className="space-y-1">
+                                                                <label className="flex items-center gap-2 text-xs">
+                                                                    <Checkbox
+                                                                        checked={Boolean(ligado)}
+                                                                        onCheckedChange={(on) =>
+                                                                            toggleRepo(
+                                                                                r,
+                                                                                on === true,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <span className="font-mono">
+                                                                        {r}
+                                                                    </span>
+                                                                </label>
+                                                                {ligado && (
+                                                                    <div className="flex items-center gap-2 pl-6">
+                                                                        <Input
+                                                                            value={
+                                                                                ligado.path ?? ''
+                                                                            }
+                                                                            onChange={(e) =>
+                                                                                setPathRepo(
+                                                                                    r,
+                                                                                    e.target.value,
+                                                                                )
+                                                                            }
+                                                                            placeholder="path local (ex: ~/src/nome)"
+                                                                            className="h-7 flex-1 text-xs"
+                                                                        />
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() =>
+                                                                                void prepararProjeto(
+                                                                                    r,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                tp === 'a-correr'
+                                                                            }
+                                                                            className="h-7 text-xs"
+                                                                        >
+                                                                            {tp === 'a-correr'
+                                                                                ? 'A preparar…'
+                                                                                : 'Testar'}
+                                                                        </Button>
+                                                                    </div>
                                                                 )}
-                                                                onCheckedChange={(on) =>
-                                                                    toggleRepo(r, on === true)
-                                                                }
-                                                            />
-                                                            <span className="font-mono">{r}</span>
-                                                        </label>
-                                                    ))}
+                                                                {ligado &&
+                                                                    tp &&
+                                                                    tp !== 'a-correr' && (
+                                                                        <p
+                                                                            className={cn(
+                                                                                'pl-6 text-xs',
+                                                                                corTeste(tp.ok),
+                                                                            )}
+                                                                        >
+                                                                            {tp.detalhe}
+                                                                        </p>
+                                                                    )}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
