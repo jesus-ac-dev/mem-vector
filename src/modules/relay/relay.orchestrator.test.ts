@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Provider } from '@/modules/definicoes/definicoes.schema';
+import type { Cruzamento, Provider } from '@/modules/definicoes/definicoes.schema';
 import type { RespostaRepo } from '@/lib/providers/escrita-no-repo';
+import type { ResultadoCruzamento } from './relay.runner';
 
 import {
-    orquestrarDevCom,
-    promptDevPrincipal,
+    montarSpec,
+    orquestrarCom,
+    orquestrarCruzamentoCom,
+    promptPrincipal,
     type IoOrquestrador,
     type Semaforo,
 } from './relay.orchestrator';
@@ -14,7 +17,6 @@ function resp(text: string): RespostaRepo {
     return { text, costUsd: 0, costIsEstimate: true };
 }
 
-// Fake da IO: regista comentários, semáforos, PR e as corridas dos providers.
 function fakeIo(over: Partial<IoOrquestrador> = {}) {
     const comentarios: string[] = [];
     const semaforos: Semaforo[] = [];
@@ -35,82 +37,148 @@ function fakeIo(over: Partial<IoOrquestrador> = {}) {
     return { io, comentarios, semaforos, corridas };
 }
 
-describe('orquestrarDevCom — verde', () => {
-    it('abre branch, posta handoff por substep, e no verde faz PR sem auto-merge', async () => {
-        const { io, comentarios, semaforos, corridas } = fakeIo();
-        const out = await orquestrarDevCom({
+const okCruzamento: ResultadoCruzamento = {
+    output: 'feito',
+    rondas: 1,
+    validado: true,
+    historico: [{ ronda: 1, output: 'feito' }],
+};
+
+describe('orquestrarCom — pipeline verde', () => {
+    it('abre branch, corre os cruzamentos, e no verde com código faz PR (sem auto-merge)', async () => {
+        const { io, comentarios, semaforos } = fakeIo();
+        const ordem: Cruzamento[] = [];
+        const out = await orquestrarCom({
             issue: 42,
-            spec: 'Implementa X',
-            cfg: { principal: 'codex', validadores: ['claude'], maxRondas: 3 },
+            spec: 's',
+            defs: { cruzamentos: { analise: {}, dev: {} } } as never,
             io,
+            executarCruzamento: async (c) => {
+                ordem.push(c);
+                return okCruzamento;
+            },
         });
 
-        expect(out.estado).toBe('pr-aberto');
-        if (out.estado === 'pr-aberto') expect(out.prUrl).toContain('/pull/9');
-
-        // Branch da Intern Rule aberto antes de produzir.
+        expect(out).toEqual({ estado: 'pr-aberto', prUrl: 'https://github.com/o/r/pull/9' });
         expect(io.abrirBranch).toHaveBeenCalledWith('feat/issue-42');
+        // Estrela: análise antes da execução.
+        expect(ordem).toEqual(['analise', 'dev']);
+        expect(semaforos).toEqual(['processando', 'pronto']);
+        expect(io.commitPush).toHaveBeenCalledTimes(1);
+        expect(comentarios.some((c) => c.includes('🟢'))).toBe(true);
+    });
 
-        // Substeps: principal escreve (escrever=true), validador valida (false).
+    it('verde mas sem diff (análise/auditoria-só) não abre PR', async () => {
+        const { io } = fakeIo({ diff: vi.fn(async () => '   ') });
+        const out = await orquestrarCom({
+            issue: 1,
+            spec: 's',
+            defs: { cruzamentos: { analise: {} } } as never,
+            io,
+            executarCruzamento: async () => okCruzamento,
+        });
+        expect(out).toEqual({ estado: 'pronto' });
+        expect(io.criarPR).not.toHaveBeenCalled();
+    });
+});
+
+describe('orquestrarCom — kill-switch', () => {
+    it('um cruzamento que não valida → 🔴 bloqueado, sem PR', async () => {
+        const { io, comentarios, semaforos } = fakeIo();
+        const out = await orquestrarCom({
+            issue: 7,
+            spec: 's',
+            defs: { cruzamentos: { analise: {}, dev: {} } } as never,
+            io,
+            executarCruzamento: async (c) =>
+                c === 'dev'
+                    ? {
+                          output: 'x',
+                          rondas: 2,
+                          validado: false,
+                          historico: [
+                              {
+                                  ronda: 2,
+                                  output: 'x',
+                                  veredito: { ok: false, feedback: 'falta o teste' },
+                              },
+                          ],
+                      }
+                    : okCruzamento,
+        });
+        expect(out).toEqual({ estado: 'bloqueado', cruzamento: 'dev' });
+        expect(io.criarPR).not.toHaveBeenCalled();
+        expect(io.commitPush).not.toHaveBeenCalled();
+        expect(semaforos).toEqual(['processando', 'bloqueado']);
+        expect(comentarios.some((c) => c.includes('🔴') && c.includes('falta o teste'))).toBe(true);
+    });
+});
+
+describe('orquestrarCruzamentoCom — handoff por substep', () => {
+    it('dev: principal escreve (escrever=true), validador valida o diff (false)', async () => {
+        const { io, comentarios, corridas } = fakeIo();
+        const r = await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: ['claude'],
+            maxRondas: 3,
+            io,
+        });
+        expect(r.validado).toBe(true);
         expect(corridas).toEqual([
             { provider: 'codex', escrever: true },
             { provider: 'claude', escrever: false },
         ]);
-
-        // Handoff POR SUBSTEP (não no fim): ≥1 do principal + 1 do validador +
-        // o comentário final de 🟢 pronto.
-        expect(comentarios.some((c) => c.startsWith('— Codex · principal'))).toBe(true);
-        expect(comentarios.some((c) => c.startsWith('— Claude · validador'))).toBe(true);
-        expect(comentarios.some((c) => c.includes('🟢'))).toBe(true);
-
-        // Semáforo: processando → pronto. Nunca bloqueado.
-        expect(semaforos).toEqual(['processando', 'pronto']);
-
-        // PR com Closes #N; SEM auto-merge (não há chamada de merge na io).
-        expect(io.criarPR).toHaveBeenCalledTimes(1);
-        expect(io.commitPush).toHaveBeenCalledTimes(1);
+        expect(comentarios.some((c) => c.startsWith('— Codex · principal · Desenvolvimento'))).toBe(
+            true,
+        );
+        expect(
+            comentarios.some((c) => c.startsWith('— Claude · validador · Desenvolvimento')),
+        ).toBe(true);
     });
 
-    it('sem validadores, passa à primeira (só principal)', async () => {
-        const { io, semaforos } = fakeIo();
-        const out = await orquestrarDevCom({
-            issue: 1,
-            spec: 's',
-            cfg: { principal: 'codex', validadores: [], maxRondas: 3 },
-            io,
-        });
-        expect(out.estado).toBe('pr-aberto');
-        expect(semaforos).toEqual(['processando', 'pronto']);
+    it('analise: read-only (principal escrever=false), valida o output', async () => {
+        const { corridas } = await (async () => {
+            const f = fakeIo();
+            await orquestrarCruzamentoCom({
+                cruzamento: 'analise',
+                spec: 's',
+                principal: 'claude',
+                validadores: ['codex'],
+                maxRondas: 1,
+                io: f.io,
+            });
+            return f;
+        })();
+        expect(corridas[0]).toEqual({ provider: 'claude', escrever: false });
     });
 });
 
-describe('orquestrarDevCom — kill-switch', () => {
-    it('validador rejeita sempre → bloqueado 🔴 ao fim das rondas, sem PR', async () => {
-        const { io, comentarios, semaforos } = fakeIo({
-            correr: vi.fn(async (_provider: Provider, _p: string, escrever: boolean) =>
-                escrever ? resp('escrevi algo') : resp('REJEITADO: falta o caso de erro'),
-            ),
+describe('montarSpec — retoma por comentários humanos', () => {
+    it('junta os comentários humanos (não os handoffs do relay)', () => {
+        const s = montarSpec({
+            title: 'T',
+            body: 'B',
+            comentarios: [
+                { autor: 'bot', corpo: '— Codex · principal · Desenvolvimento · ronda 1\n\nfiz' },
+                { autor: 'carlos', corpo: 'Na verdade o caso de erro é diferente.' },
+                { autor: 'bot', corpo: '🔴 Bloqueado no cruzamento "dev"' },
+            ],
         });
-        const out = await orquestrarDevCom({
-            issue: 7,
-            spec: 's',
-            cfg: { principal: 'codex', validadores: ['claude'], maxRondas: 2 },
-            io,
-        });
-
-        expect(out).toEqual({ estado: 'bloqueado', rondas: 2 });
-        expect(io.criarPR).not.toHaveBeenCalled();
-        expect(io.commitPush).not.toHaveBeenCalled();
-        expect(semaforos).toEqual(['processando', 'bloqueado']);
-        expect(comentarios.some((c) => c.includes('🔴'))).toBe(true);
-        // A objeção do validador chega ao programador na 2ª ronda (handoff feedback).
-        expect(comentarios.some((c) => c.includes('falta o caso de erro'))).toBe(true);
+        expect(s).toContain('Na verdade o caso de erro é diferente.');
+        expect(s).not.toContain('Bloqueado');
+        expect(s).not.toContain('— Codex');
+    });
+    it('sem comentários humanos, é só título + corpo', () => {
+        expect(montarSpec({ title: 'T', body: 'B' })).toBe('T\n\nB');
     });
 });
 
-describe('promptDevPrincipal', () => {
-    it('a 1ª ronda não traz feedback; as seguintes trazem a correção', () => {
-        expect(promptDevPrincipal('spec', null)).not.toContain('reprovada');
-        expect(promptDevPrincipal('spec', 'falta X')).toContain('falta X');
+describe('promptPrincipal', () => {
+    it('cada cruzamento tem a sua função; feedback entra a partir da 2ª ronda', () => {
+        expect(promptPrincipal('dev', 's', null)).toContain('PROGRAMADOR');
+        expect(promptPrincipal('analise', 's', null)).toContain('ANALISTA');
+        expect(promptPrincipal('dev', 's', 'corrige X')).toContain('corrige X');
     });
 });

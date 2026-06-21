@@ -32,6 +32,7 @@ import {
     clonarProjetoGithub,
     importarProjeto,
 } from '@/modules/definicoes/definicoes.actions';
+import { dispararRelay } from '@/modules/relay/relay.actions';
 import { getJson } from '@/lib/api-get';
 import {
     DEFINICOES_VISTA_DEFAULT,
@@ -118,6 +119,11 @@ export function DefinicoesModal({
     // Estado por-repo do "test à dir" (testar → clonar → importar).
     const [testesProjeto, setTestesProjeto] = useState<
         Record<string, { ok: boolean; detalhe: string } | 'a-correr'>
+    >({});
+    // Trigger do relay por-repo: nº da issue + estado do disparo.
+    const [relayIssue, setRelayIssue] = useState<Record<string, string>>({});
+    const [relayEstado, setRelayEstado] = useState<
+        Record<string, { ok: boolean; detalhe: string } | 'a-disparar'>
     >({});
     const [carregandoRepos, setCarregandoRepos] = useState(false);
     const [testes, setTestes] = useState<
@@ -264,6 +270,18 @@ export function DefinicoesModal({
             res = imp.ok ? { ok: true, detalhe: 'Projeto pronto e importado.' } : imp;
         }
         setTestesProjeto((t) => ({ ...t, [r]: res }));
+    }
+
+    // Dispara o relay para a issue indicada (corre em background; segue-se na issue).
+    async function dispararRelayRepo(r: string) {
+        const n = Number(relayIssue[r]);
+        if (!Number.isInteger(n) || n <= 0) {
+            setRelayEstado((s) => ({ ...s, [r]: { ok: false, detalhe: 'Nº de issue inválido.' } }));
+            return;
+        }
+        setRelayEstado((s) => ({ ...s, [r]: 'a-disparar' }));
+        const res = await dispararRelay(r, n);
+        setRelayEstado((s) => ({ ...s, [r]: res }));
     }
 
     // "Testar ligação": valida o token no GitHub e, em SUCESSO, guarda (não "guardar e rezar").
@@ -992,6 +1010,7 @@ export function DefinicoesModal({
                                                             (x) => x.repo === r,
                                                         );
                                                         const tp = testesProjeto[r];
+                                                        const re = relayEstado[r];
                                                         return (
                                                             <div key={r} className="space-y-1">
                                                                 <label className="flex items-center gap-2 text-xs">
@@ -1052,6 +1071,57 @@ export function DefinicoesModal({
                                                                             )}
                                                                         >
                                                                             {tp.detalhe}
+                                                                        </p>
+                                                                    )}
+                                                                {ligado && (
+                                                                    <div className="flex items-center gap-2 pl-6">
+                                                                        <Input
+                                                                            value={
+                                                                                relayIssue[r] ?? ''
+                                                                            }
+                                                                            onChange={(e) =>
+                                                                                setRelayIssue(
+                                                                                    (s) => ({
+                                                                                        ...s,
+                                                                                        [r]: e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    }),
+                                                                                )
+                                                                            }
+                                                                            placeholder="nº da issue"
+                                                                            inputMode="numeric"
+                                                                            className="h-7 w-24 text-xs"
+                                                                        />
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() =>
+                                                                                void dispararRelayRepo(
+                                                                                    r,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                re === 'a-disparar'
+                                                                            }
+                                                                            className="h-7 text-xs"
+                                                                        >
+                                                                            {re === 'a-disparar'
+                                                                                ? 'A disparar…'
+                                                                                : '⚡ Disparar relay'}
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                                {ligado &&
+                                                                    re &&
+                                                                    re !== 'a-disparar' && (
+                                                                        <p
+                                                                            className={cn(
+                                                                                'pl-6 text-xs',
+                                                                                corTeste(re.ok),
+                                                                            )}
+                                                                        >
+                                                                            {re.detalhe}
                                                                         </p>
                                                                     )}
                                                             </div>

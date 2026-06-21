@@ -46,20 +46,35 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
 é trigger + estado, o agente escreve **código de verdade** no working copy preparado (sem clonar
 por-issue), e cada substep deixa rasto.
 
-- **`relay.orchestrator.ts`** — `orquestrarDevCom` (lógica, IO injetada = testável) corre o
-  cruzamento **Development**: principal escreve (TDD), validadores derrubam o diff, rondas até
-  verde. **Handoff assinado POR SUBSTEP** (não no fim). Verde → commit/push/**PR** (`Closes #N`) +
-  🟢; kill-switch → 🔴 e pára (sem auto-merge — pára para o smoke do Carlos). `orquestrarDev` é o
-  entrypoint real (lê definições → token/path/providers → IO).
+- **`relay.orchestrator.ts`** — corre o **pipeline completo** (Análise→Dev→Docs→Auditoria) via
+  `correrPipeline` (estrela: a execução lê o goal da Análise; kill-switch no 1.º que não valida).
+  - `orquestrarCruzamentoCom` — 1 cruzamento com **handoff assinado POR SUBSTEP** (não no fim).
+    Dev/Docs **escrevem** (principal em modo escrita; validadores validam o **diff**); Análise/
+    Auditoria são **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
+  - `orquestrarCom` — branch (Intern Rule) → pipeline → verde com código: commit/push/**PR**
+    (`Closes #N`) + 🟢; verde sem código: 🟢 sem PR; kill-switch: 🔴 e pára (sem auto-merge).
+  - `orquestrar` — entrypoint real (lê definições → token/path/providers → IO via `construirIo`);
+    `montarSpec` junta os **comentários humanos** ao goal = a **retoma** (pós-🔴, comentas e
+    re-disparas; o pipeline relê e integra a correção).
+- **`relay.actions.ts`** — `dispararRelay(repo, issue)`: o **trigger**. Valida cedo e corre o
+  orchestrator em **background** (`after`) — o estado vive na issue, a resposta volta logo.
 - **`escrita-no-repo.ts`** (`src/lib/providers/`) — escrita agêntica: `claude -p
   --permission-mode acceptEdits` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
   Só modo `cli` escreve (api → erro). Bypass do sandbox por env em kernels onde o bwrap rebenta.
-- **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; push com o `GH_TOKEN` do user.
+- **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; ramo default REAL (não assume
+  `main`); push com o `GH_TOKEN` do user.
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
-- **`src/lib/github.ts`** — `verIssue`/`editarLabels` (semáforos 🟠🔴🟢)/`criarPR`.
+- **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (semáforos)/`criarPR`/`ramoPrincipal`.
 
 **Semáforos** (labels): `relay:🟠` processa · `relay:🔴` bloqueado · `relay:🟢` pronto.
 
-**Falta (próximas fatias):** os outros cruzamentos (Análise/Docs/Auditoria reusam o pipeline),
-o test-gate externo (correr a suite do repo entre rondas), a retoma do kill-switch via
-chat-under-kanban, e o trigger pela UI (arrastar Backlog→Análise). Smoke vivo por fazer.
+**Trigger na UI:** página do módulo GitHub (Definições) — por repo preparado, nº da issue +
+**⚡ Disparar relay**. Acompanha-se na issue (comentários + semáforos).
+
+**Um relay de cada vez por repo:** o working copy é partilhado — dois disparos concorrentes no
+mesmo path pisavam-se (`checkout -B` + `add -A`). v1 é manual/single-operator (um de cada vez);
+um lock por repo entra quando o relay for autónomo.
+
+**Falta (próximas fatias):** trigger por **arrastar** Backlog→Análise no kanban (precisa do link
+card↔issue da promoção assistida); o **test-gate externo** (correr a suite do repo entre rondas);
+a retoma com **chat-under-kanban** (UI de grill sobre os comentários). Smoke vivo por fazer.

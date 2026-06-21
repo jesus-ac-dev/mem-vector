@@ -63,7 +63,15 @@ export function buildIssueArgs(o: GhOp): string[] {
         case 'comentar':
             return ['issue', 'comment', String(o.number), '--repo', o.repo, '--body', o.body];
         case 'ver':
-            return ['issue', 'view', String(o.number), '--repo', o.repo, '--json', 'title,body'];
+            return [
+                'issue',
+                'view',
+                String(o.number),
+                '--repo',
+                o.repo,
+                '--json',
+                'title,body,comments',
+            ];
         case 'labels': {
             const args = ['issue', 'edit', String(o.number), '--repo', o.repo];
             for (const l of o.add ?? []) args.push('--add-label', l);
@@ -225,14 +233,25 @@ export async function clonarProjeto(token: string, repo: string, path: string): 
 
 // --- Orchestrator do relay: a issue como trigger + estado -------------------
 
-/** Lê a spec da issue (título + corpo) — o goal do pipeline. */
+/** Lê a issue (título + corpo + comentários) — o goal do pipeline + a retoma. */
 export async function verIssue(
     token: string,
     p: { repo: string; number: number },
-): Promise<{ title: string; body: string }> {
+): Promise<{ title: string; body: string; comentarios: { autor: string; corpo: string }[] }> {
     const out = await corrGh(buildIssueArgs({ op: 'ver', ...p }), token);
-    const j = JSON.parse(out) as { title?: string; body?: string };
-    return { title: j.title ?? '', body: j.body ?? '' };
+    const j = JSON.parse(out) as {
+        title?: string;
+        body?: string;
+        comments?: { author?: { login?: string }; body?: string }[];
+    };
+    return {
+        title: j.title ?? '',
+        body: j.body ?? '',
+        comentarios: (j.comments ?? []).map((c) => ({
+            autor: c.author?.login ?? '',
+            corpo: c.body ?? '',
+        })),
+    };
 }
 
 /** O ramo default REAL do repo (não assumir "main" — há repos em "master"). */
