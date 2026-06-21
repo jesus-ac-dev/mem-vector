@@ -90,7 +90,10 @@ export async function criarProjetoCom(db: SupabaseClient, input: NovoProjeto): P
     return toProjeto(data as ProjetoRow);
 }
 
-async function encontrarPorNomeCom(db: SupabaseClient, nome: string): Promise<Projeto | null> {
+export async function encontrarPorNomeCom(
+    db: SupabaseClient,
+    nome: string,
+): Promise<Projeto | null> {
     const { data, error } = await db
         .from('projetos')
         .select(COLUNAS)

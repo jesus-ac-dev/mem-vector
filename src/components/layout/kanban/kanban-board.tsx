@@ -67,6 +67,14 @@ function corPrioridade(p: PrioridadeTarefa): string {
     return 'bg-green-700';
 }
 
+// Vista kanban segue o relay: o semáforo escrito pelo orchestrator no cartão.
+function semaforoRelay(estado: string | null): string {
+    if (estado === 'processando') return '🟠';
+    if (estado === 'bloqueado') return '🔴';
+    if (estado === 'pronto') return '🟢';
+    return '';
+}
+
 function CartaoTarefa({
     tarefa,
     mae,
@@ -154,7 +162,7 @@ function CartaoTarefa({
                     {tarefa.issueGithub ? (
                         <>
                             <span className="text-muted-foreground" title={tarefa.repoGithub ?? ''}>
-                                ⧉ #{tarefa.issueGithub}
+                                {semaforoRelay(tarefa.relayEstado)} ⧉ #{tarefa.issueGithub}
                             </span>
                             <Button
                                 type="button"
@@ -322,6 +330,11 @@ export function KanbanBoard() {
         // Trigger do relay: arrastar para Análise dispara o pipeline para a issue
         // ligada (o cartão de código). Cartões leves (sem issue) só mudam de coluna.
         if (estado === 'analise' && t.repoGithub && t.issueGithub) {
+            // Checa precedências (passo 2 do fluxo): bloqueada não dispara.
+            if (bloqueadaPorDependencia(t)) {
+                setRelayInfo('Relay não disparado: a tarefa está bloqueada por uma dependência.');
+                return;
+            }
             const repo = t.repoGithub;
             const issue = t.issueGithub;
             void dispararRelay(repo, issue).then((r) => setRelayInfo(r.detalhe));

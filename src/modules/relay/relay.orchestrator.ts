@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import type {
     Cruzamento,
     DefinicoesServidor,
@@ -5,6 +7,11 @@ import type {
 } from '@/modules/definicoes/definicoes.schema';
 import { correrNoRepo, type RespostaRepo } from '@/lib/providers/escrita-no-repo';
 import { comentarIssue, criarPR, editarLabels, ramoPrincipal, verIssue } from '@/lib/github';
+import { blocoKernelCom } from '@/agent/kernel';
+import { atualizarRelayEstadoPorIssueCom } from '@/modules/tarefas/tarefas.service';
+import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
+import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
+import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.service';
 
 import { construirHandoff } from './relay.handoff';
 import { abrirBranch, commitPush, correrTestes, diffDoRepo, nomeBranch } from './relay.git';
@@ -55,8 +62,12 @@ export function promptPrincipal(
     cruzamento: Cruzamento,
     spec: string,
     feedback: string | null,
+    memoria = '',
 ): string {
-    const base = `${INTRO[cruzamento]}\nTrabalhas em português de Portugal.\n\nSpec/goal:\n${spec}`;
+    // A Análise entra com a MEMÓRIA do SaaS (Kernel do utilizador: identidade,
+    // prioridades, regras) — destila o goal já com o contexto da casa, não só o repo.
+    const mem = cruzamento === 'analise' && memoria.trim() ? `${memoria.trim()}\n\n` : '';
+    const base = `${mem}${INTRO[cruzamento]}\nTrabalhas em português de Portugal.\n\nSpec/goal:\n${spec}`;
     if (!feedback) return base;
     return `${base}\n\nA ronda anterior recebeu esta objeção/sugestão — integra-a:\n${feedback}`;
 }
@@ -112,8 +123,9 @@ export async function orquestrarCruzamentoCom(opts: {
     validadores: Provider[];
     maxRondas: number;
     io: IoOrquestrador;
+    memoria?: string;
 }): Promise<ResultadoCruzamento> {
-    const { cruzamento, spec, principal, validadores, maxRondas, io } = opts;
+    const { cruzamento, spec, principal, validadores, maxRondas, io, memoria } = opts;
     const escreve = ESCREVE[cruzamento];
     let ronda = 0;
 
@@ -123,7 +135,7 @@ export async function orquestrarCruzamentoCom(opts: {
             ronda += 1;
             const resp = await io.correr(
                 principal,
-                promptPrincipal(cruzamento, spec, feedback),
+                promptPrincipal(cruzamento, spec, feedback, memoria),
                 escreve,
             );
             await io.comentar(
@@ -199,10 +211,11 @@ export async function orquestrarCom(opts: {
     spec: string;
     io: IoOrquestrador;
     maxRondas?: number;
+    memoria?: string; // memória do SaaS (Kernel) para a Análise
     // Injetável p/ teste: corre 1 cruzamento (default = o real, com handoffs).
     executarCruzamento?: (cruzamento: Cruzamento, spec: string) => Promise<ResultadoCruzamento>;
 }): Promise<ResultadoOrquestracao> {
-    const { issue, defs, spec, io } = opts;
+    const { issue, defs, spec, io, memoria } = opts;
     const maxRondas = opts.maxRondas ?? 3;
     const branch = nomeBranch(issue);
 
@@ -217,6 +230,7 @@ export async function orquestrarCom(opts: {
                 validadores: r.validadores.map((v) => v.provider),
                 maxRondas,
                 io,
+                memoria,
             });
         });
 
@@ -272,17 +286,21 @@ export function construirIo(opts: {
     cwd: string;
     base: string;
     defs: DefinicoesServidor;
+    db?: SupabaseClient; // p/ a vista kanban seguir o semáforo (best-effort)
 }): IoOrquestrador {
-    const { token, repo, issue, cwd, base, defs } = opts;
+    const { token, repo, issue, cwd, base, defs, db } = opts;
     return {
         comentar: (body) => comentarIssue(token, { repo, number: issue, body }).then(() => {}),
-        moverSemaforo: (de, para) =>
-            editarLabels(token, {
+        moverSemaforo: async (de, para) => {
+            await editarLabels(token, {
                 repo,
                 number: issue,
                 add: [SEMAFORO_LABEL[para]],
                 remove: de ? [SEMAFORO_LABEL[de]] : [],
-            }),
+            });
+            // A vista kanban segue as labels: espelha o semáforo no cartão ligado.
+            if (db) await atualizarRelayEstadoPorIssueCom(db, repo, issue, para);
+        },
         abrirBranch: (branch) => abrirBranch(cwd, branch, base, token),
         diff: () => diffDoRepo(cwd),
         testar: () => correrTestes(cwd),
@@ -301,12 +319,13 @@ export function construirIo(opts: {
 // pipeline. É o que torna o orchestrator usável (consome a escrita-agêntica + as
 // ops GitHub — não fica solto).
 export async function orquestrar(opts: {
+    db: SupabaseClient;
     defs: DefinicoesServidor;
     repo: string;
     issue: number;
     maxRondas?: number;
 }): Promise<ResultadoOrquestracao> {
-    const { defs, repo, issue } = opts;
+    const { db, defs, repo, issue } = opts;
     const token = defs.githubToken;
     if (!token) throw new Error('Sem token GitHub (Definições > módulo GitHub).');
 
@@ -323,9 +342,66 @@ export async function orquestrar(opts: {
 
     const issueDados = await verIssue(token, { repo, number: issue });
     const spec = montarSpec(issueDados);
+    // A Análise entra com a memória do SaaS (Kernel do utilizador); não-fatal.
+    const memoria = await blocoKernelCom(db);
 
-    const io = construirIo({ token, repo, issue, cwd, base, defs });
-    return orquestrarCom({ issue, defs, spec, io, maxRondas: opts.maxRondas });
+    const io = construirIo({ token, repo, issue, cwd, base, defs, db });
+    const resultado = await orquestrarCom({
+        issue,
+        defs,
+        spec,
+        io,
+        maxRondas: opts.maxRondas,
+        memoria,
+    });
+
+    // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no
+    // projeto (nota vectorizada), não só nos docs/ do repo. Best-effort.
+    if (resultado.estado === 'pr-aberto') {
+        await registarNoSaasCom(db, repo, issue, issueDados.title, resultado.prUrl);
+    }
+    return resultado;
+}
+
+// Docs de volta no SaaS: uma nota no projeto (pasta real) com o que o relay
+// entregou — entra no RAG e nos wikilinks como as outras. Não-fatal.
+async function registarNoSaasCom(
+    db: SupabaseClient,
+    repo: string,
+    issue: number,
+    titulo: string,
+    prUrl: string,
+): Promise<void> {
+    try {
+        // Só escreve no projeto JÁ existente (criado no import); um relay em
+        // background não deve criar projetos às escondidas (achado do Audit).
+        const projeto = await encontrarPorNomeCom(db, nomeCurtoDoRepo(repo));
+        if (!projeto?.folderId) return;
+        const title = `Relay #${issue} — ${titulo}`.slice(0, 200);
+        const content_md = [
+            `# ${title}`,
+            '',
+            `- **Issue:** \`${repo}\` #${issue}`,
+            `- **PR:** ${prUrl}`,
+            '',
+            'Entregue pelo relay (pipeline Análise→Dev→Docs→Auditoria). O trace por substep está ' +
+                'nos comentários da issue; o PR aguarda smoke e merge.',
+        ].join('\n');
+        await escreverNotaEmPastaCom(
+            db,
+            {
+                title,
+                content_md,
+                summary: `Relay entregou ${repo} #${issue} (PR aberto).`,
+                links: [],
+                reason: 'docs de volta do relay',
+            },
+            projeto.folderId,
+            'agent',
+        );
+    } catch (e) {
+        console.error('registar relay no SaaS falhou (segue):', e);
+    }
 }
 
 // O goal = título + corpo + as correções HUMANAS (comentários que não são

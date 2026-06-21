@@ -73,17 +73,28 @@ por-issue), e cada substep deixa rasto.
 
 ## Trigger no kanban (2026-06-21) — o fluxo do Carlos
 
-- **Promoção** (cartão→issue): num cartão de Backlog, **⤴ promover a issue** cria a issue do
-  título+descrição e liga o cartão (`tarefas.repo_github`/`issue_github`).
-- **Arrastar Backlog→Análise** dispara o relay para a issue ligada (cartões leves só mudam de coluna).
+- **Promoção** (conversa OU cartão → issue + cartão): o agente do chat tem a tool **`promover_a_issue`**
+  (propõe→confirmas → cria a issue E o cartão Backlog ligado); ou, num cartão de Backlog, **⤴ promover
+  a issue**. Liga `tarefas.repo_github`/`issue_github`.
+- **Arrastar Backlog→Análise** dispara o relay para a issue ligada (checa precedências; cartões leves
+  só mudam de coluna).
 - **Retoma** (chat-under-kanban): num cartão ligado, **↻ retomar** mostra os comentários da issue +
   caixa de correção → comenta como humano e re-dispara (o `montarSpec` relê e integra).
 - Disparo alternativo direto: página do módulo GitHub (Definições) — repo + nº da issue + **⚡ Disparar**.
-- O estado vive na issue (handoffs + semáforos); a UI só dispara e segue-se no GitHub.
+- O estado vive na issue (handoffs + semáforos); a **vista kanban segue** (o cartão mostra 🟠🔴🟢 via
+  `tarefas.relay_estado`, escrito pelo orchestrator).
+
+## Fidelidade ao desenho (2026-06-21)
+
+- **Análise lê a memória do SaaS:** o prompt da Análise leva o **Kernel** do utilizador (`blocoKernelCom`).
+- **Docs de volta no SaaS:** no verde, o orchestrator escreve uma **nota no projeto** (vectorizada) com
+  a issue + o PR — não só os `docs/` do repo (`registarNoSaasCom`).
+- **Vista kanban ↔ labels:** o semáforo da issue espelha-se no cartão (`relay_estado`).
 
 **Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); um
 `Set` em memória trava disparos concorrentes no mesmo path (v1 single-process). Lock durável
 quando o relay for distribuído.
 
-**Falta:** a promoção **proativa** pelo agente no chat (propõe→confirma — hoje a promoção é o
-botão do cartão); o smoke vivo end-to-end.
+**Falta (refinamento / fora do v1):** **skills por fase reais** (do [[agent-skills-compare]] — hoje
+prompts inline); agregação fina dos N validadores (forma maioria/adjudicação por decidir); retoma
+**cirúrgica** à fase certa (hoje recomeça na Análise); o **smoke vivo** end-to-end.

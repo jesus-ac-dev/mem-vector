@@ -23,7 +23,7 @@ export interface PainelTarefas {
 
 // #47: o projeto é um FK real; o nome vem por join (display/serializar).
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github';
+    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado';
 
 interface TarefaRow {
     id: string;
@@ -39,6 +39,7 @@ interface TarefaRow {
     concluida_em: string | null;
     repo_github: string | null;
     issue_github: number | null;
+    relay_estado: string | null;
 }
 
 function toTarefa(r: TarefaRow): Tarefa {
@@ -56,7 +57,24 @@ function toTarefa(r: TarefaRow): Tarefa {
         concluidaEm: r.concluida_em,
         repoGithub: r.repo_github,
         issueGithub: r.issue_github,
+        relayEstado: r.relay_estado,
     };
+}
+
+// Vista kanban segue o relay: o orchestrator escreve o semáforo no cartão ligado
+// à issue. Best-effort (a verdade é a issue) — não lança se não houver cartão.
+export async function atualizarRelayEstadoPorIssueCom(
+    db: SupabaseClient,
+    repo: string,
+    issue: number,
+    estado: string,
+): Promise<void> {
+    const { error } = await db
+        .from('tarefas')
+        .update({ relay_estado: estado })
+        .eq('repo_github', repo)
+        .eq('issue_github', issue);
+    if (error) console.error('atualizar relay_estado falhou (segue):', error.message);
 }
 
 // Liga o cartão a uma issue (a promoção): grava repo + número. Só o dono (RLS).

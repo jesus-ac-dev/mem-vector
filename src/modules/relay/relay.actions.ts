@@ -43,7 +43,7 @@ export async function dispararRelay(
 
     const v = await defsValidadas(repo);
     if ('erro' in v) return { ok: false, detalhe: v.erro };
-    const { defs, path } = v;
+    const { db, defs, path } = v;
     if (Object.keys(defs.cruzamentos).length === 0) {
         return {
             ok: false,
@@ -57,7 +57,7 @@ export async function dispararRelay(
     relaysAtivos.add(path);
     after(async () => {
         try {
-            await orquestrar({ defs, repo, issue });
+            await orquestrar({ db, defs, repo, issue });
         } catch (e) {
             console.error('[relay] orquestrar falhou:', e);
         } finally {

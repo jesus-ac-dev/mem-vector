@@ -22,11 +22,12 @@ import {
     listarTarefasAbertasCom,
     criarTarefaCom,
     concluirTarefaCom,
+    ligarIssueTarefaCom,
 } from '../modules/tarefas/tarefas.service';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
-import { criarIssue, lerIssues, comentarIssue } from '../lib/github';
+import { criarIssue, lerIssues, comentarIssue, numeroDoUrl } from '../lib/github';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
 // o kernel (procurar/ler/criar/continuar nota, daily). Lançado pelo claude CLI
@@ -298,6 +299,21 @@ const GITHUB_TOOLS = [
             required: ['repo', 'number', 'body'],
         },
     },
+    {
+        name: 'promover_a_issue',
+        description:
+            'Promoção assistida (modelo 2.2) de uma tarefa de CÓDIGO durável: cria a ISSUE no repo ligado E um CARTÃO Backlog ligado a ela, num passo. PROPÕE primeiro e só corre depois de o utilizador confirmar. Usa isto (não criar_issue) quando a tarefa é trabalho de código a entrar no pipeline do relay — depois o utilizador arrasta o cartão para Análise e o relay corre.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Repo "owner/nome" da lista ligada' },
+                titulo: { type: 'string', description: 'Título curto (verbo + objeto)' },
+                body: { type: 'string', description: 'Corpo da issue com enquadramento completo' },
+                projeto: { type: 'string', description: 'Nome do projeto (opcional)' },
+            },
+            required: ['repo', 'titulo', 'body'],
+        },
+    },
 ];
 
 type Args = Record<string, unknown>;
@@ -540,6 +556,32 @@ async function executarTool(
                 body: texto(args, 'body'),
             });
             return `Comentário publicado: ${url}`;
+        }
+        case 'promover_a_issue': {
+            const repo = repoLigado(args);
+            const titulo = texto(args, 'titulo');
+            const url = await criarIssue(GITHUB_TOKEN!, {
+                repo,
+                title: titulo,
+                body: texto(args, 'body'),
+            });
+            const numero = numeroDoUrl(url);
+            const tarefa = await criarTarefaCom(db, {
+                titulo,
+                projeto: typeof args.projeto === 'string' ? args.projeto : undefined,
+                prioridade: 'normal',
+                visibility: 'privado',
+            });
+            if (numero) await ligarIssueTarefaCom(db, tarefa.id, repo, numero);
+            if (RESULT_FILE) {
+                registarEscrita(RESULT_FILE, {
+                    tipo: 'tarefa',
+                    acao: 'criada',
+                    id: tarefa.id,
+                    titulo,
+                });
+            }
+            return `Promovido: issue ${url} + cartão Backlog ligado. Arrasta o cartão para Análise para o relay correr.`;
         }
         default:
             throw new Error(`tool desconhecida: ${name}`);

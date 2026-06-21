@@ -26,6 +26,7 @@ const TOOLS_RESPOSTA = [
     'mcp__memvector__ler_issues',
     'mcp__memvector__criar_issue',
     'mcp__memvector__comentar_issue',
+    'mcp__memvector__promover_a_issue',
 ];
 
 const SYSTEM_RESPOSTA =
@@ -45,13 +46,14 @@ const SYSTEM_RESPOSTA =
 // — o agente nunca cria/comenta de surpresa.
 const CONVENCAO_GITHUB =
     '\n\nGITHUB (modelo 2.2): tens tools de issues nos repos LIGADOS — ler_issues, criar_issue, ' +
-    'comentar_issue. Uma tarefa ou bug DURÁVEL de um projeto ligado pertence a uma ISSUE no repo ' +
-    'desse projeto, não a uma nota. PROMOÇÃO ASSISTIDA: nunca crias nem comentas uma issue de ' +
-    'surpresa — PROPÕE ("queres que eu abra a issue «X» em owner/nome?") e só ages quando o ' +
-    'utilizador CONFIRMA; se ele já pediu claramente ("abre uma issue para isto"), age direto. ' +
-    'O repo é um dos LIGADOS (não inventes outro); antes de criar, usa ler_issues para não ' +
-    'duplicar. O body leva enquadramento completo (contexto, o que fazer, critério de pronto), ' +
-    'não uma linha. Cita o URL da issue na resposta.';
+    'comentar_issue, promover_a_issue. Uma tarefa ou bug DURÁVEL de um projeto ligado pertence a ' +
+    'uma ISSUE no repo desse projeto, não a uma nota. Se for trabalho de CÓDIGO (entra no pipeline ' +
+    'do relay), usa promover_a_issue — cria a issue E o cartão Backlog ligado, e o utilizador ' +
+    'arrasta-o para Análise para o relay correr. PROMOÇÃO ASSISTIDA: nunca crias/promoves/comentas ' +
+    'de surpresa — PROPÕE ("queres que promova «X» a issue em owner/nome?") e só ages quando o ' +
+    'utilizador CONFIRMA; se ele já pediu claramente, age direto. O repo é um dos LIGADOS (não ' +
+    'inventes outro); antes de criar, usa ler_issues para não duplicar. O body leva enquadramento ' +
+    'completo (contexto, o que fazer, critério de pronto), não uma linha. Cita o URL na resposta.';
 
 export interface RespostaTools {
     text: string;

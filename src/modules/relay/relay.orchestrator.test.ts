@@ -203,4 +203,9 @@ describe('promptPrincipal', () => {
         expect(promptPrincipal('analise', 's', null)).toContain('ANALISTA');
         expect(promptPrincipal('dev', 's', 'corrige X')).toContain('corrige X');
     });
+    it('a memória do SaaS entra SÓ na Análise, não no Dev', () => {
+        const mem = 'KERNEL DO WORKSPACE: o Carlos prioriza o CRMCredito.';
+        expect(promptPrincipal('analise', 's', null, mem)).toContain('CRMCredito');
+        expect(promptPrincipal('dev', 's', null, mem)).not.toContain('CRMCredito');
+    });
 });
