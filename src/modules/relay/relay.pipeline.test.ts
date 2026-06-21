@@ -62,6 +62,31 @@ describe('correrPipeline (o circuito das atividades)', () => {
         expect(specsVistos.dev).toContain('PLANO-X'); // o dev recebe a Análise como referência
     });
 
+    it('retoma cirúrgica: desde + analiseInicial saltam a Análise e usam o goal dado', async () => {
+        const correram: Cruzamento[] = [];
+        const specsVistos: Record<string, string> = {};
+        const r = await correrPipeline({
+            defs: defs({
+                analise: { principal: 'claude', validadores: [] },
+                dev: { principal: 'codex', validadores: [] },
+                auditoria: { principal: 'claude', validadores: [] },
+            }),
+            spec: 'tarefa',
+            desde: 'auditoria',
+            analiseInicial: 'GOAL-GUARDADO',
+            executar: async (c, s) => {
+                correram.push(c);
+                specsVistos[c] = s;
+                return ok(`out-${c}`);
+            },
+        });
+        // Saltou analise e dev (já tinham passado); só correu a auditoria.
+        expect(correram).toEqual(['auditoria']);
+        // A estrela usou o goal guardado, sem redestilar a Análise.
+        expect(specsVistos.auditoria).toContain('GOAL-GUARDADO');
+        expect(r.completo).toBe(true);
+    });
+
     it('pára e marca incompleto quando um cruzamento não valida (kill switch)', async () => {
         const r = await correrPipeline({
             defs: defs({

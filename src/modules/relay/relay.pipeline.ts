@@ -21,12 +21,19 @@ export async function correrPipeline(opts: {
     spec: string;
     // Injetado para testar a lógica do circuito sem chamar LLMs.
     executar: (cruzamento: Cruzamento, spec: string) => Promise<ResultadoCruzamento>;
+    // Retoma cirúrgica: recomeça NESTA fase (salta as que já passaram), com a
+    // Análise já produzida (analiseInicial) como fonte de verdade da estrela —
+    // não se redestila o goal nem se repete o que ficou no working tree.
+    desde?: Cruzamento;
+    analiseInicial?: string;
 }): Promise<ResultadoPipeline> {
-    const { defs, spec, executar } = opts;
-    const configurados = ORDEM_CANONICA.filter((c) => defs.cruzamentos[c]);
+    const { defs, spec, executar, desde, analiseInicial } = opts;
+    const todos = ORDEM_CANONICA.filter((c) => defs.cruzamentos[c]);
+    const idx = desde ? todos.indexOf(desde) : 0;
+    const configurados = idx >= 0 ? todos.slice(idx) : todos;
     const porCruzamento: ResultadoPipeline['porCruzamento'] = {};
     const ordem: Cruzamento[] = [];
-    let analise: string | null = null;
+    let analise: string | null = analiseInicial ?? null;
 
     for (const c of configurados) {
         const specCruzamento =

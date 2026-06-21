@@ -5,6 +5,8 @@ import type { RespostaRepo } from '@/lib/providers/escrita-no-repo';
 import type { ResultadoCruzamento } from './relay.runner';
 
 import {
+    faseDeRetoma,
+    goalDaAnalise,
     montarSpec,
     orquestrarCom,
     orquestrarCruzamentoCom,
@@ -60,12 +62,25 @@ describe('orquestrarCom — pipeline verde', () => {
         });
 
         expect(out).toEqual({ estado: 'pr-aberto', prUrl: 'https://github.com/o/r/pull/9' });
-        expect(io.abrirBranch).toHaveBeenCalledWith('feat/issue-42');
+        expect(io.abrirBranch).toHaveBeenCalledWith('feat/issue-42', false); // fresh, não retoma
         // Estrela: análise antes da execução.
         expect(ordem).toEqual(['analise', 'dev']);
         expect(semaforos).toEqual(['processando', 'pronto']);
         expect(io.commitPush).toHaveBeenCalledTimes(1);
         expect(comentarios.some((c) => c.includes('🟢'))).toBe(true);
+    });
+
+    it('retoma: abre o branch em modo CONTINUAR (retoma=true), não reseta', async () => {
+        const { io } = fakeIo();
+        await orquestrarCom({
+            issue: 9,
+            spec: 's',
+            defs: { cruzamentos: { auditoria: {} } } as never,
+            io,
+            desde: 'auditoria',
+            executarCruzamento: async () => okCruzamento,
+        });
+        expect(io.abrirBranch).toHaveBeenCalledWith('feat/issue-9', true);
     });
 
     it('verde mas sem diff (análise/auditoria-só) não abre PR', async () => {
@@ -174,6 +189,55 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
             return f;
         })();
         expect(corridas[0]).toEqual({ provider: 'claude', escrever: false });
+    });
+});
+
+describe('orquestrarCruzamentoCom — agregação fina (split)', () => {
+    it('split (um aprova, outro objeta) rotula "SEM CONSENSO" com os dois lados', async () => {
+        const { io } = fakeIo({
+            correr: vi.fn(async (provider: Provider, _p: string, escrever: boolean) => {
+                if (escrever) return resp('escrevi');
+                return resp(provider === 'claude' ? 'APROVADO' : 'REJEITADO: falta o caso de erro');
+            }),
+        });
+        const r = await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: ['claude', 'gemini'],
+            maxRondas: 1,
+            io,
+        });
+        expect(r.validado).toBe(false);
+        const feedback = r.historico.at(-1)?.veredito?.feedback ?? '';
+        expect(feedback).toContain('SEM CONSENSO');
+        expect(feedback).toContain('falta o caso de erro');
+    });
+});
+
+describe('faseDeRetoma', () => {
+    it('encontra a fase gravada nas labels', () => {
+        expect(faseDeRetoma(['relay:🟠', 'relay:fase:dev'])).toBe('dev');
+        expect(faseDeRetoma(['relay:fase:auditoria'])).toBe('auditoria');
+    });
+    it('null quando não há label de fase', () => {
+        expect(faseDeRetoma(['relay:🔴', 'bug'])).toBeNull();
+    });
+});
+
+describe('goalDaAnalise', () => {
+    it('extrai o goal do último handoff "principal · Análise"', () => {
+        const goal = goalDaAnalise([
+            { corpo: '— Codex · principal · Análise · ronda 1\n\nGoal antigo' },
+            { corpo: '— Claude · validador · Análise · ronda 1\n\nAPROVADO' },
+            {
+                corpo: '— Codex · principal · Análise · ronda 2\n\nGoal: fazer X e Y, testado por Z.',
+            },
+        ]);
+        expect(goal).toBe('Goal: fazer X e Y, testado por Z.');
+    });
+    it('null quando não há handoff de Análise', () => {
+        expect(goalDaAnalise([{ corpo: 'comentário humano qualquer' }])).toBeNull();
     });
 });
 

@@ -22,6 +22,17 @@ export function buildBranchArgs(branch: string, base: string): string[][] {
     ];
 }
 
+/** Retoma: CONTINUA o branch existente sem resetar de base — o working tree no
+ *  disco guarda o trabalho não-commitado da fase anterior (commit só no verde), e
+ *  o lock impede outro relay no mesmo path. Resetar (-B de base) apagava-o. */
+export function buildRetomaArgs(branch: string): string[][] {
+    return [
+        ['checkout', branch],
+        ['config', 'user.name', INTERN_NOME],
+        ['config', 'user.email', INTERN_EMAIL],
+    ];
+}
+
 /** Sequência para selar a ronda verde: tudo o que o agente mexeu → branch remoto. */
 export function buildCommitPushArgs(branch: string, mensagem: string): string[][] {
     return [
@@ -70,8 +81,11 @@ export async function abrirBranch(
     branch: string,
     base: string,
     token?: string,
+    retoma = false,
 ): Promise<void> {
-    await correrSequencia(cwd, buildBranchArgs(branch, base), token);
+    // Retoma continua o branch (preserva o trabalho); fresh parte do ramo default.
+    const seq = retoma ? buildRetomaArgs(branch) : buildBranchArgs(branch, base);
+    await correrSequencia(cwd, seq, token);
 }
 
 export async function commitPush(

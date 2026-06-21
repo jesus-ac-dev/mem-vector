@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type {
-    Cruzamento,
-    DefinicoesServidor,
-    Provider,
+import {
+    CRUZAMENTOS,
+    type Cruzamento,
+    type DefinicoesServidor,
+    type Provider,
 } from '@/modules/definicoes/definicoes.schema';
 import { correrNoRepo, type RespostaRepo } from '@/lib/providers/escrita-no-repo';
 import { comentarIssue, criarPR, editarLabels, ramoPrincipal, verIssue } from '@/lib/github';
@@ -33,6 +34,30 @@ export const SEMAFORO_LABEL: Record<Semaforo, string> = {
     bloqueado: 'relay:🔴',
     pronto: 'relay:🟢',
 };
+
+// Retoma cirúrgica: a fase onde o relay parou fica gravada numa label `relay:fase:<c>`.
+// A retoma (re-disparo) lê-a e recomeça AÍ — não sempre na Análise.
+export function faseLabel(c: Cruzamento): string {
+    return `relay:fase:${c}`;
+}
+
+/** A fase de retoma gravada nas labels da issue, ou null (recomeça do início). */
+export function faseDeRetoma(labels: string[]): Cruzamento | null {
+    for (const c of CRUZAMENTOS) if (labels.includes(faseLabel(c))) return c;
+    return null;
+}
+
+/** O goal destilado pela Análise, extraído do último handoff "principal · Análise"
+ *  da issue — para a retoma cirúrgica não redestilar (a estrela já tem fonte). */
+export function goalDaAnalise(comentarios: { corpo: string }[]): string | null {
+    for (let i = comentarios.length - 1; i >= 0; i--) {
+        const linhas = comentarios[i].corpo.split(/\r?\n/);
+        if (/^—.*·\s*principal\s*·\s*Análise\s*·/.test(linhas[0] ?? '')) {
+            return linhas.slice(1).join('\n').trim() || null;
+        }
+    }
+    return null;
+}
 
 // Que cruzamentos ESCREVEM no repo (principal em modo escrita). Análise e
 // Auditoria são read-only (produzem texto: o goal e o parecer).
@@ -98,7 +123,8 @@ export function promptValidador(cruzamento: Cruzamento, spec: string, referencia
 export interface IoOrquestrador {
     comentar(body: string): Promise<void>;
     moverSemaforo(de: Semaforo | null, para: Semaforo): Promise<void>;
-    abrirBranch(branch: string): Promise<void>;
+    // retoma=true continua o branch existente (não reseta — preserva o trabalho).
+    abrirBranch(branch: string, retoma: boolean): Promise<void>;
     diff(): Promise<string>;
     commitPush(branch: string, mensagem: string): Promise<void>;
     criarPR(p: { head: string; title: string; body: string }): Promise<string>;
@@ -107,6 +133,8 @@ export interface IoOrquestrador {
     // Test-gate opcional: corre a suite do repo (vermelho = devolve ao principal
     // antes de gastar o validador). Ausente = sem gate (só validação por LLM).
     testar?(): Promise<{ ok: boolean; output: string }>;
+    // Grava/limpa a fase de retoma (label `relay:fase:<c>`); null = limpa. Opcional.
+    marcarRetoma?(cruzamento: Cruzamento | null): Promise<void>;
 }
 
 export type ResultadoOrquestracao =
@@ -192,14 +220,25 @@ export async function orquestrarCruzamentoCom(opts: {
                           );
                           vereditos.push(veredito);
                       }
+                      // Agregação any-rejeita (motor das rondas: qualquer objeção
+                      // ganha uma ronda para ser resolvida — NÃO se vota a maioria,
+                      // um validador a apanhar um bug real não é silenciado). Mas
+                      // distingue-se o SPLIT (uns aprovam, outros objetam): um split
+                      // que não converge chega ao humano rotulado "sem consenso", com
+                      // os dois lados — é a adjudicação humana do kill-switch.
                       const objecoes = vereditos.filter((x) => !x.ok);
                       if (objecoes.length === 0) return { ok: true };
+                      const corpo = objecoes
+                          .map((o) => o.feedback)
+                          .filter(Boolean)
+                          .join('\n');
+                      const split = objecoes.length < vereditos.length;
                       return {
                           ok: false,
-                          feedback: objecoes
-                              .map((o) => o.feedback)
-                              .filter(Boolean)
-                              .join('\n'),
+                          feedback: split
+                              ? `SEM CONSENSO (${vereditos.length - objecoes.length} aprovaram, ` +
+                                `${objecoes.length} objetaram):\n${corpo}`
+                              : corpo,
                       };
                   },
     });
@@ -212,10 +251,13 @@ export async function orquestrarCom(opts: {
     io: IoOrquestrador;
     maxRondas?: number;
     memoria?: string; // memória do SaaS (Kernel) para a Análise
+    // Retoma cirúrgica: recomeça nesta fase com a Análise já produzida.
+    desde?: Cruzamento;
+    analiseInicial?: string;
     // Injetável p/ teste: corre 1 cruzamento (default = o real, com handoffs).
     executarCruzamento?: (cruzamento: Cruzamento, spec: string) => Promise<ResultadoCruzamento>;
 }): Promise<ResultadoOrquestracao> {
-    const { issue, defs, spec, io, memoria } = opts;
+    const { issue, defs, spec, io, memoria, desde, analiseInicial } = opts;
     const maxRondas = opts.maxRondas ?? 3;
     const branch = nomeBranch(issue);
 
@@ -235,23 +277,35 @@ export async function orquestrarCom(opts: {
         });
 
     await io.moverSemaforo(null, 'processando');
-    await io.abrirBranch(branch);
+    // Retoma (desde definido) continua o branch; senão abre fresh do ramo default.
+    await io.abrirBranch(branch, desde !== undefined);
 
     // O miolo trata da estrela (execução lê a Análise) + do kill-switch (pára no
-    // primeiro cruzamento que não valida).
-    const pipeline: ResultadoPipeline = await correrPipeline({ defs, spec, executar });
+    // primeiro cruzamento que não valida). desde/analiseInicial = retoma cirúrgica.
+    const pipeline: ResultadoPipeline = await correrPipeline({
+        defs,
+        spec,
+        executar,
+        desde,
+        analiseInicial,
+    });
 
     if (!pipeline.completo) {
         const cruzamento = pipeline.ordem.at(-1) ?? 'analise';
         const ultimo = pipeline.porCruzamento[cruzamento];
         await io.moverSemaforo('processando', 'bloqueado');
+        // Grava a fase: a retoma recomeça AQUI, não na Análise.
+        await io.marcarRetoma?.(cruzamento);
         await io.comentar(
             `🔴 Bloqueado no cruzamento "${cruzamento}" (não convergiu em ${ultimo?.rondas ?? '?'} ronda(s)).\n\n` +
                 `Última objeção:\n${ultimo?.historico.at(-1)?.veredito?.feedback ?? '—'}\n\n` +
-                'Comenta a correção e re-arrasta para o relay retomar (relê os comentários).',
+                'Comenta a correção e re-arrasta para o relay retomar (recomeça nesta fase).',
         );
         return { estado: 'bloqueado', cruzamento };
     }
+
+    // Convergiu: limpa a marca de retoma (a próxima corre do início).
+    await io.marcarRetoma?.(null);
 
     // Verde. Há código para PR? (análise/auditoria-só não mexem em ficheiros.)
     const mudou = (await io.diff()).trim() !== '';
@@ -301,9 +355,22 @@ export function construirIo(opts: {
             // A vista kanban segue as labels: espelha o semáforo no cartão ligado.
             if (db) await atualizarRelayEstadoPorIssueCom(db, repo, issue, para);
         },
-        abrirBranch: (branch) => abrirBranch(cwd, branch, base, token),
+        abrirBranch: (branch, retoma) => abrirBranch(cwd, branch, base, token, retoma),
         diff: () => diffDoRepo(cwd),
         testar: () => correrTestes(cwd),
+        marcarRetoma: async (cruzamento) => {
+            const manter = cruzamento ? faseLabel(cruzamento) : null;
+            try {
+                await editarLabels(token, {
+                    repo,
+                    number: issue,
+                    add: manter ? [manter] : [],
+                    remove: CRUZAMENTOS.map(faseLabel).filter((l) => l !== manter),
+                });
+            } catch (e) {
+                console.error('marcar fase de retoma falhou (segue):', e);
+            }
+        },
         commitPush: (branch, mensagem) => commitPush(cwd, branch, mensagem, token),
         criarPR: (p) => criarPR(token, { repo, base, head: p.head, title: p.title, body: p.body }),
         correr: (provider, prompt, escrever) => {
@@ -345,6 +412,13 @@ export async function orquestrar(opts: {
     // A Análise entra com a memória do SaaS (Kernel do utilizador); não-fatal.
     const memoria = await blocoKernelCom(db);
 
+    // Retoma cirúrgica: se a issue tem uma fase gravada (parou aí antes), recomeça
+    // nela com o goal da Análise já produzido — desde que esse goal exista nos
+    // comentários; senão recomeça do início (fallback seguro).
+    const fase = faseDeRetoma(issueDados.labels);
+    const goal = fase && fase !== 'analise' ? goalDaAnalise(issueDados.comentarios) : null;
+    const desde = fase && (fase === 'analise' || goal) ? fase : undefined;
+
     const io = construirIo({ token, repo, issue, cwd, base, defs, db });
     const resultado = await orquestrarCom({
         issue,
@@ -353,6 +427,8 @@ export async function orquestrar(opts: {
         io,
         maxRondas: opts.maxRondas,
         memoria,
+        desde,
+        analiseInicial: goal ?? undefined,
     });
 
     // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no

@@ -90,11 +90,20 @@ por-issue), e cada substep deixa rasto.
 - **Docs de volta no SaaS:** no verde, o orchestrator escreve uma **nota no projeto** (vectorizada) com
   a issue + o PR — não só os `docs/` do repo (`registarNoSaasCom`).
 - **Vista kanban ↔ labels:** o semáforo da issue espelha-se no cartão (`relay_estado`).
+- **Agregação fina:** any-rejeita move as rondas (uma objeção não é votada para fora); um **split**
+  (uns aprovam, outros objetam) que não converge chega ao humano rotulado **"SEM CONSENSO"** com os
+  dois lados — a adjudicação humana do kill-switch (NÃO maioria; adjudicador-agente fica p/ depois).
+- **Retoma cirúrgica:** o kill-switch grava a fase numa label `relay:fase:<c>`; o re-disparo recomeça
+  **nessa fase** (não na Análise), reusando o goal da Análise dos comentários (`faseDeRetoma`/
+  `goalDaAnalise`/`correrPipeline({desde, analiseInicial})`). Sem goal guardado → recomeça do início.
+  Na retoma a `abrirBranch` **continua** o branch (`buildRetomaArgs`: não reseta de base) — o trabalho
+  não-commitado da fase anterior fica no working tree do disco (commit só no verde; o lock impede outro
+  relay no mesmo path). Resetar apagava-o (achado do Audit).
 
 **Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); um
 `Set` em memória trava disparos concorrentes no mesmo path (v1 single-process). Lock durável
 quando o relay for distribuído.
 
-**Falta (refinamento / fora do v1):** **skills por fase reais** (do [[agent-skills-compare]] — hoje
-prompts inline); agregação fina dos N validadores (forma maioria/adjudicação por decidir); retoma
-**cirúrgica** à fase certa (hoje recomeça na Análise); o **smoke vivo** end-to-end.
+**Falta (fora do v1):** **skills por fase reais** (do [[agent-skills-compare]] — hoje prompts inline);
+**adjudicador-agente** (3.º provider a desempatar splits sem chamar o humano); lock durável
+(distribuído); o **smoke vivo** end-to-end.

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildBranchArgs,
     buildCommitPushArgs,
+    buildRetomaArgs,
     comandoTestes,
     INTERN_NOME,
     nomeBranch,
@@ -20,6 +21,17 @@ describe('buildBranchArgs', () => {
         expect(seq[0]).toEqual(['checkout', 'master']);
         expect(seq).toContainEqual(['pull', '--ff-only']);
         expect(seq).toContainEqual(['checkout', '-B', 'feat/issue-1']);
+        expect(seq).toContainEqual(['config', 'user.name', INTERN_NOME]);
+    });
+});
+
+describe('buildRetomaArgs', () => {
+    it('CONTINUA o branch (checkout sem -B, sem tocar na base) + identidade', () => {
+        const seq = buildRetomaArgs('feat/issue-1');
+        expect(seq[0]).toEqual(['checkout', 'feat/issue-1']);
+        // Não reseta: nada de checkout base nem -B (preserva o trabalho no disco).
+        expect(seq.some((a) => a[0] === 'checkout' && a[1] === 'main')).toBe(false);
+        expect(seq.some((a) => a.includes('-B'))).toBe(false);
         expect(seq).toContainEqual(['config', 'user.name', INTERN_NOME]);
     });
 });

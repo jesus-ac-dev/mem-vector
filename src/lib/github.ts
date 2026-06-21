@@ -70,7 +70,7 @@ export function buildIssueArgs(o: GhOp): string[] {
                 '--repo',
                 o.repo,
                 '--json',
-                'title,body,comments',
+                'title,body,comments,labels',
             ];
         case 'labels': {
             const args = ['issue', 'edit', String(o.number), '--repo', o.repo];
@@ -239,16 +239,22 @@ export async function clonarProjeto(token: string, repo: string, path: string): 
 
 // --- Orchestrator do relay: a issue como trigger + estado -------------------
 
-/** Lê a issue (título + corpo + comentários) — o goal do pipeline + a retoma. */
+/** Lê a issue (título + corpo + comentários + labels) — goal + retoma + estado. */
 export async function verIssue(
     token: string,
     p: { repo: string; number: number },
-): Promise<{ title: string; body: string; comentarios: { autor: string; corpo: string }[] }> {
+): Promise<{
+    title: string;
+    body: string;
+    comentarios: { autor: string; corpo: string }[];
+    labels: string[];
+}> {
     const out = await corrGh(buildIssueArgs({ op: 'ver', ...p }), token);
     const j = JSON.parse(out) as {
         title?: string;
         body?: string;
         comments?: { author?: { login?: string }; body?: string }[];
+        labels?: { name?: string }[];
     };
     return {
         title: j.title ?? '',
@@ -257,6 +263,7 @@ export async function verIssue(
             autor: c.author?.login ?? '',
             corpo: c.body ?? '',
         })),
+        labels: (j.labels ?? []).map((l) => l.name ?? '').filter(Boolean),
     };
 }
 

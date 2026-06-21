@@ -54,7 +54,7 @@ describe('remoteBate', () => {
 });
 
 describe('buildIssueArgs (orchestrator: ver/labels/pr)', () => {
-    it('ver = issue view --json title,body,comments', () => {
+    it('ver = issue view --json title,body,comments,labels', () => {
         expect(buildIssueArgs({ op: 'ver', repo: 'o/r', number: 5 })).toEqual([
             'issue',
             'view',
@@ -62,7 +62,7 @@ describe('buildIssueArgs (orchestrator: ver/labels/pr)', () => {
             '--repo',
             'o/r',
             '--json',
-            'title,body,comments',
+            'title,body,comments,labels',
         ]);
     });
     it('labels = add/remove na issue', () => {
