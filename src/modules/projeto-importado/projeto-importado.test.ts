@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { construirNotaResumo, nomeCurtoDoRepo } from './projeto-importado.service';
+import { construirNotaResumo, estadoDaIssue, nomeCurtoDoRepo } from './projeto-importado.service';
 
 describe('nomeCurtoDoRepo', () => {
     it('tira o nome do owner/nome', () => {
@@ -45,5 +45,16 @@ describe('construirNotaResumo', () => {
         const n = construirNotaResumo({ repo: 'o/r' });
         expect(n.content_md).toContain('Resumo do projeto por preencher');
         expect(n.summary).toContain('o/r');
+    });
+});
+
+describe('estadoDaIssue (cuidado com o estado)', () => {
+    it('aberta → backlog (trabalho a fazer)', () => {
+        expect(estadoDaIssue('OPEN')).toBe('backlog');
+        expect(estadoDaIssue('open')).toBe('backlog');
+    });
+    it('fechada → terminado (não reaparece como trabalho)', () => {
+        expect(estadoDaIssue('CLOSED')).toBe('terminado');
+        expect(estadoDaIssue('closed')).toBe('terminado');
     });
 });

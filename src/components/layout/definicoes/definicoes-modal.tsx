@@ -31,6 +31,7 @@ import {
     testarProjeto,
     clonarProjetoGithub,
     importarProjeto,
+    importarIssuesProjeto,
 } from '@/modules/definicoes/definicoes.actions';
 import { WORKSPACE_MUDOU_EVENT } from '@/components/layout/workspace/workspace-context';
 import { getJson } from '@/lib/api-get';
@@ -262,9 +263,15 @@ export function DefinicoesModal({
         }
         if (res.ok) {
             const imp = await importarProjeto(r, path);
-            res = imp.ok ? { ok: true, detalhe: 'Projeto pronto e importado.' } : imp;
-            // Refresh do explorer para a pasta + nota aparecerem sem reload manual.
-            if (imp.ok) window.dispatchEvent(new Event(WORKSPACE_MUDOU_EVENT));
+            if (imp.ok) {
+                // Lança também as issues do repo como cartões (trabalho para arrancar).
+                const iss = await importarIssuesProjeto(r);
+                res = { ok: true, detalhe: `Projeto importado. ${iss.detalhe}` };
+                // Refresh do explorer + kanban (pasta, nota e cartões) sem reload.
+                window.dispatchEvent(new Event(WORKSPACE_MUDOU_EVENT));
+            } else {
+                res = imp;
+            }
         }
         setTestesProjeto((t) => ({ ...t, [r]: res }));
     }

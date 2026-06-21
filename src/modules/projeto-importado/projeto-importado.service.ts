@@ -5,7 +5,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
 import { resolverProjetoCom } from '@/modules/projetos/projetos.service';
+import type { EstadoTarefa } from '@/modules/tarefas/tarefas.schema';
 import { expandirHome } from '@/lib/paths';
+
+/** Estado da issue (gh: OPEN/CLOSED) → coluna do kanban. Cuidado com o estado:
+ *  uma issue FECHADA não entra como backlog (seria trabalho fantasma) — vai
+ *  terminada; uma aberta arranca no backlog (trabalho a fazer). */
+export function estadoDaIssue(state: string): EstadoTarefa {
+    return state.trim().toLowerCase() === 'closed' ? 'terminado' : 'backlog';
+}
 
 // Import de um repo ligado para o vault: o projeto vira uma PASTA real (reusa a
 // máquina de projetos = pasta) com uma NOTA DE RESUMO dentro — header com o path
