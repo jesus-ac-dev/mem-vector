@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCloneArgs, buildRemoteCheckArgs, remoteBate } from './github';
+import { buildCloneArgs, buildIssueArgs, buildRemoteCheckArgs, remoteBate } from './github';
 
 describe('buildCloneArgs', () => {
     it('monta o gh repo clone repo path', () => {
@@ -44,5 +44,47 @@ describe('remoteBate', () => {
     });
     it('não bate em string vazia', () => {
         expect(remoteBate('', 'o/r')).toBe(false);
+    });
+});
+
+describe('buildIssueArgs (orchestrator: ver/labels/pr)', () => {
+    it('ver = issue view --json title,body', () => {
+        expect(buildIssueArgs({ op: 'ver', repo: 'o/r', number: 5 })).toEqual([
+            'issue',
+            'view',
+            '5',
+            '--repo',
+            'o/r',
+            '--json',
+            'title,body',
+        ]);
+    });
+    it('labels = add/remove na issue', () => {
+        expect(
+            buildIssueArgs({ op: 'labels', repo: 'o/r', number: 5, add: ['a'], remove: ['b'] }),
+        ).toEqual([
+            'issue',
+            'edit',
+            '5',
+            '--repo',
+            'o/r',
+            '--add-label',
+            'a',
+            '--remove-label',
+            'b',
+        ]);
+    });
+    it('pr = pr create com base/head/title/body', () => {
+        const a = buildIssueArgs({
+            op: 'pr',
+            repo: 'o/r',
+            base: 'main',
+            head: 'feat/issue-5',
+            title: 'Relay: #5',
+            body: 'Closes #5',
+        });
+        expect(a.slice(0, 4)).toEqual(['pr', 'create', '--repo', 'o/r']);
+        expect(a[a.indexOf('--head') + 1]).toBe('feat/issue-5');
+        expect(a[a.indexOf('--base') + 1]).toBe('main');
     });
 });

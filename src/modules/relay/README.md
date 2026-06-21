@@ -39,3 +39,27 @@ por comentário são os próximos passos.
   painel adversarial (qualquer um que derrube = não passou). `self` + providers ATIVOS.
 - Os cruzamentos são **config do módulo GitHub** (add-on de dev), não genéricos no kernel: a UI
   vive **dentro da página do módulo GitHub** (gated, com providers ativos), não no menu de topo.
+
+## Orchestrator (2026-06-21) — o motor sobre o miolo
+
+O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao GitHub: a issue
+é trigger + estado, o agente escreve **código de verdade** no working copy preparado (sem clonar
+por-issue), e cada substep deixa rasto.
+
+- **`relay.orchestrator.ts`** — `orquestrarDevCom` (lógica, IO injetada = testável) corre o
+  cruzamento **Development**: principal escreve (TDD), validadores derrubam o diff, rondas até
+  verde. **Handoff assinado POR SUBSTEP** (não no fim). Verde → commit/push/**PR** (`Closes #N`) +
+  🟢; kill-switch → 🔴 e pára (sem auto-merge — pára para o smoke do Carlos). `orquestrarDev` é o
+  entrypoint real (lê definições → token/path/providers → IO).
+- **`escrita-no-repo.ts`** (`src/lib/providers/`) — escrita agêntica: `claude -p
+  --permission-mode acceptEdits` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
+  Só modo `cli` escreve (api → erro). Bypass do sandbox por env em kernels onde o bwrap rebenta.
+- **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; push com o `GH_TOKEN` do user.
+- **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
+- **`src/lib/github.ts`** — `verIssue`/`editarLabels` (semáforos 🟠🔴🟢)/`criarPR`.
+
+**Semáforos** (labels): `relay:🟠` processa · `relay:🔴` bloqueado · `relay:🟢` pronto.
+
+**Falta (próximas fatias):** os outros cruzamentos (Análise/Docs/Auditoria reusam o pipeline),
+o test-gate externo (correr a suite do repo entre rondas), a retoma do kill-switch via
+chat-under-kanban, e o trigger pela UI (arrastar Backlog→Análise). Smoke vivo por fazer.

@@ -36,7 +36,10 @@ export interface IssueRef {
 export type GhOp =
     | { op: 'criar'; repo: string; title: string; body: string }
     | { op: 'ler'; repo: string; state?: 'open' | 'closed' | 'all'; limit?: number }
-    | { op: 'comentar'; repo: string; number: number; body: string };
+    | { op: 'comentar'; repo: string; number: number; body: string }
+    | { op: 'ver'; repo: string; number: number }
+    | { op: 'labels'; repo: string; number: number; add?: string[]; remove?: string[] }
+    | { op: 'pr'; repo: string; base: string; head: string; title: string; body: string };
 
 /** Args do gh para cada operação (puro — o núcleo testável). */
 export function buildIssueArgs(o: GhOp): string[] {
@@ -59,6 +62,29 @@ export function buildIssueArgs(o: GhOp): string[] {
             ];
         case 'comentar':
             return ['issue', 'comment', String(o.number), '--repo', o.repo, '--body', o.body];
+        case 'ver':
+            return ['issue', 'view', String(o.number), '--repo', o.repo, '--json', 'title,body'];
+        case 'labels': {
+            const args = ['issue', 'edit', String(o.number), '--repo', o.repo];
+            for (const l of o.add ?? []) args.push('--add-label', l);
+            for (const l of o.remove ?? []) args.push('--remove-label', l);
+            return args;
+        }
+        case 'pr':
+            return [
+                'pr',
+                'create',
+                '--repo',
+                o.repo,
+                '--base',
+                o.base,
+                '--head',
+                o.head,
+                '--title',
+                o.title,
+                '--body',
+                o.body,
+            ];
     }
 }
 
@@ -195,4 +221,41 @@ export async function testarProjetoLocal(
 export async function clonarProjeto(token: string, repo: string, path: string): Promise<void> {
     const r = await corrBin('gh', buildCloneArgs(repo, path), buildGhEnv(token));
     if (r.code !== 0) throw new Error(`clone falhou: ${r.err || r.out || `gh saiu ${r.code}`}`);
+}
+
+// --- Orchestrator do relay: a issue como trigger + estado -------------------
+
+/** Lê a spec da issue (título + corpo) — o goal do pipeline. */
+export async function verIssue(
+    token: string,
+    p: { repo: string; number: number },
+): Promise<{ title: string; body: string }> {
+    const out = await corrGh(buildIssueArgs({ op: 'ver', ...p }), token);
+    const j = JSON.parse(out) as { title?: string; body?: string };
+    return { title: j.title ?? '', body: j.body ?? '' };
+}
+
+/** O ramo default REAL do repo (não assumir "main" — há repos em "master"). */
+export async function ramoPrincipal(token: string, repo: string): Promise<string> {
+    const out = await corrGh(
+        ['repo', 'view', repo, '--json', 'defaultBranchRef', '-q', '.defaultBranchRef.name'],
+        token,
+    );
+    return out.trim() || 'main';
+}
+
+/** Move os semáforos/estado da issue por label (a vista kanban segue as labels). */
+export async function editarLabels(
+    token: string,
+    p: { repo: string; number: number; add?: string[]; remove?: string[] },
+): Promise<void> {
+    await corrGh(buildIssueArgs({ op: 'labels', ...p }), token);
+}
+
+/** Abre o PR do branch da issue (v1 sem auto-merge — pára para o smoke humano). */
+export async function criarPR(
+    token: string,
+    p: { repo: string; base: string; head: string; title: string; body: string },
+): Promise<string> {
+    return extrairUrl(await corrGh(buildIssueArgs({ op: 'pr', ...p }), token));
 }
