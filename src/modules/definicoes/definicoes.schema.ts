@@ -156,6 +156,7 @@ export interface DefinicoesVista {
     githubTemToken: boolean;
     githubKeySufixo?: string;
     githubRepos: string[];
+    cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -179,6 +180,7 @@ export interface DefinicoesServidor {
     comportamento?: string; // #122: injetado no prompt do agente a seguir ao Kernel
     githubToken?: string; // M7: decifrado, vira o GH_TOKEN do subprocesso; nunca serializado p/ fora
     githubRepos: string[]; // M7: repos ligados ("owner/nome")
+    cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -202,6 +204,41 @@ export const TestarProviderSchema = z.object({
     provider: z.enum(PROVIDERS),
     config: AgenteConfigSchema.optional(),
 });
+
+// --- Relay (módulo de dev): cruzamentos config-driven ----------------------
+// O pipeline é um percurso de CRUZAMENTOS, cada um com um papel, parametrizado
+// por {principal, validador} — CONFIG, não código (glossário). Roles canónicos.
+export const CRUZAMENTOS = ['analise', 'dev', 'docs', 'auditoria'] as const;
+export type Cruzamento = (typeof CRUZAMENTOS)[number];
+
+export const CRUZAMENTO_LABEL: Record<Cruzamento, string> = {
+    analise: 'Análise',
+    dev: 'Desenvolvimento',
+    docs: 'Documentação',
+    auditoria: 'Auditoria',
+};
+
+// Um validador é o MESMO provider ('self') ou outro de linhagem diferente (cross —
+// anti-árvore-torta). O double-tap escala para N: lista vazia = só principal (sem
+// validação); 1 = double-tap; 2+ = painel adversarial (cada um tenta derrubar).
+export const ValidadorSchema = z.union([z.enum(PROVIDERS), z.literal('self')]);
+export type Validador = z.infer<typeof ValidadorSchema>;
+
+// Config de UM cruzamento: quem PRODUZ (principal) e quem VALIDA (N validadores).
+export const CruzamentoConfigSchema = z.object({
+    principal: z.enum(PROVIDERS),
+    validadores: z.array(ValidadorSchema).max(4).default([]),
+});
+export type CruzamentoConfig = z.infer<typeof CruzamentoConfigSchema>;
+
+// O mapa cruzamento→provider (espelha AgentesSchema: cada um opcional).
+const CruzamentosSchema = z.object({
+    analise: CruzamentoConfigSchema.optional(),
+    dev: CruzamentoConfigSchema.optional(),
+    docs: CruzamentoConfigSchema.optional(),
+    auditoria: CruzamentoConfigSchema.optional(),
+});
+export type Cruzamentos = z.infer<typeof CruzamentosSchema>;
 
 // Input de gravação (a porta valida isto).
 export const DefinicoesSchema = z.object({
@@ -230,6 +267,8 @@ export const DefinicoesSchema = z.object({
         .array(z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'usa o formato owner/nome'))
         .max(50)
         .optional(),
+    // Relay (módulo de dev): o mapa cruzamento→provider — config, não código.
+    cruzamentos: CruzamentosSchema.optional(),
     agentes: AgentesSchema,
 });
 
@@ -247,5 +286,6 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     webTemKey: false,
     githubTemToken: false,
     githubRepos: [],
+    cruzamentos: {},
     agentes: {},
 };

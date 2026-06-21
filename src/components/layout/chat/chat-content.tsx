@@ -295,13 +295,6 @@ function ChatControls({
     onTraceClick: () => void;
     onEscolha: (defs: DefinicoesVista) => void;
 }) {
-    const provider = defs?.chatProvider ?? 'claude';
-    const atual = defs?.agentes[provider] ?? agenteDefault();
-    const modelos = defs
-        ? atual.modelos?.length
-            ? atual.modelos
-            : MODELOS_SUGERIDOS[provider]
-        : [];
     const ativos = defs ? PROVIDERS.filter((p) => defs.agentes[p]?.ativo) : [];
 
     function escolher(campos: {
@@ -332,9 +325,11 @@ function ChatControls({
         );
     }
 
-    // Caminho (a): sem provider ativo, em vez dos dropdowns mostra-se o erro
-    // + atalho para configurar (não há default que use a conta da máquina).
-    if (defs && ativos.length === 0) {
+    // Caminho (a): a carregar OU sem provider ativo — NUNCA mostrar o default Claude
+    // (sem conta da máquina, #40). A carregar => nada (sem flash do Claude); sem
+    // provider ativo => o aviso + atalho, nunca os dropdowns.
+    if (!defs) return null;
+    if (ativos.length === 0) {
         return (
             <div className="flex shrink-0 flex-wrap items-center gap-2 text-[0.7rem] text-muted-foreground">
                 <span>Sem provider configurado.</span>
@@ -349,6 +344,11 @@ function ChatControls({
             </div>
         );
     }
+
+    // Só aqui há provider ativo. O selecionado é o chat_provider se ativo, senão o 1.º ativo.
+    const provider = ativos.includes(defs.chatProvider) ? defs.chatProvider : ativos[0];
+    const atual = defs.agentes[provider] ?? agenteDefault();
+    const modelos = atual.modelos?.length ? atual.modelos : MODELOS_SUGERIDOS[provider];
 
     return (
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[0.7rem] text-muted-foreground">
@@ -367,7 +367,7 @@ function ChatControls({
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                    {(ativos.length ? ativos : (['claude'] as Provider[])).map((p) => (
+                    {ativos.map((p) => (
                         <SelectItem key={p} value={p}>
                             <span className="flex items-center gap-2">
                                 <ProviderIcon provider={p} className="h-5 w-5" />

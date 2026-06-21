@@ -45,3 +45,30 @@ describe('DefinicoesSchema github (M7)', () => {
         ).toThrow();
     });
 });
+
+// Relay (módulo de dev): o mapa cruzamento→provider — config, não código.
+describe('DefinicoesSchema cruzamentos (relay)', () => {
+    it('é opcional (ausente = sem pipeline configurado)', () => {
+        expect(DefinicoesSchema.parse({ agentes: {} }).cruzamentos).toBeUndefined();
+    });
+
+    it('aceita principal + N validadores; omitido = lista vazia', () => {
+        const d = DefinicoesSchema.parse({
+            agentes: {},
+            cruzamentos: {
+                dev: { principal: 'codex', validadores: ['claude'] },
+                auditoria: { principal: 'codex', validadores: ['claude', 'gemini'] },
+                analise: { principal: 'claude' },
+            },
+        });
+        expect(d.cruzamentos?.dev).toEqual({ principal: 'codex', validadores: ['claude'] });
+        expect(d.cruzamentos?.auditoria?.validadores).toEqual(['claude', 'gemini']);
+        expect(d.cruzamentos?.analise).toEqual({ principal: 'claude', validadores: [] });
+    });
+
+    it('rejeita um provider desconhecido como principal', () => {
+        expect(() =>
+            DefinicoesSchema.parse({ agentes: {}, cruzamentos: { dev: { principal: 'gpt' } } }),
+        ).toThrow();
+    });
+});
