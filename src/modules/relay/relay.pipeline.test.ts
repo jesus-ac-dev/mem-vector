@@ -32,6 +32,7 @@ describe('correrPipeline (o circuito das atividades)', () => {
                 auditoria: { principal: 'claude', validadores: [] },
                 analise: { principal: 'claude', validadores: [] },
                 dev: { principal: 'codex', validadores: ['claude'] },
+                testes: { principal: 'claude', validadores: [] },
             }),
             spec: 'tarefa',
             executar: async (c) => {
@@ -39,9 +40,9 @@ describe('correrPipeline (o circuito das atividades)', () => {
                 return ok(`out-${c}`);
             },
         });
-        // docs não estava configurado; a ordem é canónica (analise→dev→auditoria).
-        expect(r.ordem).toEqual(['analise', 'dev', 'auditoria']);
-        expect(correram).toEqual(['analise', 'dev', 'auditoria']);
+        // docs não estava configurado; a ordem é canónica.
+        expect(r.ordem).toEqual(['analise', 'dev', 'testes', 'auditoria']);
+        expect(correram).toEqual(['analise', 'dev', 'testes', 'auditoria']);
         expect(r.completo).toBe(true);
     });
 

@@ -7,7 +7,15 @@ import {
     type Provider,
 } from '@/modules/definicoes/definicoes.schema';
 import { correrNoRepo, type RespostaRepo } from '@/lib/providers/escrita-no-repo';
-import { comentarIssue, criarPR, editarLabels, ramoPrincipal, verIssue } from '@/lib/github';
+import { criarProvider } from '@/lib/providers/factory';
+import {
+    comentarIssue,
+    criarPR,
+    editarLabels,
+    garantirLabels,
+    ramoPrincipal,
+    verIssue,
+} from '@/lib/github';
 import { blocoKernelCom } from '@/agent/kernel';
 import { atualizarRelayEstadoPorIssueCom } from '@/modules/tarefas/tarefas.service';
 import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
@@ -17,11 +25,11 @@ import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.s
 import { construirHandoff } from './relay.handoff';
 import { abrirBranch, commitPush, correrTestes, diffDoRepo, nomeBranch } from './relay.git';
 import { correrPipeline, type ResultadoPipeline } from './relay.pipeline';
-import { resolverCruzamento } from './relay.resolver';
+import { providersAtivos, resolverCruzamento } from './relay.resolver';
 import { correrCruzamento, parseVeredito, type ResultadoCruzamento } from './relay.runner';
 
 // O orchestrator: faz o GitHub ser trigger + estado do PIPELINE de cruzamentos
-// (Análise→Dev→Docs→Auditoria) contra o working copy preparado (path das
+// (Análise→Dev→Testes→Docs) contra o working copy preparado (path das
 // Definições, sem clonar por-issue). A lógica do circuito (estrela, rondas,
 // kill-switch) é o miolo (#127, correrPipeline/correrCruzamento); aqui ligam-se
 // os FACTOS ao GitHub: semáforo por label, handoff assinado POR SUBSTEP (não no
@@ -34,6 +42,19 @@ export const SEMAFORO_LABEL: Record<Semaforo, string> = {
     bloqueado: 'relay:🔴',
     pronto: 'relay:🟢',
 };
+
+const RELAY_LABELS = [
+    { name: SEMAFORO_LABEL.processando, color: 'f59e0b', description: 'Relay em processamento' },
+    { name: SEMAFORO_LABEL.bloqueado, color: 'ef4444', description: 'Relay bloqueado' },
+    { name: SEMAFORO_LABEL.pronto, color: '22c55e', description: 'Relay pronto para smoke' },
+    ...CRUZAMENTOS.map((c) => ({
+        name: faseLabel(c),
+        color: '64748b',
+        description: `Fase de retoma do relay: ${c}`,
+    })),
+];
+
+const FASES_RELAY: Cruzamento[] = ['analise', 'dev', 'testes', 'docs'];
 
 // Retoma cirúrgica: a fase onde o relay parou fica gravada numa label `relay:fase:<c>`.
 // A retoma (re-disparo) lê-a e recomeça AÍ — não sempre na Análise.
@@ -64,6 +85,7 @@ export function goalDaAnalise(comentarios: { corpo: string }[]): string | null {
 const ESCREVE: Record<Cruzamento, boolean> = {
     analise: false,
     dev: true,
+    testes: true,
     docs: true,
     auditoria: false,
 };
@@ -75,6 +97,11 @@ const INTRO: Record<Cruzamento, string> = {
     dev:
         'És o PROGRAMADOR. Segue TDD à risca: primeiro os testes que falham, depois o código até ' +
         'TODOS passarem. Mexes só no âmbito da spec. NÃO corras git (o orchestrator faz o commit).',
+    testes:
+        'És a VERIFICAÇÃO de regressão/integração (não é o TDD do Dev nem a auditoria de segurança). ' +
+        'Confirma que o que entrou no Dev RESPEITA o goal da Análise, e verifica que não partiu ' +
+        'OUTRAS partes da app. Corre os testes, reforça a cobertura onde há buracos e corrige ' +
+        'regressões reais — sem alargar o âmbito.',
     docs:
         'És o DOCUMENTADOR. Atualiza a documentação (docs/, README) para refletir a mudança. ' +
         'Escreve só o necessário, na língua e no estilo da casa.',
@@ -244,6 +271,82 @@ export async function orquestrarCruzamentoCom(opts: {
     });
 }
 
+export async function orquestrarFaseSequencialCom(opts: {
+    cruzamento: Cruzamento;
+    spec: string;
+    providers: Provider[];
+    validadores?: Provider[];
+    maxRondas: number;
+    io: IoOrquestrador;
+    memoria?: string;
+}): Promise<ResultadoCruzamento> {
+    const historico: ResultadoCruzamento['historico'] = [];
+    const outputs: string[] = [];
+    let rondas = 0;
+
+    if (opts.providers.length === 0) {
+        throw new Error(`Sem provider capaz de executar a fase "${opts.cruzamento}".`);
+    }
+
+    for (const principal of opts.providers) {
+        const validadores = (opts.validadores ?? opts.providers).filter((p) => p !== principal);
+        const r = await orquestrarCruzamentoCom({
+            cruzamento: opts.cruzamento,
+            spec: opts.spec,
+            principal,
+            validadores,
+            maxRondas: opts.maxRondas,
+            io: opts.io,
+            memoria: opts.memoria,
+        });
+        rondas += r.rondas;
+        historico.push(...r.historico);
+        outputs.push(`## ${principal}\n\n${r.output}`);
+        if (!r.validado) {
+            return {
+                output: outputs.join('\n\n---\n\n'),
+                rondas,
+                validado: false,
+                historico,
+            };
+        }
+    }
+
+    return {
+        output: outputs.join('\n\n---\n\n'),
+        rondas,
+        validado: true,
+        historico,
+    };
+}
+
+function podeEscreverNoRepo(provider: Provider, defs: DefinicoesServidor): boolean {
+    const cfg = defs.agentes[provider];
+    return (
+        cfg?.ativo === true && cfg.modo === 'cli' && (provider === 'claude' || provider === 'codex')
+    );
+}
+
+function providersPrincipaisDaFase(defs: DefinicoesServidor, cruzamento: Cruzamento): Provider[] {
+    const ativos = providersAtivos(defs).map((p) => p.provider);
+    if (!ESCREVE[cruzamento]) return ativos;
+    return ativos.filter((p) => podeEscreverNoRepo(p, defs));
+}
+
+// Garante que as fases canónicas CORREM mesmo sem o user as configurar: preenche
+// SÓ as que faltam com um placeholder (todos os ativos). A config que o user
+// definiu fica INTACTA — é o override real, honrado pelo executor.
+export function normalizarDefsRelay(defs: DefinicoesServidor): DefinicoesServidor {
+    const ativos = providersAtivos(defs).map((p) => p.provider);
+    if (ativos.length === 0) return defs;
+    const [principal, ...resto] = ativos;
+    const cruzamentos = { ...defs.cruzamentos };
+    for (const fase of FASES_RELAY) {
+        if (!cruzamentos[fase]) cruzamentos[fase] = { principal, validadores: resto };
+    }
+    return { ...defs, cruzamentos };
+}
+
 export async function orquestrarCom(opts: {
     issue: number;
     defs: DefinicoesServidor;
@@ -254,16 +357,36 @@ export async function orquestrarCom(opts: {
     // Retoma cirúrgica: recomeça nesta fase com a Análise já produzida.
     desde?: Cruzamento;
     analiseInicial?: string;
+    // Fases que o USER configurou nas Definições (override real). Numa dessas, usa-se
+    // a config (1 principal); nas restantes fases canónicas, rodam todos os ativos.
+    fasesConfiguradas?: Cruzamento[];
     // Injetável p/ teste: corre 1 cruzamento (default = o real, com handoffs).
     executarCruzamento?: (cruzamento: Cruzamento, spec: string) => Promise<ResultadoCruzamento>;
 }): Promise<ResultadoOrquestracao> {
     const { issue, defs, spec, io, memoria, desde, analiseInicial } = opts;
+    const fasesConfiguradas = opts.fasesConfiguradas ?? [];
     const maxRondas = opts.maxRondas ?? 3;
     const branch = nomeBranch(issue);
 
     const executar =
         opts.executarCruzamento ??
         ((cruzamento: Cruzamento, specCruzamento: string) => {
+            // Override REAL do user: se configurou esta fase nas Definições
+            // (principal + validadores), honra-a — 1 principal escolhido, não a
+            // rotação. Sem config, rodam TODOS os ativos como principal (o debate).
+            const override = fasesConfiguradas.includes(cruzamento);
+            const ativos = providersAtivos(defs).map((p) => p.provider);
+            if (!override && ativos.length > 0 && FASES_RELAY.includes(cruzamento)) {
+                return orquestrarFaseSequencialCom({
+                    cruzamento,
+                    spec: specCruzamento,
+                    providers: providersPrincipaisDaFase(defs, cruzamento),
+                    validadores: ativos,
+                    maxRondas,
+                    io,
+                    memoria,
+                });
+            }
             const r = resolverCruzamento(defs, cruzamento);
             return orquestrarCruzamentoCom({
                 cruzamento,
@@ -345,12 +468,14 @@ export function construirIo(opts: {
     const { token, repo, issue, cwd, base, defs, db } = opts;
     return {
         comentar: (body) => comentarIssue(token, { repo, number: issue, body }).then(() => {}),
-        moverSemaforo: async (de, para) => {
+        moverSemaforo: async (_de, para) => {
             await editarLabels(token, {
                 repo,
                 number: issue,
                 add: [SEMAFORO_LABEL[para]],
-                remove: de ? [SEMAFORO_LABEL[de]] : [],
+                remove: Object.values(SEMAFORO_LABEL).filter(
+                    (label) => label !== SEMAFORO_LABEL[para],
+                ),
             });
             // A vista kanban segue as labels: espelha o semáforo no cartão ligado.
             if (db) await atualizarRelayEstadoPorIssueCom(db, repo, issue, para);
@@ -373,10 +498,23 @@ export function construirIo(opts: {
         },
         commitPush: (branch, mensagem) => commitPush(cwd, branch, mensagem, token),
         criarPR: (p) => criarPR(token, { repo, base, head: p.head, title: p.title, body: p.body }),
-        correr: (provider, prompt, escrever) => {
+        correr: async (provider, prompt, escrever) => {
             const c = defs.agentes[provider];
             if (!c) throw new Error(`provider "${provider}" sem config (Definições > Agentes).`);
-            return correrNoRepo(provider, c, prompt, cwd, { escrever });
+            if (escrever) return correrNoRepo(provider, c, prompt, cwd, { escrever });
+            try {
+                return await correrNoRepo(provider, c, prompt, cwd, { escrever });
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                if (!/modo cli|ainda não escreve/.test(msg)) throw e;
+                const r = await criarProvider(provider, c).gerar(prompt);
+                return {
+                    text: r.text,
+                    costUsd: r.costUsd ?? 0,
+                    costIsEstimate: r.costUsd === null,
+                    model: r.model,
+                };
+            }
         },
     };
 }
@@ -412,6 +550,9 @@ export async function orquestrar(opts: {
     // A Análise entra com a memória do SaaS (Kernel do utilizador); não-fatal.
     const memoria = await blocoKernelCom(db);
 
+    // Repos recém-ligados podem não ter as labels do relay; garantir antes do 1.º semáforo.
+    await garantirLabels(token, repo, RELAY_LABELS);
+
     // Retoma cirúrgica: se a issue tem uma fase gravada (parou aí antes), recomeça
     // nela com o goal da Análise já produzido — desde que esse goal exista nos
     // comentários; senão recomeça do início (fallback seguro).
@@ -419,16 +560,21 @@ export async function orquestrar(opts: {
     const goal = fase && fase !== 'analise' ? goalDaAnalise(issueDados.comentarios) : null;
     const desde = fase && (fase === 'analise' || goal) ? fase : undefined;
 
-    const io = construirIo({ token, repo, issue, cwd, base, defs, db });
+    // Normaliza (preenche as fases canónicas que faltam) para o pipeline as correr;
+    // as fases que o user JÁ configurou viajam como override real (fasesConfiguradas).
+    const fasesConfiguradas = Object.keys(defs.cruzamentos) as Cruzamento[];
+    const defsRelay = normalizarDefsRelay(defs);
+    const io = construirIo({ token, repo, issue, cwd, base, defs: defsRelay, db });
     const resultado = await orquestrarCom({
         issue,
-        defs,
+        defs: defsRelay,
         spec,
         io,
         maxRondas: opts.maxRondas,
         memoria,
         desde,
         analiseInicial: goal ?? undefined,
+        fasesConfiguradas,
     });
 
     // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no
@@ -460,7 +606,7 @@ async function registarNoSaasCom(
             `- **Issue:** \`${repo}\` #${issue}`,
             `- **PR:** ${prUrl}`,
             '',
-            'Entregue pelo relay (pipeline Análise→Dev→Docs→Auditoria). O trace por substep está ' +
+            'Entregue pelo relay (pipeline Análise→Dev→Testes→Docs). O trace por substep está ' +
                 'nos comentários da issue; o PR aguarda smoke e merge.',
         ].join('\n');
         await escreverNotaEmPastaCom(

@@ -769,13 +769,11 @@ export function DefinicoesModal({
                         ) : pagina === 'cruzamentos' ? (
                             <div className="max-w-lg space-y-4">
                                 <div>
-                                    <h3 className="text-sm font-medium">
-                                        Cruzamentos — pipeline de dev
-                                    </h3>
+                                    <h3 className="text-sm font-medium">Relay — pipeline de dev</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Quem PRODUZ (principal) e quem VALIDA (N validadores) em
-                                        cada passo. Só providers ativos. Validadores de linhagem
-                                        diferente = defesa máxima contra o erro que escapa.
+                                        O relay real corre os providers ativos, sequencialmente, em
+                                        Análise, Desenvolvimento, Testes e Documentação. Estes
+                                        campos ficam como override fino por fase.
                                     </p>
                                 </div>
                                 <ul className="space-y-3">

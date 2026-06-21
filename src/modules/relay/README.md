@@ -9,26 +9,26 @@ parametrizada do par fixo `claude↔codex` que o POC `agentic-kanban` provou.
 definições (`cruzamentos`) → `resolverCruzamento` (resolve quem produz/valida) →
 `correrCruzamento` (round-loop: produz → valida → repete até passar ou esgotar rondas) →
 `executarCruzamento` (liga aos providers reais pela factory + prompts) →
-`correrPipeline` (corre os cruzamentos configurados em estrela, pára num kill switch).
+`correrPipeline` (corre as fases do relay em estrela, pára num kill switch).
 
 ## Convergência (glossário) — nunca por consenso
 
 - **Análise** = gerativo: o validador sugere a próxima melhoria até estabilizar.
-- **Dev / Docs / Auditoria** = adversarial: o validador tenta **DERRUBAR**; `parseVeredito` só
+- **Dev / Testes / Docs / Auditoria** = adversarial: o validador tenta **DERRUBAR**; `parseVeredito` só
   passa com "APROVADO" explícito (default-to-refuted — o erro não escapa por ambiguidade).
 - **Estrela:** os cruzamentos de execução leem o output da **Análise** (fonte de verdade), não
   a narrativa do anterior (não propaga a árvore torta).
 - **Kill switch:** cruzamento não validado em N rondas → pára (`completo: false`), não finge sucesso.
-  - **A DISCUTIR (Carlos):** o "volta ao humano" — como/onde o humano é chamado e o que pode fazer — ainda não está fechado. Por agora só pára.
+    - **A DISCUTIR (Carlos):** o "volta ao humano" — como/onde o humano é chamado e o que pode fazer — ainda não está fechado. Por agora só pára.
 
 ## Ficheiros
 
-| Ficheiro            | Responsabilidade                                                  |
-| ------------------- | ----------------------------------------------------------------- |
-| `relay.resolver.ts` | do config → principal/validador (`none`/`self`/`<provider>`)      |
-| `relay.runner.ts`   | round-loop puro + `parseVeredito`                                 |
+| Ficheiro            | Responsabilidade                                                   |
+| ------------------- | ------------------------------------------------------------------ |
+| `relay.resolver.ts` | do config → principal/validador (`none`/`self`/`<provider>`)       |
+| `relay.runner.ts`   | round-loop puro + `parseVeredito`                                  |
 | `relay.executar.ts` | 1 cruzamento e2e: prompts (gerativo/adversarial) + providers reais |
-| `relay.pipeline.ts` | o circuito das atividades (estrela, kill switch)                  |
+| `relay.pipeline.ts` | o circuito das atividades (estrela, kill switch)                   |
 
 A config vive nas definições (`cruzamentos`). O **trigger** (issue/goal → pipeline) + os handoffs
 por comentário são os próximos passos.
@@ -46,20 +46,28 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
 é trigger + estado, o agente escreve **código de verdade** no working copy preparado (sem clonar
 por-issue), e cada substep deixa rasto.
 
-- **`relay.orchestrator.ts`** — corre o **pipeline completo** (Análise→Dev→Docs→Auditoria) via
+- **`relay.orchestrator.ts`** — corre o **pipeline completo** (Análise→Dev→Testes→Docs) via
   `correrPipeline` (estrela: a execução lê o goal da Análise; kill-switch no 1.º que não valida).
-  - `orquestrarCruzamentoCom` — 1 cruzamento com **handoff assinado POR SUBSTEP** (não no fim).
-    Dev/Docs **escrevem** (principal em modo escrita; validadores validam o **diff**); Análise/
-    Auditoria são **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
-  - `orquestrarCom` — branch (Intern Rule) → pipeline → verde com código: commit/push/**PR**
-    (`Closes #N`) + 🟢; verde sem código: 🟢 sem PR; kill-switch: 🔴 e pára (sem auto-merge).
-  - `orquestrar` — entrypoint real (lê definições → token/path/providers → IO via `construirIo`);
-    `montarSpec` junta os **comentários humanos** ao goal = a **retoma** (pós-🔴, comentas e
-    re-disparas; o pipeline relê e integra a correção).
+  No caminho real, o orchestrator normaliza o relay para as fases canónicas e corre **todos os
+  providers ativos** sequencialmente em cada fase: cada provider atua como principal uma vez, e os
+  restantes validam. Em fases que escrevem ficheiros, só providers com execução no repo entram como
+  principais; os restantes providers ativos continuam a validar o diff/output.
+  **Override real por fase:** se o user configurar uma fase nas Definições (`cruzamentos`), essa fase
+  usa a config dele (1 principal + validadores) em vez da rotação (`fasesConfiguradas`); as outras
+  rodam todos os ativos. A fase **Testes** = regressão/integração (confirma que o Dev respeita a
+  Análise + não partiu o resto da app), distinta do TDD do Dev e da segurança da Auditoria.
+    - `orquestrarCruzamentoCom` — 1 cruzamento com **handoff assinado POR SUBSTEP** (não no fim).
+      Dev/Testes/Docs **escrevem** (principal em modo escrita; validadores validam o **diff**); Análise/
+      Auditoria são **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
+    - `orquestrarCom` — branch (Intern Rule) → pipeline → verde com código: commit/push/**PR**
+      (`Closes #N`) + 🟢; verde sem código: 🟢 sem PR; kill-switch: 🔴 e pára (sem auto-merge).
+    - `orquestrar` — entrypoint real (lê definições → token/path/providers → IO via `construirIo`);
+      `montarSpec` junta os **comentários humanos** ao goal = a **retoma** (pós-🔴, comentas e
+      re-disparas; o pipeline relê e integra a correção).
 - **`relay.actions.ts`** — `dispararRelay(repo, issue)`: o **trigger**. Valida cedo e corre o
   orchestrator em **background** (`after`) — o estado vive na issue, a resposta volta logo.
 - **`escrita-no-repo.ts`** (`src/lib/providers/`) — escrita agêntica: `claude -p
-  --permission-mode acceptEdits` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
+--permission-mode acceptEdits` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
   Só modo `cli` escreve (api → erro). Bypass do sandbox por env em kernels onde o bwrap rebenta.
 - **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; ramo default REAL (não assume
   `main`); push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default

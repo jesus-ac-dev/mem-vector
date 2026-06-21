@@ -4,6 +4,7 @@ import {
     buildBranchArgs,
     buildCommitPushArgs,
     buildRetomaArgs,
+    buildStatusArgs,
     comandoTestes,
     INTERN_NOME,
     nomeBranch,
@@ -42,6 +43,12 @@ describe('buildCommitPushArgs', () => {
         expect(seq[0]).toEqual(['add', '-A']);
         expect(seq[1]).toEqual(['commit', '-m', 'feat: x']);
         expect(seq[2]).toEqual(['push', '-u', 'origin', 'feat/issue-1']);
+    });
+});
+
+describe('buildStatusArgs', () => {
+    it('preflight de árvore limpa antes de fresh run', () => {
+        expect(buildStatusArgs()).toEqual(['status', '--porcelain']);
     });
 });
 

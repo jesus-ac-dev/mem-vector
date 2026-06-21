@@ -208,12 +208,13 @@ export const TestarProviderSchema = z.object({
 // --- Relay (módulo de dev): cruzamentos config-driven ----------------------
 // O pipeline é um percurso de CRUZAMENTOS, cada um com um papel, parametrizado
 // por {principal, validador} — CONFIG, não código (glossário). Roles canónicos.
-export const CRUZAMENTOS = ['analise', 'dev', 'docs', 'auditoria'] as const;
+export const CRUZAMENTOS = ['analise', 'dev', 'testes', 'docs', 'auditoria'] as const;
 export type Cruzamento = (typeof CRUZAMENTOS)[number];
 
 export const CRUZAMENTO_LABEL: Record<Cruzamento, string> = {
     analise: 'Análise',
     dev: 'Desenvolvimento',
+    testes: 'Testes',
     docs: 'Documentação',
     auditoria: 'Auditoria',
 };
@@ -235,6 +236,7 @@ export type CruzamentoConfig = z.infer<typeof CruzamentoConfigSchema>;
 const CruzamentosSchema = z.object({
     analise: CruzamentoConfigSchema.optional(),
     dev: CruzamentoConfigSchema.optional(),
+    testes: CruzamentoConfigSchema.optional(),
     docs: CruzamentoConfigSchema.optional(),
     auditoria: CruzamentoConfigSchema.optional(),
 });

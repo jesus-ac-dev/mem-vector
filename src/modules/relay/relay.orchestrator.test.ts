@@ -8,8 +8,10 @@ import {
     faseDeRetoma,
     goalDaAnalise,
     montarSpec,
+    normalizarDefsRelay,
     orquestrarCom,
     orquestrarCruzamentoCom,
+    orquestrarFaseSequencialCom,
     promptPrincipal,
     type IoOrquestrador,
     type Semaforo,
@@ -68,6 +70,50 @@ describe('orquestrarCom — pipeline verde', () => {
         expect(semaforos).toEqual(['processando', 'pronto']);
         expect(io.commitPush).toHaveBeenCalledTimes(1);
         expect(comentarios.some((c) => c.includes('🟢'))).toBe(true);
+    });
+
+    it('fase real: todos os providers ativos validam, mas só repo-writers escrevem', async () => {
+        const { io, corridas } = fakeIo({ diff: vi.fn(async () => '   ') });
+        await orquestrarCom({
+            issue: 2,
+            spec: 's',
+            defs: {
+                cruzamentos: { dev: { principal: 'claude', validadores: [] } },
+                agentes: {
+                    claude: { ativo: true, modo: 'cli' },
+                    codex: { ativo: true, modo: 'cli' },
+                    gemini: { ativo: true, modo: 'api' },
+                },
+            } as never,
+            io,
+        });
+        expect(corridas).toEqual([
+            { provider: 'claude', escrever: true },
+            { provider: 'codex', escrever: false },
+            { provider: 'gemini', escrever: false },
+            { provider: 'codex', escrever: true },
+            { provider: 'claude', escrever: false },
+            { provider: 'gemini', escrever: false },
+        ]);
+    });
+
+    it('override: fase configurada pelo user honra a config (1 principal), não roda', async () => {
+        const { io, corridas } = fakeIo({ diff: vi.fn(async () => '   ') });
+        await orquestrarCom({
+            issue: 3,
+            spec: 's',
+            defs: {
+                cruzamentos: { dev: { principal: 'claude', validadores: [] } },
+                agentes: {
+                    claude: { ativo: true, modo: 'cli' },
+                    codex: { ativo: true, modo: 'cli' },
+                },
+            } as never,
+            io,
+            // O user configurou 'dev' → override: só o claude (validadores: []).
+            fasesConfiguradas: ['dev'],
+        });
+        expect(corridas).toEqual([{ provider: 'claude', escrever: true }]);
     });
 
     it('retoma: abre o branch em modo CONTINUAR (retoma=true), não reseta', async () => {
@@ -212,6 +258,51 @@ describe('orquestrarCruzamentoCom — agregação fina (split)', () => {
         const feedback = r.historico.at(-1)?.veredito?.feedback ?? '';
         expect(feedback).toContain('SEM CONSENSO');
         expect(feedback).toContain('falta o caso de erro');
+    });
+});
+
+describe('orquestrarFaseSequencialCom — todos os providers ativos por fase', () => {
+    it('cada provider corre como principal, sequencialmente, com os outros a validar', async () => {
+        const { io, corridas } = fakeIo();
+        const r = await orquestrarFaseSequencialCom({
+            cruzamento: 'dev',
+            spec: 's',
+            providers: ['claude', 'codex'],
+            maxRondas: 1,
+            io,
+        });
+        expect(r.validado).toBe(true);
+        expect(corridas).toEqual([
+            { provider: 'claude', escrever: true },
+            { provider: 'codex', escrever: false },
+            { provider: 'codex', escrever: true },
+            { provider: 'claude', escrever: false },
+        ]);
+        expect(r.output).toContain('## claude');
+        expect(r.output).toContain('## codex');
+    });
+});
+
+describe('normalizarDefsRelay', () => {
+    it('expande o relay real para Análise→Dev→Testes→Docs com todos os providers ativos', () => {
+        const defs = normalizarDefsRelay({
+            metodoDestilacao: 'one-shot',
+            modulosAtivos: [],
+            chatProvider: 'claude',
+            matchCount: 5,
+            webHabilitada: false,
+            githubRepos: [],
+            cruzamentos: {},
+            agentes: {
+                claude: { ativo: true, modo: 'cli' },
+                codex: { ativo: true, modo: 'cli' },
+            },
+        });
+        expect(Object.keys(defs.cruzamentos)).toEqual(['analise', 'dev', 'testes', 'docs']);
+        expect(defs.cruzamentos.testes).toEqual({
+            principal: 'claude',
+            validadores: ['codex'],
+        });
     });
 });
 

@@ -42,6 +42,11 @@ export function buildCommitPushArgs(branch: string, mensagem: string): string[][
     ];
 }
 
+/** Preflight de fresh run: não misturar trabalho humano/lixo local no PR do relay. */
+export function buildStatusArgs(): string[] {
+    return ['status', '--porcelain'];
+}
+
 /** Nome do branch da issue (Intern Rule: feat/issue-N). */
 export function nomeBranch(issue: number): string {
     return `feat/issue-${issue}`;
@@ -76,6 +81,19 @@ async function correrSequencia(cwd: string, seq: string[][], token?: string): Pr
     }
 }
 
+export async function garantirWorkingTreeLimpa(cwd: string): Promise<void> {
+    const r = await correrGit(cwd, buildStatusArgs());
+    if (r.code !== 0) {
+        throw new Error(`git status falhou: ${r.stderr.trim() || r.stdout.trim()}`);
+    }
+    const sujo = r.stdout.trim();
+    if (sujo) {
+        throw new Error(
+            `working tree suja; aborta para não misturar alterações no PR do relay:\n${sujo}`,
+        );
+    }
+}
+
 export async function abrirBranch(
     cwd: string,
     branch: string,
@@ -84,6 +102,7 @@ export async function abrirBranch(
     retoma = false,
 ): Promise<void> {
     // Retoma continua o branch (preserva o trabalho); fresh parte do ramo default.
+    if (!retoma) await garantirWorkingTreeLimpa(cwd);
     const seq = retoma ? buildRetomaArgs(branch) : buildBranchArgs(branch, base);
     await correrSequencia(cwd, seq, token);
 }

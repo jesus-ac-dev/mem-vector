@@ -63,11 +63,13 @@ describe('DefinicoesSchema cruzamentos (relay)', () => {
             agentes: {},
             cruzamentos: {
                 dev: { principal: 'codex', validadores: ['claude'] },
+                testes: { principal: 'gemini', validadores: ['codex'] },
                 auditoria: { principal: 'codex', validadores: ['claude', 'gemini'] },
                 analise: { principal: 'claude' },
             },
         });
         expect(d.cruzamentos?.dev).toEqual({ principal: 'codex', validadores: ['claude'] });
+        expect(d.cruzamentos?.testes).toEqual({ principal: 'gemini', validadores: ['codex'] });
         expect(d.cruzamentos?.auditoria?.validadores).toEqual(['claude', 'gemini']);
         expect(d.cruzamentos?.analise).toEqual({ principal: 'claude', validadores: [] });
     });

@@ -7,7 +7,7 @@ import type { ResultadoCruzamento } from './relay.runner';
 // respeitando o provider parametrizado de cada um. Topologia em ESTRELA — a Análise
 // é a fonte de verdade; os de execução recebem o output dela como referência (não a
 // narrativa do cruzamento anterior, para não propagar a árvore torta).
-const ORDEM_CANONICA: Cruzamento[] = ['analise', 'dev', 'docs', 'auditoria'];
+const ORDEM_CANONICA: Cruzamento[] = ['analise', 'dev', 'testes', 'docs', 'auditoria'];
 
 export interface ResultadoPipeline {
     ordem: Cruzamento[]; // os que correram, por ordem

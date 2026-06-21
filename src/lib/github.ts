@@ -39,6 +39,7 @@ export type GhOp =
     | { op: 'comentar'; repo: string; number: number; body: string }
     | { op: 'ver'; repo: string; number: number }
     | { op: 'labels'; repo: string; number: number; add?: string[]; remove?: string[] }
+    | { op: 'label'; repo: string; name: string; color: string; description: string }
     | { op: 'pr'; repo: string; base: string; head: string; title: string; body: string };
 
 /** Args do gh para cada operação (puro — o núcleo testável). */
@@ -78,6 +79,19 @@ export function buildIssueArgs(o: GhOp): string[] {
             for (const l of o.remove ?? []) args.push('--remove-label', l);
             return args;
         }
+        case 'label':
+            return [
+                'label',
+                'create',
+                o.name,
+                '--repo',
+                o.repo,
+                '--color',
+                o.color,
+                '--description',
+                o.description,
+                '--force',
+            ];
         case 'pr':
             return [
                 'pr',
@@ -282,6 +296,17 @@ export async function editarLabels(
     p: { repo: string; number: number; add?: string[]; remove?: string[] },
 ): Promise<void> {
     await corrGh(buildIssueArgs({ op: 'labels', ...p }), token);
+}
+
+/** Garante labels antes de as aplicar a issues; `--force` torna a operação idempotente. */
+export async function garantirLabels(
+    token: string,
+    repo: string,
+    labels: { name: string; color: string; description: string }[],
+): Promise<void> {
+    for (const label of labels) {
+        await corrGh(buildIssueArgs({ op: 'label', repo, ...label }), token);
+    }
 }
 
 /** Abre o PR do branch da issue (v1 sem auto-merge — pára para o smoke humano). */

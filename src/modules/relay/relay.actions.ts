@@ -6,10 +6,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { lerDefinicoesServidorCom } from '@/modules/definicoes/definicoes.service';
 import type { DefinicoesServidor } from '@/modules/definicoes/definicoes.schema';
-import { criarIssue, comentarIssue, numeroDoUrl, verIssue } from '@/lib/github';
-import { getTarefaCom, ligarIssueTarefaCom } from '@/modules/tarefas/tarefas.service';
+import { criarIssue, comentarIssue, editarLabels, numeroDoUrl, verIssue } from '@/lib/github';
+import {
+    atualizarRelayEstadoPorIssueCom,
+    getTarefaCom,
+    ligarIssueTarefaCom,
+} from '@/modules/tarefas/tarefas.service';
 
-import { orquestrar } from './relay.orchestrator';
+import { orquestrar, SEMAFORO_LABEL } from './relay.orchestrator';
+import { providersAtivos } from './relay.resolver';
 
 // Lock de um-relay-por-repo (working copy partilhado): dois disparos no mesmo
 // path pisavam-se. Um Set em memória trava o segundo até o primeiro terminar.
@@ -28,6 +33,38 @@ async function defsValidadas(repo: string): Promise<DefsValidadas> {
     return { db, defs, path: ligado.path };
 }
 
+async function marcarFalhaRelay(opts: {
+    db: SupabaseClient;
+    token: string;
+    repo: string;
+    issue: number;
+    erro: unknown;
+}): Promise<void> {
+    const detalhe = opts.erro instanceof Error ? opts.erro.message : String(opts.erro);
+    try {
+        await editarLabels(opts.token, {
+            repo: opts.repo,
+            number: opts.issue,
+            add: [SEMAFORO_LABEL.bloqueado],
+            remove: [SEMAFORO_LABEL.processando, SEMAFORO_LABEL.pronto],
+        });
+    } catch (e) {
+        console.error('[relay] marcar 🔴 falhou:', e);
+    }
+    try {
+        await comentarIssue(opts.token, {
+            repo: opts.repo,
+            number: opts.issue,
+            body:
+                '🔴 Relay falhou antes de concluir.\n\n' +
+                `Erro:\n\`\`\`\n${detalhe.slice(0, 2000)}\n\`\`\``,
+        });
+    } catch (e) {
+        console.error('[relay] comentar falha falhou:', e);
+    }
+    await atualizarRelayEstadoPorIssueCom(opts.db, opts.repo, opts.issue, 'bloqueado');
+}
+
 // Trigger do relay: dispara o pipeline para uma (repo, issue). Valida cedo, trava
 // disparos concorrentes no mesmo repo, e corre o orchestrator em BACKGROUND
 // (after) — fire-and-forget. O estado/progresso vive na ISSUE (comentários
@@ -43,10 +80,10 @@ export async function dispararRelay(
     const v = await defsValidadas(repo);
     if ('erro' in v) return { ok: false, detalhe: v.erro };
     const { db, defs, path } = v;
-    if (Object.keys(defs.cruzamentos).length === 0) {
+    if (providersAtivos(defs).length === 0) {
         return {
             ok: false,
-            detalhe: 'Sem cruzamentos configurados (Definições > Configurar cruzamentos).',
+            detalhe: 'Sem providers ativos (Definições > Agentes).',
         };
     }
     if (relaysAtivos.has(path)) {
@@ -59,6 +96,7 @@ export async function dispararRelay(
             await orquestrar({ db, defs, repo, issue });
         } catch (e) {
             console.error('[relay] orquestrar falhou:', e);
+            await marcarFalhaRelay({ db, token: defs.githubToken!, repo, issue, erro: e });
         } finally {
             relaysAtivos.delete(path);
         }

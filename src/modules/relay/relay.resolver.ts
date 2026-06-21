@@ -4,6 +4,7 @@ import type {
     DefinicoesServidor,
     Provider,
 } from '@/modules/definicoes/definicoes.schema';
+import { PROVIDERS } from '@/modules/definicoes/definicoes.schema';
 
 // O circuito do relay lê o CONFIG (não código): para um cruzamento, resolve QUEM
 // produz (principal) e QUEM valida (validador), a partir do mapa cruzamento→provider
@@ -20,6 +21,13 @@ export interface CruzamentoResolvido {
     principal: PapelResolvido;
     // [] = sem validação (lista vazia). N = painel adversarial ('self' resolve ao principal).
     validadores: PapelResolvido[];
+}
+
+export function providersAtivos(defs: DefinicoesServidor): PapelResolvido[] {
+    return PROVIDERS.flatMap((provider) => {
+        const config = defs.agentes[provider];
+        return config?.ativo ? [{ provider, config }] : [];
+    });
 }
 
 export function resolverCruzamento(

@@ -61,6 +61,8 @@ const ESTADO_LABEL: Record<EstadoTarefa, string> = {
     terminado: 'Terminado',
 };
 
+const ESTADOS_TRIGGER_RELAY: EstadoTarefa[] = ['analise', 'desenvolvimento'];
+
 function corPrioridade(p: PrioridadeTarefa): string {
     if (p === 'alta') return 'bg-red-500';
     if (p === 'baixa') return 'bg-blue-800';
@@ -326,18 +328,24 @@ export function KanbanBoard() {
             setConfirmar({ tipo: 'concluir', tarefa: t });
             return;
         }
-        mutacao('mudarEstadoTarefa', { id: t.id, estado }, () => mudarEstadoTarefa(t.id, estado));
-        // Trigger do relay: arrastar para Análise dispara o pipeline para a issue
-        // ligada (o cartão de código). Cartões leves (sem issue) só mudam de coluna.
-        if (estado === 'analise' && t.repoGithub && t.issueGithub) {
-            // Checa precedências (passo 2 do fluxo): bloqueada não dispara.
+        const relayAlvo =
+            ESTADOS_TRIGGER_RELAY.includes(estado) && t.repoGithub && t.issueGithub
+                ? { repo: t.repoGithub, issue: t.issueGithub }
+                : null;
+        if (relayAlvo) {
+            // Checa precedências antes de mudar de coluna: bloqueada não entra no relay.
             if (bloqueadaPorDependencia(t)) {
                 setRelayInfo('Relay não disparado: a tarefa está bloqueada por uma dependência.');
                 return;
             }
-            const repo = t.repoGithub;
-            const issue = t.issueGithub;
-            void dispararRelay(repo, issue).then((r) => setRelayInfo(r.detalhe));
+        }
+        mutacao('mudarEstadoTarefa', { id: t.id, estado }, () => mudarEstadoTarefa(t.id, estado));
+        // Trigger do relay: arrastar para Análise ou Em Desenvolvimento dispara
+        // o pipeline para a issue ligada. Cartões leves (sem issue) só mudam de coluna.
+        if (relayAlvo) {
+            void dispararRelay(relayAlvo.repo, relayAlvo.issue).then((r) =>
+                setRelayInfo(r.detalhe),
+            );
         }
     }
 
