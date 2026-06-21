@@ -25,7 +25,11 @@ export function ProfileMenu({ perfil }: { perfil: PerfilVista }) {
     const [perfilAberto, setPerfilAberto] = useState(false);
     return (
         <>
-            <DropdownMenu>
+            {/* modal={false}: o menu não tranca o pointer-events do body. Sem isto,
+                abrir um Dialog (Definições/Perfil) a partir de um item deixava o
+                body com `pointer-events: none` preso ao fechar — app não-clicável
+                (Radix: dois overlays modais a pisar a gestão do body). */}
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="ghost"
