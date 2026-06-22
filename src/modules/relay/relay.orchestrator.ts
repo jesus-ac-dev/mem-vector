@@ -181,10 +181,10 @@ export interface IoOrquestrador {
     diff(): Promise<string>;
     commitPush(branch: string, mensagem: string): Promise<void>;
     criarPR(p: { head: string; title: string; body: string }): Promise<string>;
-    // Corre o provider DENTRO do repo (escrever=true principal, false validador).
+    // Corre o provider DENTRO do repo; escrever=true permite editar, false revê read-only.
     correr(provider: Provider, prompt: string, escrever: boolean): Promise<RespostaRepo>;
-    // Test-gate opcional: corre a suite do repo (vermelho = devolve ao principal
-    // antes de gastar o validador). Ausente = sem gate (só validação por LLM).
+    // Test-gate opcional: corre a suite do repo depois dos substeps de escrita.
+    // Vermelho devolve o output ao principal na ronda seguinte.
     testar?(): Promise<{ ok: boolean; output: string }>;
     // Grava/limpa a fase de retoma (label `relay:fase:<c>`); null = limpa. Opcional.
     marcarRetoma?(cruzamento: Cruzamento | null): Promise<void>;
@@ -236,7 +236,7 @@ export async function orquestrarCruzamentoCom(opts: {
             return resp.text;
         },
         validar:
-            validadores.length === 0
+            validadores.length === 0 && !(escreve && io.testar)
                 ? null
                 : async (output) => {
                       // RELAY a sério: cada validador NÃO é leitor — faz o seu melhor e
@@ -366,10 +366,44 @@ function podeEscreverNoRepo(provider: Provider, defs: DefinicoesServidor): boole
     );
 }
 
-function providersPrincipaisDaFase(defs: DefinicoesServidor, cruzamento: Cruzamento): Provider[] {
+function providersEscritoresDaFase(defs: DefinicoesServidor, cruzamento: Cruzamento): Provider[] {
     const ativos = providersAtivos(defs).map((p) => p.provider);
     if (!ESCREVE[cruzamento]) return ativos;
     return ativos.filter((p) => podeEscreverNoRepo(p, defs));
+}
+
+function unicosProviders(providers: Provider[]): Provider[] {
+    return providers.filter((p, i) => providers.indexOf(p) === i);
+}
+
+function resolverCruzamentoParaExecucao(
+    defs: DefinicoesServidor,
+    cruzamento: Cruzamento,
+): { principal: Provider; validadores: Provider[]; escritores: Provider[] } {
+    const r = resolverCruzamento(defs, cruzamento);
+    const principal = r.principal.provider;
+    const validadores = r.validadores.map((v) => v.provider);
+    const escritores = providersEscritoresDaFase(defs, cruzamento);
+
+    if (!ESCREVE[cruzamento] || escritores.includes(principal)) {
+        return { principal, validadores, escritores };
+    }
+
+    // Override defensivo: um principal api não consegue escrever uma fase de código.
+    // Promove-se o primeiro validador repo-writer declarado; o principal original
+    // continua no painel read-only.
+    const fallback = validadores.find((p) => escritores.includes(p));
+    if (!fallback) {
+        throw new Error(
+            `A fase "${cruzamento}" escreve no repo, mas a configuração declarada não inclui ` +
+                'nenhum repo-writer (Claude/Codex em modo CLI).',
+        );
+    }
+    return {
+        principal: fallback,
+        validadores: unicosProviders([principal, ...validadores]).filter((p) => p !== fallback),
+        escritores,
+    };
 }
 
 // Garante que as fases canónicas CORREM mesmo sem o user as configurar: preenche
@@ -419,23 +453,23 @@ export async function orquestrarCom(opts: {
                 return orquestrarFaseSequencialCom({
                     cruzamento,
                     spec: specCruzamento,
-                    providers: providersPrincipaisDaFase(defs, cruzamento),
+                    providers: providersEscritoresDaFase(defs, cruzamento),
                     validadores: ativos,
                     maxRondas,
                     io,
                     memoria,
                 });
             }
-            const r = resolverCruzamento(defs, cruzamento);
+            const r = resolverCruzamentoParaExecucao(defs, cruzamento);
             return orquestrarCruzamentoCom({
                 cruzamento,
                 spec: specCruzamento,
-                principal: r.principal.provider,
-                validadores: r.validadores.map((v) => v.provider),
+                principal: r.principal,
+                validadores: r.validadores,
                 maxRondas,
                 io,
                 memoria,
-                escritores: providersPrincipaisDaFase(defs, cruzamento),
+                escritores: r.escritores,
             });
         });
 

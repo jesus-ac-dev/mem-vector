@@ -11,15 +11,17 @@ definições (`cruzamentos`) → `resolverCruzamento` (resolve quem produz/valid
 `executarCruzamento` (liga aos providers reais pela factory + prompts) →
 `correrPipeline` (corre as fases do relay em estrela, pára num kill switch).
 
-## Convergência (glossário) — nunca por consenso
+## Convergência (glossário)
 
-- **Análise** = gerativo: o validador sugere a próxima melhoria até estabilizar.
-- **Dev / Testes / Docs / Auditoria** = adversarial: o validador tenta **DERRUBAR**; `parseVeredito` só
-  passa com "APROVADO" explícito (default-to-refuted — o erro não escapa por ambiguidade).
+- **Análise** = gerativo: o validador sugere a próxima melhoria do plano até estabilizar.
+- **Dev / Testes / Docs** = cada validador repo-writer faz o seu melhor e **ESCREVE por cima** + dá
+  veredito; **converge quando TODOS CONCORDAM** (aprovam). `parseVeredito` só passa com "APROVADO"
+  explícito (default-to-refuted — o erro não escapa por ambiguidade).
+- **Auditoria** = adversarial read-only: o validador tenta **DERRUBAR** (não escreve).
 - **Estrela:** os cruzamentos de execução leem o output da **Análise** (fonte de verdade), não
   a narrativa do anterior (não propaga a árvore torta).
-- **Kill switch:** cruzamento não validado em N rondas → pára (`completo: false`), não finge sucesso.
-    - **A DISCUTIR (Carlos):** o "volta ao humano" — como/onde o humano é chamado e o que pode fazer — ainda não está fechado. Por agora só pára.
+- **Kill switch:** não convergido em N rondas (máx. configurável) → **🔴 humano** (split = "sem
+  consenso", os dois lados); o humano comenta na issue e **re-dispara** (a retoma relê e integra).
 
 ## Ficheiros
 
@@ -62,8 +64,9 @@ por-issue), e cada substep deixa rasto.
   A fase **Testes** = regressão/integração (confirma que o Dev respeita a Análise + não partiu o
   resto da app), distinta do TDD do Dev e da segurança da Auditoria.
     - `orquestrarCruzamentoCom` — 1 cruzamento com **handoff assinado POR SUBSTEP** (não no fim).
-      Dev/Testes/Docs **escrevem** (principal em modo escrita; validadores validam o **diff**); Análise/
-      Auditoria são **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
+      Dev/Testes/Docs **escrevem** (principal em modo escrita; validadores repo-writer escrevem
+      por cima e validadores sem escrita revêem o **diff** read-only); Análise/Auditoria são
+      **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
     - `orquestrarCom` — branch (Intern Rule) → pipeline → verde com código: commit/push/**PR**
       (`Closes #N`) + 🟢; verde sem código: 🟢 sem PR; kill-switch: 🔴 e pára (sem auto-merge).
     - `orquestrar` — entrypoint real (lê definições → token/path/providers → IO via `construirIo`);

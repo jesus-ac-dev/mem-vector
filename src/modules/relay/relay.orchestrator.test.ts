@@ -119,6 +119,27 @@ describe('orquestrarCom — pipeline verde', () => {
         expect(corridas).toEqual([{ provider: 'claude', escrever: true }]);
     });
 
+    it('override: se o principal declarado não escreve, cai para um validador repo-writer e mantém o original read-only', async () => {
+        const { io, corridas } = fakeIo({ diff: vi.fn(async () => '   ') });
+        await orquestrarCom({
+            issue: 4,
+            spec: 's',
+            defs: {
+                cruzamentos: { dev: { principal: 'gemini', validadores: ['claude'] } },
+                agentes: {
+                    gemini: { ativo: true, modo: 'api' },
+                    claude: { ativo: true, modo: 'cli' },
+                },
+            } as never,
+            io,
+            fasesConfiguradas: ['dev'],
+        });
+        expect(corridas).toEqual([
+            { provider: 'claude', escrever: true },
+            { provider: 'gemini', escrever: false },
+        ]);
+    });
+
     it('retoma: abre o branch em modo CONTINUAR (retoma=true), não reseta', async () => {
         const { io } = fakeIo();
         await orquestrarCom({
@@ -237,6 +258,23 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
         // Mesmo com todos a aprovar, a suite vermelha não deixa convergir (não finge verde).
         expect(r.validado).toBe(false);
         expect(comentarios.some((c) => c.includes('suite vermelha'))).toBe(true);
+    });
+
+    it('test-gate: também corre quando a fase não tem validadores', async () => {
+        const { io, comentarios, corridas } = fakeIo({
+            testar: vi.fn(async () => ({ ok: false, output: 'FAIL sem validadores' })),
+        });
+        const r = await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: [],
+            maxRondas: 1,
+            io,
+        });
+        expect(corridas).toEqual([{ provider: 'codex', escrever: true }]);
+        expect(r.validado).toBe(false);
+        expect(comentarios.some((c) => c.includes('FAIL sem validadores'))).toBe(true);
     });
 
     it('analise: read-only (principal escrever=false), valida o output', async () => {
