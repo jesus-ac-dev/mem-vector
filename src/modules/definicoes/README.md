@@ -1,6 +1,6 @@
 # Módulo `definicoes`
 
-> Definições por utilizador (#60): a mega modal do badge — Comportamento, Agentes e Módulos.
+> Definições por utilizador (#60): a mega modal do badge — Chat, Agentes e Módulos.
 
 ## O que faz
 
@@ -17,15 +17,7 @@ onChange, só entre providers já parametrizados.
 
 ## Secções e opções
 
-- **Comportamento** — COMO o agente-autor age; a secção ACUMULA (ver memória
-  `definicoes-comportamento-acumula`): o campo **`comportamento`** (#122, Ponte F)
-  é **texto livre** onde o utilizador molda o agente (proatividade, estilo,
-  ênfases, o que evitar) — o **equivalente web a editar o `CLAUDE.md`**, sem tocar
-  em config do host. É injetado no prompt a seguir ao Kernel (`blocoComportamento`
-  em `kernel.ts`, lido por `chat.postturno.ts`), por cima do contrato base
-  (`AGENT_CONTRACT`, que já traz a **voz** genérica do produto). Importa a
-  funcionalidade do andaime (regras de comportamento) para dentro do produto.
-  Mais: `metodo_destilacao` (`one-shot`
+- **Chat** — opções do turno: `metodo_destilacao` (`one-shot`
   default, decisão #38 — ¼ do custo / `agentic`), lido por `chat.postturno.ts`;
   a env `MEMVECTOR_AGENTIC_DISTILL=1` continua como **override** (evals).
   E `match_count` (#67): nº de fontes do retrieval do chat (1..50, default 5;
@@ -43,7 +35,8 @@ onChange, só entre providers já parametrizados.
   configura-se aqui no toggle, com link para a obter; `MEMVECTOR_AGENT_WEB_KEY` no
   env fica como fallback de operação. A key segue ao `responderComToolsCom` via
   `providerDoChatCom`.
-  A entrar: proatividade, estilo, personalidade.
+  Proatividade, estilo e personalidade vivem no **Kernel** do workspace, não num
+  campo separado de Definições.
 - **Agentes** — os providers/orquestradores (`agentes` jsonb): claude (default
   vivo, cli), codex, gemini, ollama — `{ativo, modo, modelo, esforco, apiKey}`.
   **O `modo` é real por provider** (r9/r10, `MODOS_POR_PROVIDER`): claude/codex/gemini =
@@ -82,8 +75,10 @@ models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
   providers, máscara na vista) + a lista de **repos ligados** (`github_repos`).
   **UX:** botão **"Testar ligação"** valida o token (`gh api user`) e guarda em sucesso
   (não "guardar e rezar"); os repos escolhem-se por **checkbox** (carregados via
-  `gh repo list`, ações `testarGithub`/`listarReposGithub`), não à mão. Os **cruzamentos**
-  (config do relay) vivem DENTRO desta página (add-on de dev), não no menu de topo. O transporte é o **`gh` CLI** (requisito declarado no README do
+  `gh repo list`, ações `testarGithub`/`listarReposGithub`), não à mão. O **relay**
+  vive dentro desta página como add-on de dev: usa os providers ativos em fases
+  canónicas (Análise→Dev→Testes→Docs) e expõe só o limite de rondas/kill-switch.
+  O transporte é o **`gh` CLI** (requisito declarado no README do
   repo); o token vira `GH_TOKEN` no subprocesso = a conta do utilizador do SaaS,
   não o `gh` do host (passa o fresh-pc-test — requisito declarado ≠ andaime
   acumulado). Com o módulo ligado + token, o **responder com tools**
@@ -111,6 +106,6 @@ UI: `src/components/layout/definicoes-modal.tsx` (aberta pelo `profile-menu.tsx`
 Tabela `definicoes` (migração `20260612200000`): `owner_id` (PK, FK auth.users),
 `metodo_destilacao` (check), `modulos_ativos text[]`, `updated_at`. RLS só-dono
 (definições não se partilham com grupos). Colunas posteriores: `web_key_cifrada`
-(#45), `comportamento` (#122), e **M7** (`20260620120000`) `github_token_cifrada`
+(#45), e **M7** (`20260620120000`) `github_token_cifrada`
 
 - `github_repos jsonb` (connection GitHub por-utilizador).
