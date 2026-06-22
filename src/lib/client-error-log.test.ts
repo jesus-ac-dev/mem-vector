@@ -76,4 +76,22 @@ describe('runClientAction + app stale (#49)', () => {
         expect(ouvinte).not.toHaveBeenCalled();
         window.removeEventListener(STALE_APP_EVENT, ouvinte);
     });
+
+    it('RE-LANÇA o redirect do Next (signOut→/login) e NÃO o loga como erro', async () => {
+        const { runClientAction, isErroDeNavegacaoNext } = await import('./client-error-log');
+        const redirectErr = Object.assign(new Error('NEXT_REDIRECT'), {
+            digest: 'NEXT_REDIRECT;push;/login;307;',
+        });
+        expect(isErroDeNavegacaoNext(redirectErr)).toBe(true);
+
+        const erro = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // Re-lança (para o Next navegar), não devolve undefined nem loga.
+        await expect(
+            runClientAction({ area: 'profile-menu', action: 'signOut' }, async () => {
+                throw redirectErr;
+            }),
+        ).rejects.toBe(redirectErr);
+        expect(erro).not.toHaveBeenCalled();
+        erro.mockRestore();
+    });
 });
