@@ -16,7 +16,7 @@ import {
     ramoPrincipal,
     verIssue,
 } from '@/lib/github';
-import { blocoKernelCom } from '@/agent/kernel';
+import { blocoKernelRelayCom } from '@/agent/kernel';
 import { expandirHome } from '@/lib/paths';
 import { atualizarRelayEstadoPorIssueCom } from '@/modules/tarefas/tarefas.service';
 import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
@@ -551,8 +551,8 @@ export async function orquestrar(opts: {
 
     const issueDados = await verIssue(token, { repo, number: issue });
     const spec = montarSpec(issueDados);
-    // A Análise entra com a memória do SaaS (Kernel do utilizador); não-fatal.
-    const memoria = await blocoKernelCom(db);
+    // O relay inteiro recebe o Kernel focado em método/regras; não o Kernel completo.
+    const memoria = await blocoKernelRelayCom(db);
 
     // Repos recém-ligados podem não ter as labels do relay; garantir antes do 1.º semáforo.
     await garantirLabels(token, repo, RELAY_LABELS);

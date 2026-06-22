@@ -92,7 +92,9 @@ por-issue), e cada substep deixa rasto.
 
 ## Fidelidade ao desenho (2026-06-21)
 
-- **Análise lê a memória do SaaS:** o prompt da Análise leva o **Kernel** do utilizador (`blocoKernelCom`).
+- **Todas as fases leem o método da casa:** principais e validadores recebem um subset bounded do
+  **Kernel** focado em método/regras/voz/prioridades (`blocoKernelRelayCom`), para herdar a craft
+  sem multiplicar o Kernel inteiro por fase/ronda/provider.
 - **Docs de volta no SaaS:** no verde, o orchestrator escreve uma **nota no projeto** (vectorizada) com
   a issue + o PR — não só os `docs/` do repo (`registarNoSaasCom`).
 - **Vista kanban ↔ labels:** o semáforo da issue espelha-se no cartão (`relay_estado`).

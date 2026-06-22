@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blocoKernel, MYTHOS_BASE_SEED } from './kernel';
+import { blocoKernel, blocoKernelRelay, MYTHOS_BASE_SEED, notasKernelParaRelay } from './kernel';
 import { buildPrompt } from '@/modules/chat/chat.prompt';
 import { buildTurnoPrompt } from '@/modules/chat/chat.turno';
 
@@ -36,6 +36,31 @@ describe('blocoKernel', () => {
         const b = blocoKernel(notas);
         expect(b).toContain('[cortado: Kernel maior que o cap total]');
         expect(b.length).toBeLessThan(14000);
+    });
+});
+
+describe('Kernel para relay', () => {
+    it('seleciona notas focadas em método/regras e evita glossário irrelevante quando há match', () => {
+        const notas = [
+            { title: 'Glossário', contentMd: 'muito vocabulário' },
+            { title: 'Regras do agente', contentMd: 'sem fachadas; verificar sempre' },
+        ];
+        expect(notasKernelParaRelay(notas).map((n) => n.title)).toEqual(['Regras do agente']);
+        const b = blocoKernelRelay(notas);
+        expect(b).toContain('KERNEL DO WORKSPACE PARA RELAY');
+        expect(b).toContain('sem fachadas');
+        expect(b).not.toContain('muito vocabulário');
+    });
+
+    it('faz fallback ao Kernel disponível se não houver nota focada', () => {
+        const notas = [{ title: 'Sobre mim', contentMd: 'Sou mediador.' }];
+        expect(notasKernelParaRelay(notas)).toEqual(notas);
+    });
+
+    it('usa cap menor que o Kernel completo para não multiplicar custo por fase/ronda/provider', () => {
+        const b = blocoKernelRelay([{ title: 'Regras do agente', contentMd: 'x'.repeat(9000) }]);
+        expect(b).toContain('[cortado: nota maior que o cap do Kernel]');
+        expect(b.length).toBeLessThan(3000);
     });
 });
 
