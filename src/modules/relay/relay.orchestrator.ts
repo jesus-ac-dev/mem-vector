@@ -117,18 +117,29 @@ export function promptPrincipal(
     feedback: string | null,
     memoria = '',
 ): string {
-    // A Análise entra com a MEMÓRIA do SaaS (Kernel do utilizador: identidade,
-    // prioridades, regras) — destila o goal já com o contexto da casa, não só o repo.
-    const mem = cruzamento === 'analise' && memoria.trim() ? `${memoria.trim()}\n\n` : '';
+    // O Kernel do workspace (identidade, prioridades e REGRAS/método da casa) entra
+    // em TODAS as fases — não só a Análise destila com contexto. O programador, o de
+    // testes, o de docs e o auditor herdam o MÉTODO (cirúrgico, sem fachadas, docs
+    // antes de código, verificar). É o que faz o relay trabalhar "como nós", não
+    // coders genéricos — o vault é o protótipo, o relay produtiza-o (recursive-construction).
+    const mem = memoria.trim() ? `${memoria.trim()}\n\n` : '';
     const base = `${mem}${INTRO[cruzamento]}\nTrabalhas em português de Portugal.\n\nSpec/goal:\n${spec}`;
     if (!feedback) return base;
     return `${base}\n\nA ronda anterior recebeu esta objeção/sugestão — integra-a:\n${feedback}`;
 }
 
-export function promptValidador(cruzamento: Cruzamento, spec: string, referencia: string): string {
+export function promptValidador(
+    cruzamento: Cruzamento,
+    spec: string,
+    referencia: string,
+    memoria = '',
+): string {
     const rotulo = ESCREVE[cruzamento] ? 'Diff' : 'Output';
+    // O validador também herda o Kernel: julga contra as REGRAS da casa (é cirúrgico?
+    // respeita a spec? sem fachadas write-only?), não só contra a spec nua.
+    const mem = memoria.trim() ? `${memoria.trim()}\n\n` : '';
     const cabeca =
-        `És o VALIDADOR (linhagem diferente do principal). Trabalhas em português de Portugal.\n\n` +
+        `${mem}És o VALIDADOR (linhagem diferente do principal). Trabalhas em português de Portugal.\n\n` +
         `Spec:\n${spec}\n\n${rotulo}:\n${referencia}\n\n`;
     // Análise é GERATIVA (sugere a próxima melhoria até estabilizar); os de
     // execução são ADVERSARIAIS (tentam derrubar). parseVeredito só passa em APROVADO.
@@ -232,7 +243,7 @@ export async function orquestrarCruzamentoCom(opts: {
                       for (const v of validadores) {
                           const resp = await io.correr(
                               v,
-                              promptValidador(cruzamento, spec, referencia),
+                              promptValidador(cruzamento, spec, referencia, memoria),
                               false,
                           );
                           const veredito = parseVeredito(resp.text);

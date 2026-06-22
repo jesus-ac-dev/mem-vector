@@ -13,6 +13,7 @@ import {
     orquestrarCruzamentoCom,
     orquestrarFaseSequencialCom,
     promptPrincipal,
+    promptValidador,
     type IoOrquestrador,
     type Semaforo,
 } from './relay.orchestrator';
@@ -363,9 +364,19 @@ describe('promptPrincipal', () => {
         expect(promptPrincipal('analise', 's', null)).toContain('ANALISTA');
         expect(promptPrincipal('dev', 's', 'corrige X')).toContain('corrige X');
     });
-    it('a memória do SaaS entra SÓ na Análise, não no Dev', () => {
+    it('o Kernel entra em TODAS as fases (não só na Análise): os coders herdam o método', () => {
         const mem = 'KERNEL DO WORKSPACE: o Carlos prioriza o CRMCredito.';
         expect(promptPrincipal('analise', 's', null, mem)).toContain('CRMCredito');
-        expect(promptPrincipal('dev', 's', null, mem)).not.toContain('CRMCredito');
+        expect(promptPrincipal('dev', 's', null, mem)).toContain('CRMCredito');
+        expect(promptPrincipal('docs', 's', null, mem)).toContain('CRMCredito');
+    });
+});
+
+describe('promptValidador', () => {
+    it('o validador também herda o Kernel (julga contra as regras da casa)', () => {
+        const mem = 'KERNEL DO WORKSPACE: sem fachadas write-only.';
+        const p = promptValidador('dev', 's', 'o diff', mem);
+        expect(p).toContain('write-only'); // a regra da casa chega ao validador
+        expect(p).toContain('DERRUBAR'); // continua adversarial
     });
 });
