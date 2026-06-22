@@ -1,7 +1,8 @@
-// O runner de UM cruzamento: o principal produz, o validador verifica, repete até
-// passar ou esgotar as rondas (kill switch). A convergência NÃO é consenso — o
-// validador adversarial (review) tenta DERRUBAR e avança quando não consegue; o
-// gerativo (análise) melhora até estabilizar. Em ambos, "ok" = terminar.
+// O runner de UM cruzamento: ronda após ronda, produz-se e o caller decide se
+// convergiu (validar → ok), até passar ou esgotar as rondas (kill switch). No relay
+// real, em fases de escrita cada validador faz o seu melhor e ESCREVE por cima, e a
+// convergência é CONCORDAREM (todos aprovam); em análise (gerativo) estabiliza quando
+// não há mais a acrescentar. "ok" = terminar.
 //
 // Os providers entram INJETADOS (produzir/validar) — esta função é a lógica do
 // circuito, pura e testável. A construção dos providers e os prompts ficam para

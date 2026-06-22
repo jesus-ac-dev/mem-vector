@@ -50,8 +50,12 @@ por-issue), e cada substep deixa rasto.
   `correrPipeline` (estrela: a execução lê o goal da Análise; kill-switch no 1.º que não valida).
   No caminho real, o orchestrator normaliza o relay para as fases canónicas e corre **todos os
   providers ativos** sequencialmente em cada fase: cada provider atua como principal uma vez, e os
-  restantes validam. Em fases que escrevem ficheiros, só providers com execução no repo entram como
-  principais; os restantes providers ativos continuam a validar o diff/output.
+  restantes não só validam — **fazem o seu melhor e ESCREVEM por cima** (o relay a sério: cada
+  corredor melhora a perna do anterior, como um review que também corrige). Em fases que escrevem
+  ficheiros, só providers com execução no repo é que escrevem (como principal OU validador); um
+  provider sem execução (ex.: `api`) participa sempre read-only. A fase **converge quando CONCORDAM**
+  (todos aprovam); senão roda até ao máx. de rondas → 🔴 humano (split = "sem consenso", os dois lados).
+  O **test-gate** corre DEPOIS de todos escreverem (julga o trabalho acumulado).
   **Override real por fase:** se o utilizador **declarar** uma fase nas Definições (`cruzamentos`:
   principal + validadores), essa fase usa a declaração dele (1 principal escolhido + os validadores
   escolhidos) em vez da rotação (`fasesConfiguradas`); as fases NÃO declaradas rodam todos os ativos.

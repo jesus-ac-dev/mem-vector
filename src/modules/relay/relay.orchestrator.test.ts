@@ -88,13 +88,15 @@ describe('orquestrarCom — pipeline verde', () => {
             } as never,
             io,
         });
+        // Cada repo-writer ESCREVE a sua perna (principal e validador); o gemini (api,
+        // não escreve no repo) participa sempre read-only.
         expect(corridas).toEqual([
-            { provider: 'claude', escrever: true },
-            { provider: 'codex', escrever: false },
-            { provider: 'gemini', escrever: false },
-            { provider: 'codex', escrever: true },
-            { provider: 'claude', escrever: false },
-            { provider: 'gemini', escrever: false },
+            { provider: 'claude', escrever: true }, // principal
+            { provider: 'codex', escrever: true }, // validador codex (cli) escreve por cima
+            { provider: 'gemini', escrever: false }, // validador gemini (api) revê read-only
+            { provider: 'codex', escrever: true }, // principal
+            { provider: 'claude', escrever: true }, // validador claude (cli) escreve por cima
+            { provider: 'gemini', escrever: false }, // validador gemini (api) revê read-only
         ]);
     });
 
@@ -177,7 +179,7 @@ describe('orquestrarCom — kill-switch', () => {
 });
 
 describe('orquestrarCruzamentoCom — handoff por substep', () => {
-    it('dev: principal escreve (escrever=true), validador valida o diff (false)', async () => {
+    it('dev: principal escreve e o validador também escreve a sua melhoria por cima', async () => {
         const { io, comentarios, corridas } = fakeIo();
         const r = await orquestrarCruzamentoCom({
             cruzamento: 'dev',
@@ -188,9 +190,11 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
             io,
         });
         expect(r.validado).toBe(true);
+        // Validador também ESCREVE a sua melhoria por cima (sem restrição de escritores
+        // no teste direto = pode escrever).
         expect(corridas).toEqual([
             { provider: 'codex', escrever: true },
-            { provider: 'claude', escrever: false },
+            { provider: 'claude', escrever: true },
         ]);
         expect(comentarios.some((c) => c.startsWith('— Codex · principal · Desenvolvimento'))).toBe(
             true,
@@ -200,14 +204,27 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
         ).toBe(true);
     });
 
-    it('test-gate: suite vermelha rejeita ANTES do validador LLM (não o corre)', async () => {
-        const validadorCorrido = vi.fn();
-        const { io } = fakeIo({
+    it('validador repo-writer escreve por cima; o não-escritor (escritores) revê read-only', async () => {
+        const { io, corridas } = fakeIo();
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'claude',
+            validadores: ['codex', 'gemini'],
+            escritores: ['claude', 'codex'], // gemini fora → não escreve
+            maxRondas: 1,
+            io,
+        });
+        expect(corridas).toEqual([
+            { provider: 'claude', escrever: true }, // principal
+            { provider: 'codex', escrever: true }, // validador writer → escreve a melhoria
+            { provider: 'gemini', escrever: false }, // validador não-writer → revê read-only
+        ]);
+    });
+
+    it('test-gate: suite vermelha barra a convergência (corre DEPOIS de todos escreverem)', async () => {
+        const { io, comentarios } = fakeIo({
             testar: vi.fn(async () => ({ ok: false, output: 'FAIL x.test' })),
-            correr: vi.fn(async (_provider: Provider, _p: string, escrever: boolean) => {
-                if (!escrever) validadorCorrido();
-                return resp(escrever ? 'escrevi' : 'APROVADO');
-            }),
         });
         const r = await orquestrarCruzamentoCom({
             cruzamento: 'dev',
@@ -217,9 +234,9 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
             maxRondas: 1,
             io,
         });
+        // Mesmo com todos a aprovar, a suite vermelha não deixa convergir (não finge verde).
         expect(r.validado).toBe(false);
-        // O validador LLM nunca correu — o gate dos testes barrou antes.
-        expect(validadorCorrido).not.toHaveBeenCalled();
+        expect(comentarios.some((c) => c.includes('suite vermelha'))).toBe(true);
     });
 
     it('analise: read-only (principal escrever=false), valida o output', async () => {
@@ -242,9 +259,15 @@ describe('orquestrarCruzamentoCom — handoff por substep', () => {
 describe('orquestrarCruzamentoCom — agregação fina (split)', () => {
     it('split (um aprova, outro objeta) rotula "SEM CONSENSO" com os dois lados', async () => {
         const { io } = fakeIo({
-            correr: vi.fn(async (provider: Provider, _p: string, escrever: boolean) => {
-                if (escrever) return resp('escrevi');
-                return resp(provider === 'claude' ? 'APROVADO' : 'REJEITADO: falta o caso de erro');
+            // O validador agora ESCREVE e dá veredito (a resposta é o veredito) — mocka-se
+            // pelo prompt (VALIDADOR), não pelo flag escrever. claude aprova, gemini objeta.
+            correr: vi.fn(async (provider: Provider, p: string, _escrever: boolean) => {
+                if (p.includes('VALIDADOR')) {
+                    return resp(
+                        provider === 'claude' ? 'APROVADO' : 'REJEITADO: falta o caso de erro',
+                    );
+                }
+                return resp('escrevi'); // principal
             }),
         });
         const r = await orquestrarCruzamentoCom({
@@ -273,11 +296,12 @@ describe('orquestrarFaseSequencialCom — todos os providers ativos por fase', (
             io,
         });
         expect(r.validado).toBe(true);
+        // Ambos são repo-writers → cada um escreve como principal E por cima como validador.
         expect(corridas).toEqual([
             { provider: 'claude', escrever: true },
-            { provider: 'codex', escrever: false },
             { provider: 'codex', escrever: true },
-            { provider: 'claude', escrever: false },
+            { provider: 'codex', escrever: true },
+            { provider: 'claude', escrever: true },
         ]);
         expect(r.output).toContain('## claude');
         expect(r.output).toContain('## codex');
@@ -368,10 +392,12 @@ describe('promptPrincipal', () => {
 });
 
 describe('promptValidador', () => {
-    it('o validador também herda o Kernel (julga contra as regras da casa)', () => {
+    it('o validador herda o Kernel; em fases de escrita MELHORA por cima, em auditoria DERRUBA', () => {
         const mem = 'KERNEL DO WORKSPACE: sem fachadas write-only.';
-        const p = promptValidador('dev', 's', 'o diff', mem);
-        expect(p).toContain('write-only'); // a regra da casa chega ao validador
-        expect(p).toContain('DERRUBAR'); // continua adversarial
+        const dev = promptValidador('dev', 's', 'o diff', mem);
+        expect(dev).toContain('write-only'); // a regra da casa chega ao validador
+        expect(dev).toContain('melhora'); // fase de escrita: faz o seu melhor por cima
+        const aud = promptValidador('auditoria', 's', 'o output', mem);
+        expect(aud).toContain('DERRUBAR'); // auditoria (read-only) continua adversarial
     });
 });
