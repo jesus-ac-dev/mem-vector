@@ -571,7 +571,8 @@ export async function orquestrar(opts: {
         defs: defsRelay,
         spec,
         io,
-        maxRondas: opts.maxRondas,
+        // O máximo de rondas vem das Definições (configurável); fallback 3.
+        maxRondas: opts.maxRondas ?? defs.maxRondas,
         memoria,
         desde,
         analiseInicial: goal ?? undefined,

@@ -83,16 +83,9 @@ export async function blocoKernelCom(db: SupabaseClient): Promise<string> {
     }
 }
 
-// #122 (Ponte F): o campo Comportamento das Definições — o utilizador molda COMO
-// o agente age (proatividade, estilo, ênfases), o equivalente web a editar o
-// CLAUDE.md, sem tocar em config do host. Injeta-se a seguir ao Kernel (camada de
-// utilizador), por cima do contrato base. Vazio = nada muda. Mesmo cap por nota.
-export function blocoComportamento(texto?: string | null): string {
-    const t = (texto ?? '').trim();
-    if (!t) return '';
-    const corpo = t.length > CAP_NOTA ? `${t.slice(0, CAP_NOTA)}\n[cortado]` : t;
-    return `INSTRUÇÕES DE COMPORTAMENTO (do utilizador — respeita-as por cima do contrato):\n${corpo}\n`;
-}
+// O moldar do agente (proatividade, estilo, regras) vive no KERNEL — a nota
+// "Regras do agente" — e não num campo Comportamento à parte (que duplicava o
+// Kernel). Descontinuado em 2026-06-22 (pedido do Carlos no smoke).
 
 // Mythos Base (#44): a camada GENÉRICA do seed — a língua do produto que serve
 // qualquer utilizador, semeada ao lado do KERNEL_SEED. O glossário do produto

@@ -38,7 +38,7 @@ interface DefinicoesRow {
     match_count?: number | null;
     web_habilitada?: boolean | null;
     web_key_cifrada?: string | null;
-    comportamento?: string | null;
+    max_rondas?: number | null;
     github_token_cifrada?: string | null;
     github_repos?: (string | { repo: string; path?: string })[] | null;
     cruzamentos?: Record<string, unknown> | null;
@@ -49,7 +49,7 @@ async function lerRowCom(db: SupabaseClient): Promise<DefinicoesRow | null> {
     const { data, error } = await db
         .from('definicoes')
         .select(
-            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, comportamento, github_token_cifrada, github_repos, cruzamentos, agentes',
+            'metodo_destilacao, modulos_ativos, chat_provider, match_count, web_habilitada, web_key_cifrada, max_rondas, github_token_cifrada, github_repos, cruzamentos, agentes',
         )
         .maybeSingle();
     if (error) throw new Error(`ler definições falhou: ${error.message}`);
@@ -78,7 +78,7 @@ function normalizar(
         // fallback abaixo (linha toda, não só este campo).
         matchCount: row.match_count ?? undefined,
         webHabilitada: row.web_habilitada ?? undefined,
-        comportamento: row.comportamento ?? undefined,
+        maxRondas: row.max_rondas ?? undefined,
     });
     if (!parsed.success) {
         return {
@@ -255,7 +255,7 @@ export async function gravarDefinicoesCom(
         match_count: definicoes.matchCount,
         web_habilitada: definicoes.webHabilitada,
         web_key_cifrada: webKeyCifrada ?? null,
-        comportamento: definicoes.comportamento?.trim() || null,
+        max_rondas: definicoes.maxRondas ?? null,
         github_token_cifrada: githubTokenCifrada ?? null,
         github_repos: definicoes.githubRepos ?? row?.github_repos ?? [],
         cruzamentos: definicoes.cruzamentos ?? row?.cruzamentos ?? {},

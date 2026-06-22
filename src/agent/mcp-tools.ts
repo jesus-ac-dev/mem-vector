@@ -518,7 +518,7 @@ async function executarTool(
                 // Limite/bloqueio do provider sem-key: devolve uma instrução para o
                 // agente AVISAR o utilizador a configurar a key (regra do Carlos).
                 if (e instanceof LimiteWebError) {
-                    return `LIMITE_WEB: ${e.message} Diz ao utilizador, na resposta, que a pesquisa web atingiu o limite e que pode configurar uma key Tavily (grátis) em Definições > Comportamento para continuar.`;
+                    return `LIMITE_WEB: ${e.message} Diz ao utilizador, na resposta, que a pesquisa web atingiu o limite e que pode configurar uma key Tavily (grátis) em Definições > Chat para continuar.`;
                 }
                 return `Erro na pesquisa web: ${e instanceof Error ? e.message : 'desconhecido'}`;
             }

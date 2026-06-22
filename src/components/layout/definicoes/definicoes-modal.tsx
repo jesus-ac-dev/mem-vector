@@ -22,7 +22,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
     gravarDefinicoes,
     testarProvider,
@@ -60,7 +59,7 @@ import { ProviderIcon } from '@/components/layout/chat/provider-icon';
 import { providersPorForcarTeste } from '@/components/layout/definicoes/definicoes-modal.logic';
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
-// forms à direita. Aqui PARAMETRIZA-SE (Comportamento, Agentes, Módulos) com
+// forms à direita. Aqui PARAMETRIZA-SE (Chat, Agentes, Módulos) com
 // botão Guardar explícito — ao guardar, só os providers LIGADOS nesta sessão e
 // não testados são testados à força (mudar modelo/key ou desativar não dispara).
 // A ESCOLHA do provider/modelo do chat vive na mini-modal do link sobre o Enviar.
@@ -377,15 +376,14 @@ export function DefinicoesModal({
             chatProvider: defs.chatProvider,
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
-            // #122: como o agente-autor age (texto livre, injetado no prompt).
-            comportamento: defs.comportamento,
             // undefined = manter a key cifrada; '' = limpar; string = cifrar.
             webKey: webKeyNova,
             // M7: mesmo contrato do token; os repos viajam como a lista atual.
             githubToken: githubTokenNova,
             githubRepos: defs.githubRepos,
-            // relay: o mapa cruzamento→provider (config, não código).
+            // relay: o mapa cruzamento→provider (config, não código) + máx. rondas.
             cruzamentos: defs.cruzamentos,
+            maxRondas: defs.maxRondas,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -443,9 +441,7 @@ export function DefinicoesModal({
             <DialogContent className="grid h-[85vh] max-w-5xl grid-rows-[auto,1fr,auto] gap-0 p-0">
                 <DialogHeader className="border-b px-6 py-4">
                     <DialogTitle>Definições</DialogTitle>
-                    <DialogDescription>
-                        Comportamento, agentes e módulos deste workspace.
-                    </DialogDescription>
+                    <DialogDescription>Chat, agentes e módulos deste workspace.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid min-h-0 grid-cols-[12rem,1fr]">
@@ -454,7 +450,7 @@ export function DefinicoesModal({
                         <p className="px-2 pb-1 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
                             Principais
                         </p>
-                        {itemMenu('comportamento', 'Comportamento')}
+                        {itemMenu('comportamento', 'Chat')}
                         {itemMenu('agentes', 'Agentes')}
                         {itemMenu('modulos', 'Módulos')}
                         {defs.modulosAtivos.length > 0 && (
@@ -472,29 +468,9 @@ export function DefinicoesModal({
                         {!carregado ? (
                             <p className="text-sm text-muted-foreground">A carregar…</p>
                         ) : pagina === 'comportamento' ? (
-                            // Comportamento (#60 r2): COMO o agente-autor age — a
-                            // secção acumula (proatividade, estilo, personalidade
-                            // hão de entrar aqui; ver memória de alto nível).
+                            // Chat: método de destilação, nº de fontes do retrieval e
+                            // pesquisa web. (O moldar do agente vive no Kernel, não aqui.)
                             <div className="max-w-md space-y-4">
-                                <div>
-                                    <h3 className="text-sm font-medium">Comportamento do agente</h3>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        Em texto livre, como queres que o agente-autor aja —
-                                        proatividade, estilo, ênfases, o que evitar. É injetado nas
-                                        instruções dele (o equivalente web a editar o CLAUDE.md),
-                                        por cima do contrato base e da pasta Kernel.
-                                    </p>
-                                    <Textarea
-                                        value={defs.comportamento ?? ''}
-                                        onChange={(e) =>
-                                            editar({ ...defs, comportamento: e.target.value })
-                                        }
-                                        placeholder="ex.: Sê mais conciso. Prioriza decisões. Não cries tarefas sem eu pedir."
-                                        rows={5}
-                                        maxLength={4000}
-                                        className="mt-2 text-sm"
-                                    />
-                                </div>
                                 <div>
                                     <h3 className="text-sm font-medium">Método de destilação</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
@@ -767,6 +743,28 @@ export function DefinicoesModal({
                                         Análise, Desenvolvimento, Testes e Documentação. Estes
                                         campos ficam como override fino por fase.
                                     </p>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-medium">
+                                        Máximo de rondas (kill-switch)
+                                    </h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Quantas rondas os providers debatem numa fase antes de o
+                                        relay parar (🔴) e te chamar. Sem consenso ao fim disto =
+                                        volta para ti.
+                                    </p>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        value={defs.maxRondas ?? 3}
+                                        onChange={(e) => {
+                                            const n = Number(e.target.value);
+                                            if (Number.isInteger(n) && n >= 1 && n <= 10)
+                                                editar({ ...defs, maxRondas: n });
+                                        }}
+                                        className="mt-2 h-8 w-24 text-xs"
+                                    />
                                 </div>
                                 <ul className="space-y-3">
                                     {CRUZAMENTOS.map((c) => {

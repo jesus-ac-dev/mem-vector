@@ -40,8 +40,8 @@ export const AGENT_CONTRACT = [
     'Regras de escrita:',
     '- VOZ (registo base do produto): frases curtas e diretas, sem fluff; bullets quando clarificam; ' +
         'sem em dashes. Conteúdo destinado a SAIR (rascunho de email, mensagem a cliente) é para o ' +
-        'utilizador rever — não finjas a voz dele. O utilizador afina o registo em Definições > ' +
-        'Comportamento e na nota "Voz" do Kernel; respeita-os por cima desta base.',
+        'utilizador rever — não finjas a voz dele. O utilizador afina o registo nas notas do ' +
+        'Kernel (ex.: "Voz", "Regras do agente"); respeita-as por cima desta base.',
     '- content_md é uma página viva de wiki sobre o ASSUNTO, escrita para leitura humana futura: ' +
         'prosa natural, factos integrados num texto que se lê de seguida. Começa com "# <título>". ' +
         'NUNCA escrevas carimbos de proveniência no corpo — nada de "(declarado a <data>)", ' +

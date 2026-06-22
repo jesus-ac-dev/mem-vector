@@ -213,12 +213,14 @@ describe('definições (#60, integração RLS)', () => {
                 webHabilitada: false,
                 githubToken: 'github_pat_de_teste_5678',
                 githubRepos: [{ repo: 'jesus-ac-dev/mem-vector' }],
+                maxRondas: 4,
                 agentes: {},
             });
             // Vista: o token NUNCA aparece — só a máscara; os repos sim.
             expect(vista.githubTemToken).toBe(true);
             expect(vista.githubKeySufixo).toBe('5678');
             expect(vista.githubRepos).toEqual([{ repo: 'jesus-ac-dev/mem-vector' }]);
+            expect(vista.maxRondas).toBe(4); // relay: máx. rondas round-trip
             expect(JSON.stringify(vista)).not.toContain('github_pat_de_teste');
 
             // At rest: cifrada (gcm:), nunca plaintext.

@@ -112,4 +112,5 @@ Tabela `definicoes` (migração `20260612200000`): `owner_id` (PK, FK auth.users
 `metodo_destilacao` (check), `modulos_ativos text[]`, `updated_at`. RLS só-dono
 (definições não se partilham com grupos). Colunas posteriores: `web_key_cifrada`
 (#45), `comportamento` (#122), e **M7** (`20260620120000`) `github_token_cifrada`
-+ `github_repos jsonb` (connection GitHub por-utilizador).
+
+- `github_repos jsonb` (connection GitHub por-utilizador).
