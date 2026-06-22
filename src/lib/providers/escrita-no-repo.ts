@@ -34,8 +34,16 @@ export interface RespostaRepo {
     model?: string;
 }
 
-/** Args do `claude -p` agêntico no repo. acceptEdits = edita sem perguntar;
- *  plan = read-only (valida sem tocar). `--setting-sources ''` isola o host. */
+// Política de permissões do relay (Carlos 2026-06-22): cada agente faz TUDO
+// dentro do projeto EXCETO reset ao Supabase. Sem isto, o claude bloqueia
+// `npm`/`tsc`/`vitest`/`build` à espera de aprovação que no background não há
+// (o #150 mostrou-o: o claude ficou preso, o codex correu tudo).
+const RELAY_SEM_RESET_SUPABASE = 'Bash(supabase db reset:*)';
+
+/** Args do `claude -p` agêntico no repo. `bypassPermissions` = executa tudo
+ *  (edita + corre testes/build) sem parar para aprovar; `--disallowedTools` mantém
+ *  a única red-line (reset Supabase). Validador e principal partilham a mesma
+ *  política (mesmo trabalho, rotação dos N). `--setting-sources ''` isola o host. */
 export function buildClaudeRepoArgs(opts: OpcoesRepo): string[] {
     return [
         '-p',
@@ -44,7 +52,9 @@ export function buildClaudeRepoArgs(opts: OpcoesRepo): string[] {
         '--setting-sources',
         '',
         '--permission-mode',
-        opts.escrever ? 'acceptEdits' : 'plan',
+        'bypassPermissions',
+        '--disallowedTools',
+        RELAY_SEM_RESET_SUPABASE,
         ...(opts.modelo ? ['--model', opts.modelo] : []),
     ];
 }

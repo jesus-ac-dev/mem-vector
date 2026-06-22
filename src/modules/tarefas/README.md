@@ -23,7 +23,7 @@ UI: `src/components/layout/tarefas-panel.tsx` (painel esquerdo).
 ## Modelo de dados
 
 Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim em
-`20260612110000`):
+`20260612110000`, relay GitHub em `20260621120000`/`20260621140000`/`20260622170000`):
 
 | Coluna                                                | Tipo          | Notas                                                                        |
 | ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------- |
@@ -36,6 +36,8 @@ Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim
 | `depende_de`                                          | `uuid`        | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`) |
 | `data_fim`                                            | `date`        | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação           |
 | `concluida_em`                                        | `timestamptz` | carimbada pela RPC                                                           |
+| `repo_github` / `issue_github`                         |               | ligação opcional do cartão a uma issue de código                             |
+| `relay_estado` / `relay_fase` / `relay_pr_url`         |               | progresso do relay no kanban e link direto para o PR quando existir          |
 | `owner_id` / `visibility` / `group_id` / `created_at` |               | iguais ao resto do projeto                                                   |
 
 **RLS:** ler — dono ou grupo (`protected`); criar/apagar — só o dono; editar — dono ou

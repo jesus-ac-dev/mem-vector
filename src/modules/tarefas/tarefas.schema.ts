@@ -89,6 +89,9 @@ export interface Tarefa {
     issueGithub: number | null;
     // Semáforo do relay escrito pelo orchestrator (processando/bloqueado/pronto).
     relayEstado: string | null;
+    // Fase e PR do relay para o kanban seguir o progresso sem depender só do GitHub.
+    relayFase: string | null;
+    relayPrUrl: string | null;
 }
 
 // Id curto à vista (#58, ideia do Carlos): o início do uuid identifica a

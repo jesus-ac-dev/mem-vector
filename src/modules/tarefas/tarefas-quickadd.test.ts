@@ -189,6 +189,8 @@ function tarefa(parcial: Partial<Tarefa> & { id: string }): Tarefa {
         repoGithub: null,
         issueGithub: null,
         relayEstado: null,
+        relayFase: null,
+        relayPrUrl: null,
         ...parcial,
     };
 }
