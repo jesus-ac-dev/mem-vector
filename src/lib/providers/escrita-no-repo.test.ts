@@ -3,16 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { buildClaudeRepoArgs, buildCodexRepoArgs, correrNoRepo } from './escrita-no-repo';
 
 describe('buildClaudeRepoArgs', () => {
-    it('escrever = acceptEdits (edita sem perguntar)', () => {
+    it('bypassPermissions = executa tudo sem parar para aprovar', () => {
         const a = buildClaudeRepoArgs({ escrever: true });
         expect(a).toContain('--permission-mode');
-        expect(a[a.indexOf('--permission-mode') + 1]).toBe('acceptEdits');
+        expect(a[a.indexOf('--permission-mode') + 1]).toBe('bypassPermissions');
         expect(a).toContain('-p');
         expect(a.join(' ')).toContain('--setting-sources');
     });
-    it('validar = plan (read-only, não toca)', () => {
-        const a = buildClaudeRepoArgs({ escrever: false });
-        expect(a[a.indexOf('--permission-mode') + 1]).toBe('plan');
+    it('red-line: nega reset ao Supabase via disallowedTools', () => {
+        const a = buildClaudeRepoArgs({ escrever: true });
+        expect(a[a.indexOf('--disallowedTools') + 1]).toBe('Bash(supabase db reset:*)');
+    });
+    it('validador e principal partilham a mesma política (mesmo trabalho)', () => {
+        const principal = buildClaudeRepoArgs({ escrever: true });
+        const validador = buildClaudeRepoArgs({ escrever: false });
+        expect(validador[validador.indexOf('--permission-mode') + 1]).toBe('bypassPermissions');
+        expect(validador).toEqual(principal);
     });
     it('passa o modelo quando há', () => {
         const a = buildClaudeRepoArgs({ escrever: true, modelo: 'opus' });
