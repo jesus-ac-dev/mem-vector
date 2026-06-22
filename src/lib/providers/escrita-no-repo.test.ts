@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildClaudeRepoArgs, buildCodexRepoArgs, correrNoRepo } from './escrita-no-repo';
+import {
+    buildClaudeRepoArgs,
+    buildCodexRepoArgs,
+    comandoRelayBloqueado,
+    correrNoRepo,
+} from './escrita-no-repo';
 
 describe('buildClaudeRepoArgs', () => {
     it('bypassPermissions = executa tudo sem parar para aprovar', () => {
@@ -42,6 +47,42 @@ describe('buildCodexRepoArgs', () => {
         const a = buildCodexRepoArgs({ escrever: true, modelo: 'gpt-5.5', esforco: 'high' }, '/r');
         expect(a.join(' ')).toContain('model_reasoning_effort="high"');
         expect(a[a.indexOf('--model') + 1]).toBe('gpt-5.5');
+    });
+});
+
+describe('comandoRelayBloqueado', () => {
+    it('bloqueia reset Supabase para qualquer provider que invoque o binário via PATH', () => {
+        expect(comandoRelayBloqueado('supabase', ['db', 'reset'])).toMatch(/Supabase/);
+        expect(comandoRelayBloqueado('supabase', ['migration', 'up'])).toBeNull();
+    });
+
+    it('bloqueia variantes de reset Supabase via package runners', () => {
+        expect(comandoRelayBloqueado('npx', ['--yes', 'supabase', 'db', 'reset'])).toMatch(
+            /Supabase/,
+        );
+        expect(comandoRelayBloqueado('npm', ['exec', 'supabase', '--', 'db', 'reset'])).toMatch(
+            /Supabase/,
+        );
+        expect(comandoRelayBloqueado('pnpm', ['dlx', 'supabase', 'db', 'reset'])).toMatch(
+            /Supabase/,
+        );
+        expect(comandoRelayBloqueado('yarn', ['dlx', 'supabase', 'db', 'reset'])).toMatch(
+            /Supabase/,
+        );
+        expect(comandoRelayBloqueado('npm', ['run', 'test'])).toBeNull();
+    });
+
+    it('bloqueia comandos git que descartam trabalho local', () => {
+        expect(comandoRelayBloqueado('git', ['reset', '--hard'])).toMatch(/reset --hard/);
+        expect(comandoRelayBloqueado('git', ['clean', '-fd'])).toMatch(/clean -fd/);
+        expect(comandoRelayBloqueado('git', ['checkout', '--', '.'])).toMatch(/checkout --/);
+        expect(comandoRelayBloqueado('git', ['reset', '--soft', 'HEAD~1'])).toBeNull();
+    });
+
+    it('bloqueia rm -rf contra diretórios críticos sem bloquear limpezas normais', () => {
+        expect(comandoRelayBloqueado('rm', ['-rf', '.'])).toMatch(/rm -rf/);
+        expect(comandoRelayBloqueado('rm', ['-fr', '/'])).toMatch(/rm -rf/);
+        expect(comandoRelayBloqueado('rm', ['-rf', 'dist'])).toBeNull();
     });
 });
 

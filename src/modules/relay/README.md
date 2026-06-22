@@ -75,8 +75,13 @@ por-issue), e cada substep deixa rasto.
 - **`relay.actions.ts`** — `dispararRelay(repo, issue)`: o **trigger**. Valida cedo e corre o
   orchestrator em **background** (`after`) — o estado vive na issue, a resposta volta logo.
 - **`escrita-no-repo.ts`** (`src/lib/providers/`) — escrita agêntica: `claude -p
---permission-mode acceptEdits` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
+--permission-mode bypassPermissions` / `codex exec --sandbox workspace-write -C <cwd>` DENTRO do repo.
   Só modo `cli` escreve (api → erro). Bypass do sandbox por env em kernels onde o bwrap rebenta.
+  Antes de lançar o provider, o relay injeta wrappers temporários no `PATH` para bloquear red-lines
+  comuns a Claude/Codex: `supabase db reset` (incluindo `npx`/`npm exec`/`pnpm dlx`/`yarn dlx`),
+  `git reset --hard`, `git clean -fd`, `git checkout --` e `rm -rf` contra diretórios críticos.
+  Limite honesto: isto protege invocações via `PATH`; chamadas por caminho absoluto continuam fora
+  desta guarda e devem ser tratadas por ambiente descartável/sandbox.
 - **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; ramo default REAL (não assume
   `main`); push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default
   `npm test`): a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
