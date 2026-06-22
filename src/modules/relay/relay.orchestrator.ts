@@ -134,15 +134,16 @@ export function promptValidador(
     referencia: string,
     memoria = '',
 ): string {
-    const rotulo = ESCREVE[cruzamento] ? 'Diff' : 'Output';
+    const escreve = ESCREVE[cruzamento];
+    const rotulo = escreve ? 'Diff' : 'Output';
     // O validador também herda o Kernel: julga contra as REGRAS da casa (é cirúrgico?
     // respeita a spec? sem fachadas write-only?), não só contra a spec nua.
     const mem = memoria.trim() ? `${memoria.trim()}\n\n` : '';
     const cabeca =
         `${mem}És o VALIDADOR (linhagem diferente do principal). Trabalhas em português de Portugal.\n\n` +
         `Spec:\n${spec}\n\n${rotulo}:\n${referencia}\n\n`;
-    // Análise é GERATIVA (sugere a próxima melhoria até estabilizar); os de
-    // execução são ADVERSARIAIS (tentam derrubar). parseVeredito só passa em APROVADO.
+    // Análise é GERATIVA (sugere a próxima melhoria até estabilizar); parseVeredito
+    // só passa em APROVADO.
     if (cruzamento === 'analise') {
         return (
             cabeca +
@@ -150,6 +151,19 @@ export function promptValidador(
             '"REJEITADO: <a melhoria>". Quando estiver estável (nada a acrescentar), "APROVADO".'
         );
     }
+    // Fases que ESCREVEM (Dev/Testes/Docs): o validador não é leitor — faz o SEU
+    // melhor e escreve POR CIMA (o relay a sério: cada corredor melhora a perna do
+    // anterior, como um review que também corrige), depois dá o veredito.
+    if (escreve) {
+        return (
+            cabeca +
+            'Faz o teu MELHOR: melhora o que já está no diff POR CIMA (não recomeces do zero) — ' +
+            'corrige o que está mal, reforça o que falta, mantém-te cirúrgico e no âmbito da spec. ' +
+            'Depois dá o veredito: "APROVADO" se concordas que está pronto (nada a mudar), ou ' +
+            '"REJEITADO: <o que ainda falta>".'
+        );
+    }
+    // Auditoria (read-only): adversarial — tenta DERRUBAR, não escreve.
     return (
         cabeca +
         'A tua função é tentar DERRUBAR. Se encontrares um problema REAL, responde ' +
@@ -167,10 +181,10 @@ export interface IoOrquestrador {
     diff(): Promise<string>;
     commitPush(branch: string, mensagem: string): Promise<void>;
     criarPR(p: { head: string; title: string; body: string }): Promise<string>;
-    // Corre o provider DENTRO do repo (escrever=true principal, false validador).
+    // Corre o provider DENTRO do repo; escrever=true permite editar, false revê read-only.
     correr(provider: Provider, prompt: string, escrever: boolean): Promise<RespostaRepo>;
-    // Test-gate opcional: corre a suite do repo (vermelho = devolve ao principal
-    // antes de gastar o validador). Ausente = sem gate (só validação por LLM).
+    // Test-gate opcional: corre a suite do repo depois dos substeps de escrita.
+    // Vermelho devolve o output ao principal na ronda seguinte.
     testar?(): Promise<{ ok: boolean; output: string }>;
     // Grava/limpa a fase de retoma (label `relay:fase:<c>`); null = limpa. Opcional.
     marcarRetoma?(cruzamento: Cruzamento | null): Promise<void>;
@@ -191,8 +205,12 @@ export async function orquestrarCruzamentoCom(opts: {
     maxRondas: number;
     io: IoOrquestrador;
     memoria?: string;
+    // Quem PODE escrever no repo (repo-writers). O validador só escreve a sua
+    // melhoria se estiver aqui; os restantes (ex.: api) revêem read-only. undefined
+    // = sem restrição (todos os validadores escrevem nas fases de escrita).
+    escritores?: Provider[];
 }): Promise<ResultadoCruzamento> {
-    const { cruzamento, spec, principal, validadores, maxRondas, io, memoria } = opts;
+    const { cruzamento, spec, principal, validadores, maxRondas, io, memoria, escritores } = opts;
     const escreve = ESCREVE[cruzamento];
     let ronda = 0;
 
@@ -218,33 +236,24 @@ export async function orquestrarCruzamentoCom(opts: {
             return resp.text;
         },
         validar:
-            validadores.length === 0
+            validadores.length === 0 && !(escreve && io.testar)
                 ? null
                 : async (output) => {
-                      // Test-gate (cruzamentos de escrita): a suite do repo é o juiz
-                      // objetivo antes do validador-LLM. Vermelho = devolve já ao
-                      // principal com o output dos testes (não gasta o validador).
-                      if (escreve && io.testar) {
-                          const t = await io.testar();
-                          await io.comentar(
-                              `— Testes · gate · ${cruzamento} · ronda ${ronda}\n\n` +
-                                  (t.ok
-                                      ? '✅ suite verde'
-                                      : `❌ suite vermelha:\n\n\`\`\`\n${t.output}\n\`\`\``),
-                          );
-                          if (!t.ok) {
-                              return { ok: false, feedback: `Testes vermelhos:\n${t.output}` };
-                          }
-                      }
-                      // Execução valida o DIFF (o que se escreveu); análise/auditoria
-                      // validam o OUTPUT (o texto produzido).
-                      const referencia = escreve ? await io.diff() : output;
+                      // RELAY a sério: cada validador NÃO é leitor — faz o seu melhor e
+                      // ESCREVE por cima (nas fases de escrita; em Auditoria fica read-only),
+                      // lendo o diff já COM as melhorias do anterior. Como o Codex que não
+                      // diz só "está bom" — melhora o código por cima. Depois dá o veredito.
                       const vereditos = [];
                       for (const v of validadores) {
+                          // Execução valida o DIFF acumulado (fresco por validador, para
+                          // cada um construir sobre o anterior); auditoria valida o OUTPUT.
+                          const referencia = escreve ? await io.diff() : output;
+                          // Escreve a melhoria SE for repo-writer; senão revê read-only.
+                          const escreverV = escreve && (escritores ? escritores.includes(v) : true);
                           const resp = await io.correr(
                               v,
                               promptValidador(cruzamento, spec, referencia, memoria),
-                              false,
+                              escreverV,
                           );
                           const veredito = parseVeredito(resp.text);
                           await io.comentar(
@@ -259,6 +268,22 @@ export async function orquestrarCruzamentoCom(opts: {
                           );
                           vereditos.push(veredito);
                       }
+                      // Test-gate DEPOIS de todos escreverem: a suite é o juiz objetivo do
+                      // trabalho ACUMULADO (principal + melhorias dos validadores). Vermelho
+                      // = mais uma ronda com o output dos testes, não se finge verde.
+                      if (escreve && io.testar) {
+                          const t = await io.testar();
+                          await io.comentar(
+                              `— Testes · gate · ${cruzamento} · ronda ${ronda}\n\n` +
+                                  (t.ok
+                                      ? '✅ suite verde'
+                                      : `❌ suite vermelha:\n\n\`\`\`\n${t.output}\n\`\`\``),
+                          );
+                          if (!t.ok) {
+                              return { ok: false, feedback: `Testes vermelhos:\n${t.output}` };
+                          }
+                      }
+                      // Convergência = CONCORDAREM (todos aprovam, zero objeções).
                       // Agregação any-rejeita (motor das rondas: qualquer objeção
                       // ganha uma ronda para ser resolvida — NÃO se vota a maioria,
                       // um validador a apanhar um bug real não é silenciado). Mas
@@ -291,6 +316,7 @@ export async function orquestrarFaseSequencialCom(opts: {
     maxRondas: number;
     io: IoOrquestrador;
     memoria?: string;
+    escritores?: Provider[]; // repo-writers: validador só escreve se estiver aqui
 }): Promise<ResultadoCruzamento> {
     const historico: ResultadoCruzamento['historico'] = [];
     const outputs: string[] = [];
@@ -310,6 +336,7 @@ export async function orquestrarFaseSequencialCom(opts: {
             maxRondas: opts.maxRondas,
             io: opts.io,
             memoria: opts.memoria,
+            escritores: opts.escritores ?? opts.providers,
         });
         rondas += r.rondas;
         historico.push(...r.historico);
@@ -339,10 +366,44 @@ function podeEscreverNoRepo(provider: Provider, defs: DefinicoesServidor): boole
     );
 }
 
-function providersPrincipaisDaFase(defs: DefinicoesServidor, cruzamento: Cruzamento): Provider[] {
+function providersEscritoresDaFase(defs: DefinicoesServidor, cruzamento: Cruzamento): Provider[] {
     const ativos = providersAtivos(defs).map((p) => p.provider);
     if (!ESCREVE[cruzamento]) return ativos;
     return ativos.filter((p) => podeEscreverNoRepo(p, defs));
+}
+
+function unicosProviders(providers: Provider[]): Provider[] {
+    return providers.filter((p, i) => providers.indexOf(p) === i);
+}
+
+function resolverCruzamentoParaExecucao(
+    defs: DefinicoesServidor,
+    cruzamento: Cruzamento,
+): { principal: Provider; validadores: Provider[]; escritores: Provider[] } {
+    const r = resolverCruzamento(defs, cruzamento);
+    const principal = r.principal.provider;
+    const validadores = r.validadores.map((v) => v.provider);
+    const escritores = providersEscritoresDaFase(defs, cruzamento);
+
+    if (!ESCREVE[cruzamento] || escritores.includes(principal)) {
+        return { principal, validadores, escritores };
+    }
+
+    // Override defensivo: um principal api não consegue escrever uma fase de código.
+    // Promove-se o primeiro validador repo-writer declarado; o principal original
+    // continua no painel read-only.
+    const fallback = validadores.find((p) => escritores.includes(p));
+    if (!fallback) {
+        throw new Error(
+            `A fase "${cruzamento}" escreve no repo, mas a configuração declarada não inclui ` +
+                'nenhum repo-writer (Claude/Codex em modo CLI).',
+        );
+    }
+    return {
+        principal: fallback,
+        validadores: unicosProviders([principal, ...validadores]).filter((p) => p !== fallback),
+        escritores,
+    };
 }
 
 // Garante que as fases canónicas CORREM mesmo sem o user as configurar: preenche
@@ -392,22 +453,23 @@ export async function orquestrarCom(opts: {
                 return orquestrarFaseSequencialCom({
                     cruzamento,
                     spec: specCruzamento,
-                    providers: providersPrincipaisDaFase(defs, cruzamento),
+                    providers: providersEscritoresDaFase(defs, cruzamento),
                     validadores: ativos,
                     maxRondas,
                     io,
                     memoria,
                 });
             }
-            const r = resolverCruzamento(defs, cruzamento);
+            const r = resolverCruzamentoParaExecucao(defs, cruzamento);
             return orquestrarCruzamentoCom({
                 cruzamento,
                 spec: specCruzamento,
-                principal: r.principal.provider,
-                validadores: r.validadores.map((v) => v.provider),
+                principal: r.principal,
+                validadores: r.validadores,
                 maxRondas,
                 io,
                 memoria,
+                escritores: r.escritores,
             });
         });
 

@@ -11,15 +11,17 @@ definições (`cruzamentos`) → `resolverCruzamento` (resolve quem produz/valid
 `executarCruzamento` (liga aos providers reais pela factory + prompts) →
 `correrPipeline` (corre as fases do relay em estrela, pára num kill switch).
 
-## Convergência (glossário) — nunca por consenso
+## Convergência (glossário)
 
-- **Análise** = gerativo: o validador sugere a próxima melhoria até estabilizar.
-- **Dev / Testes / Docs / Auditoria** = adversarial: o validador tenta **DERRUBAR**; `parseVeredito` só
-  passa com "APROVADO" explícito (default-to-refuted — o erro não escapa por ambiguidade).
+- **Análise** = gerativo: o validador sugere a próxima melhoria do plano até estabilizar.
+- **Dev / Testes / Docs** = cada validador repo-writer faz o seu melhor e **ESCREVE por cima** + dá
+  veredito; **converge quando TODOS CONCORDAM** (aprovam). `parseVeredito` só passa com "APROVADO"
+  explícito (default-to-refuted — o erro não escapa por ambiguidade).
+- **Auditoria** = adversarial read-only: o validador tenta **DERRUBAR** (não escreve).
 - **Estrela:** os cruzamentos de execução leem o output da **Análise** (fonte de verdade), não
   a narrativa do anterior (não propaga a árvore torta).
-- **Kill switch:** cruzamento não validado em N rondas → pára (`completo: false`), não finge sucesso.
-    - **A DISCUTIR (Carlos):** o "volta ao humano" — como/onde o humano é chamado e o que pode fazer — ainda não está fechado. Por agora só pára.
+- **Kill switch:** não convergido em N rondas (máx. configurável) → **🔴 humano** (split = "sem
+  consenso", os dois lados); o humano comenta na issue e **re-dispara** (a retoma relê e integra).
 
 ## Ficheiros
 
@@ -50,16 +52,21 @@ por-issue), e cada substep deixa rasto.
   `correrPipeline` (estrela: a execução lê o goal da Análise; kill-switch no 1.º que não valida).
   No caminho real, o orchestrator normaliza o relay para as fases canónicas e corre **todos os
   providers ativos** sequencialmente em cada fase: cada provider atua como principal uma vez, e os
-  restantes validam. Em fases que escrevem ficheiros, só providers com execução no repo entram como
-  principais; os restantes providers ativos continuam a validar o diff/output.
+  restantes não só validam — **fazem o seu melhor e ESCREVEM por cima** (o relay a sério: cada
+  corredor melhora a perna do anterior, como um review que também corrige). Em fases que escrevem
+  ficheiros, só providers com execução no repo é que escrevem (como principal OU validador); um
+  provider sem execução (ex.: `api`) participa sempre read-only. A fase **converge quando CONCORDAM**
+  (todos aprovam); senão roda até ao máx. de rondas → 🔴 humano (split = "sem consenso", os dois lados).
+  O **test-gate** corre DEPOIS de todos escreverem (julga o trabalho acumulado).
   **Override real por fase:** se o utilizador **declarar** uma fase nas Definições (`cruzamentos`:
   principal + validadores), essa fase usa a declaração dele (1 principal escolhido + os validadores
   escolhidos) em vez da rotação (`fasesConfiguradas`); as fases NÃO declaradas rodam todos os ativos.
   A fase **Testes** = regressão/integração (confirma que o Dev respeita a Análise + não partiu o
   resto da app), distinta do TDD do Dev e da segurança da Auditoria.
     - `orquestrarCruzamentoCom` — 1 cruzamento com **handoff assinado POR SUBSTEP** (não no fim).
-      Dev/Testes/Docs **escrevem** (principal em modo escrita; validadores validam o **diff**); Análise/
-      Auditoria são **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
+      Dev/Testes/Docs **escrevem** (principal em modo escrita; validadores repo-writer escrevem
+      por cima e validadores sem escrita revêem o **diff** read-only); Análise/Auditoria são
+      **read-only** (validam o **output**). Análise é gerativa, os outros adversariais.
     - `orquestrarCom` — branch (Intern Rule) → pipeline → verde com código: commit/push/**PR**
       (`Closes #N`) + 🟢; verde sem código: 🟢 sem PR; kill-switch: 🔴 e pára (sem auto-merge).
     - `orquestrar` — entrypoint real (lê definições → token/path/providers → IO via `construirIo`);
