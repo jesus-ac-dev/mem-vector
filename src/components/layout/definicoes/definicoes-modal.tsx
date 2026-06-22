@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
@@ -105,6 +106,7 @@ export function DefinicoesModal({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
+    const router = useRouter();
     const [pagina, setPagina] = useState<Pagina>('comportamento');
     const [defs, setDefs] = useState<DefinicoesVista>(DEFINICOES_VISTA_DEFAULT);
     // Keys escritas nesta sessão da modal ('' = limpar; só seguem no Guardar).
@@ -266,8 +268,11 @@ export function DefinicoesModal({
                 // Lança também as issues do repo como cartões (trabalho para arrancar).
                 const iss = await importarIssuesProjeto(r);
                 res = { ok: true, detalhe: `Projeto importado. ${iss.detalhe}` };
-                // Refresh do explorer + kanban (pasta, nota e cartões) sem reload.
+                // Kanban (cartões): client-fetched, refresca pelo workspaceVersion.
                 window.dispatchEvent(new Event(WORKSPACE_MUDOU_EVENT));
+                // Explorer (pasta + nota): a árvore vem do servidor como prop —
+                // o router.refresh re-busca-a sem F5 (o evento não a toca).
+                router.refresh();
             } else {
                 res = imp;
             }
