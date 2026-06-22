@@ -79,6 +79,12 @@ describe('MYTHOS_BASE_SEED (glossário genérico, #44)', () => {
         expect(MYTHOS_BASE_SEED.map((n) => n.title)).toContain('Código');
     });
 
+    it('inclui o Manual de Instruções (#128)', () => {
+        const manual = MYTHOS_BASE_SEED.find((n) => n.title === 'Manual de Instruções');
+        expect(manual?.contentMd).toContain('Como usar este workspace');
+        expect(manual?.contentMd).toContain('O Kernel manda');
+    });
+
     it('o glossário é a língua do produto — sem conteúdo pessoal nem do relay', () => {
         const corpo = MYTHOS_BASE_SEED.map((n) => n.contentMd)
             .join('\n')
@@ -110,6 +116,8 @@ describe('MYTHOS_BASE_SEED (glossário genérico, #44)', () => {
         // método genérico, não pessoal: update-over-create + teia
         expect(corpo).toContain('update');
         expect(corpo).toContain('[[');
+        expect(corpo).toContain('nota-índice');
+        expect(corpo).toContain('estado vivo');
     });
 });
 
