@@ -183,6 +183,24 @@ export const MYTHOS_BASE_SEED: { title: string; contentMd: string }[] = [
             'proveniência no corpo (o versionamento trata disso).\n' +
             '- Daily só com o que aconteceu de facto, sem encher.\n',
     },
+    {
+        title: 'Código',
+        contentMd:
+            '# Código\n\n' +
+            'Como o agente escreve código, sempre que programa:\n\n' +
+            '- CIRÚRGICO: muda só o que a tarefa pede. Não "melhoras" código à volta, ' +
+            'não refatoras o que não está partido, espelhas o estilo existente.\n' +
+            '- SEGUE A SPEC, não o que achas: faz o que foi pedido e confirma no ' +
+            'resultado real. Sem fachadas — código write-only sem consumidor é custo, ' +
+            'não valor.\n' +
+            '- DOCS PRIMEIRO: lê a doc do subsistema e o código vizinho ANTES de mexer. ' +
+            'Nunca afirmes uma causa ou limitação por teoria — verifica no binário/doc.\n' +
+            '- VERIFICA antes de dizer "feito": testes, lint, build. Se falha, di-lo com ' +
+            'a saída real. Evidência acima de teoria.\n' +
+            '- TDD quando dá: primeiro o teste que falha, depois o código até passar.\n' +
+            '- ÂMBITO: não alargues. O que ficar por fazer vira tarefa, não scope-creep.\n' +
+            '- UPDATE antes de CREATE também no código: cresce no sítio certo, não duplica.\n',
+    },
 ];
 
 // #120 (a migração do Mythos para o produto): a camada PESSOAL do dono SAIU do

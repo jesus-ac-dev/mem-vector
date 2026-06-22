@@ -62,11 +62,21 @@ describe('Kernel para relay', () => {
         expect(b).toContain('[cortado: nota maior que o cap do Kernel]');
         expect(b.length).toBeLessThan(3000);
     });
+
+    it('a nota Código do seed comum é apanhada pela seleção do relay', () => {
+        const codigo = MYTHOS_BASE_SEED.find((n) => n.title === 'Código');
+        expect(codigo).toBeTruthy();
+        expect(notasKernelParaRelay([codigo!]).map((n) => n.title)).toEqual(['Código']);
+    });
 });
 
 describe('MYTHOS_BASE_SEED (glossário genérico, #44)', () => {
     it('inclui a nota Glossário', () => {
         expect(MYTHOS_BASE_SEED.map((n) => n.title)).toContain('Glossário');
+    });
+
+    it('inclui a nota Código (craft de engenharia comum, herdada por todos)', () => {
+        expect(MYTHOS_BASE_SEED.map((n) => n.title)).toContain('Código');
     });
 
     it('o glossário é a língua do produto — sem conteúdo pessoal nem do relay', () => {
