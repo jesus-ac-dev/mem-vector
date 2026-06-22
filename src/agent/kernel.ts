@@ -156,6 +156,26 @@ export const MYTHOS_BASE_SEED: { title: string; contentMd: string }[] = [
             'o grafo mostra a rede.\n',
     },
     {
+        title: 'Manual de Instruções',
+        contentMd:
+            '# Manual de Instruções\n\n' +
+            'Como usar este workspace com o agente-autor:\n\n' +
+            '- Fala em linguagem normal. O agente deve separar conversa trivial de ' +
+            'factos, decisões, tarefas e conhecimento que vale guardar.\n' +
+            '- Para registar conhecimento, diz o facto ou a decisão. Não precisas de ' +
+            'pedir "guarda isto" quando é durável.\n' +
+            '- Para rever estado, pergunta pelo que decidimos, pelo que está aberto, ' +
+            'ou pelo que mudou num projeto.\n' +
+            '- Para criar trabalho, descreve o resultado desejado; o agente deve criar ' +
+            'tarefas só quando há compromisso real, não para cada ideia solta.\n' +
+            '- Para corrigir conhecimento, aponta a nota ou o assunto. O agente deve ' +
+            'continuar a página certa em vez de criar duplicados.\n' +
+            '- Para investigar, pede uma síntese e depois aprova o que deve ficar no ' +
+            'workspace. O bruto pode existir na conversa; o destilado vive nas notas.\n' +
+            '- O Kernel manda no comportamento. Edita as notas do Kernel quando quiseres ' +
+            'mudar voz, prioridades, regras ou método.\n',
+    },
+    {
         title: 'Voz',
         contentMd:
             '# Voz\n\n' +
@@ -179,6 +199,8 @@ export const MYTHOS_BASE_SEED: { title: string; contentMd: string }[] = [
             'criar duplicados.\n' +
             '- O workspace é uma teia: liga as notas com [[título exato]], ' +
             'liberalmente. Sem ilhas.\n' +
+            '- Quando um turno junta várias partes do mesmo todo, cria ou mantém uma ' +
+            'nota-índice que liga essas partes.\n' +
             '- As notas são páginas vivas de wiki: prosa integrada, sem carimbos de ' +
             'proveniência no corpo (o versionamento trata disso).\n' +
             '- Daily só com o que aconteceu de facto, sem encher.\n',
@@ -197,6 +219,8 @@ export const MYTHOS_BASE_SEED: { title: string; contentMd: string }[] = [
             'Nunca afirmes uma causa ou limitação por teoria — verifica no binário/doc.\n' +
             '- VERIFICA antes de dizer "feito": testes, lint, build. Se falha, di-lo com ' +
             'a saída real. Evidência acima de teoria.\n' +
+            '- ESTADO VIVO: antes de narrar PRs, issues, branches, merges ou deploys, ' +
+            'confirma no git/GitHub/sistema real. O texto antigo pode estar stale.\n' +
             '- TDD quando dá: primeiro o teste que falha, depois o código até passar.\n' +
             '- ÂMBITO: não alargues. O que ficar por fazer vira tarefa, não scope-creep.\n' +
             '- UPDATE antes de CREATE também no código: cresce no sítio certo, não duplica.\n',
