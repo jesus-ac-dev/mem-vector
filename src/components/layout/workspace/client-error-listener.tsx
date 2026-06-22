@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 
-import { logClientError, STALE_APP_EVENT } from '@/lib/client-error-log';
+import { logClientError, STALE_APP_EVENT, isErroDeNavegacaoNext } from '@/lib/client-error-log';
 import { Button } from '@/components/ui/button';
 
 export function ClientErrorListener() {
@@ -14,6 +14,8 @@ export function ClientErrorListener() {
 
     useEffect(() => {
         function onUnhandledRejection(event: PromiseRejectionEvent) {
+            // Control-flow do Next (redirect/notFound) não é erro — não o loga.
+            if (isErroDeNavegacaoNext(event.reason)) return;
             logClientError(
                 { area: 'browser', action: 'unhandledrejection' },
                 event.reason ?? 'Promise rejeitada sem reason',

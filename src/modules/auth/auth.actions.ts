@@ -31,8 +31,10 @@ export async function signIn(
     redirect('/chat');
 }
 
+// SEM redirect() aqui: o signOut é chamado imperativamente (onClick, fire-and-forget),
+// e redirect() numa action assim vaza o NEXT_REDIRECT (vinha parar ao log de erros /
+// unhandledrejection). Limpa a sessão e devolve — quem chama navega no cliente.
 export async function signOut(): Promise<void> {
     const supabase = await createClient();
     await supabase.auth.signOut();
-    redirect('/login');
 }

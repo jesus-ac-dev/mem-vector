@@ -41,9 +41,10 @@ export function isUnexpectedServerActionResponse(error: unknown): boolean {
 }
 
 // `redirect()`/`notFound()` do Next lançam um "erro" de CONTROLO DE FLUXO (digest
-// NEXT_REDIRECT / NEXT_NOT_FOUND) para fazer a navegação — não é um erro. Tem de
-// ser RE-LANÇADO (senão o redirect não acontece) e NUNCA logado (ex.: o signOut
-// faz redirect('/login') e aparecia como erro de cliente).
+// NEXT_REDIRECT / NEXT_NOT_FOUND) — não é um erro, é a navegação. O runClientAction
+// NÃO o loga nem o re-lança (as actions aqui são fire-and-forget/void: re-lançar
+// viraria unhandledrejection). Quem precisa de navegar fá-lo no cliente (ex.: o
+// signOut limpa a sessão e o profile-menu faz router.replace('/login')).
 export function isErroDeNavegacaoNext(error: unknown): boolean {
     const digest = (error as { digest?: unknown } | null)?.digest;
     return (
@@ -134,9 +135,10 @@ export async function runClientAction<T>(
     try {
         return await action();
     } catch (error) {
-        // Navegação do Next (redirect/notFound) não é erro — re-lança para a
-        // navegação acontecer (ex.: signOut → /login) e não a loga.
-        if (isErroDeNavegacaoNext(error)) throw error;
+        // Navegação do Next (redirect/notFound) é control-flow, não erro: não loga
+        // nem re-lança (re-lançar num void → unhandledrejection). Quem navega fá-lo
+        // no cliente.
+        if (isErroDeNavegacaoNext(error)) return undefined;
         logClientError(context, error);
         if (typeof window !== 'undefined' && isUnexpectedServerActionResponse(error)) {
             window.dispatchEvent(new CustomEvent(STALE_APP_EVENT, { detail: context }));
