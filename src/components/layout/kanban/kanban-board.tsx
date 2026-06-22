@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, Lock } from 'lucide-react';
+import { Archive, CalendarClock, Code2, ExternalLink, GitPullRequest, Lock } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { dataCurtaPt, dataPt } from '@/lib/datas';
@@ -17,7 +17,6 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
     SelectContent,
@@ -27,15 +26,12 @@ import {
 } from '@/components/ui/select';
 import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { apagarTarefa, concluirTarefa, mudarEstadoTarefa } from '@/modules/tarefas/tarefas.actions';
-import {
-    comentarERetomar,
-    dispararRelay,
-    lerComentariosRelay,
-    promoverTarefa,
-} from '@/modules/relay/relay.actions';
+import { dispararRelay, promoverTarefa } from '@/modules/relay/relay.actions';
 import { getJson } from '@/lib/api-get';
+import { emitirPrefillChat } from '@/modules/chat/chat.events';
 import type { DefinicoesVista } from '@/modules/definicoes/definicoes.schema';
 import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
+import { promptKillSwitchRelay } from '@/components/layout/kanban/kanban-relay-context';
 import {
     agruparPorEstado,
     ESTADOS_TAREFA,
@@ -69,33 +65,80 @@ function corPrioridade(p: PrioridadeTarefa): string {
     return 'bg-green-700';
 }
 
-// Vista kanban segue o relay: o semáforo escrito pelo orchestrator no cartão.
-function semaforoRelay(estado: string | null): string {
-    if (estado === 'processando') return '🟠';
-    if (estado === 'bloqueado') return '🔴';
-    if (estado === 'pronto') return '🟢';
-    return '';
+const RELAY_FASE_LABEL: Record<string, string> = {
+    analise: 'Análise',
+    dev: 'Dev',
+    testes: 'Testes',
+    docs: 'Docs',
+    auditoria: 'Auditoria',
+    pr: 'PR',
+    erro: 'Erro',
+};
+
+function corIndicadorTarefa(tarefa: Tarefa): string {
+    if (tarefa.estado === 'backlog') return 'bg-muted-foreground/30';
+    if (tarefa.relayEstado === 'processando') return 'bg-orange-500';
+    if (tarefa.relayEstado === 'bloqueado') return 'bg-red-500';
+    if (tarefa.relayEstado === 'pronto') return 'bg-green-500';
+    return corPrioridade(tarefa.prioridade);
+}
+
+function tituloIndicadorTarefa(tarefa: Tarefa): string {
+    const fase = tarefa.relayFase ? (RELAY_FASE_LABEL[tarefa.relayFase] ?? tarefa.relayFase) : null;
+    if (tarefa.estado === 'backlog') return 'Backlog';
+    if (tarefa.relayEstado === 'processando') return fase ? `Relay em ${fase}` : 'Relay em curso';
+    if (tarefa.relayEstado === 'bloqueado')
+        return fase ? `Relay bloqueado em ${fase}` : 'Relay bloqueado';
+    if (tarefa.relayEstado === 'pronto') return fase ? `Relay pronto em ${fase}` : 'Relay pronto';
+    return `Prioridade ${tarefa.prioridade}`;
+}
+
+function issueUrl(tarefa: Tarefa): string | null {
+    if (!tarefa.repoGithub || !tarefa.issueGithub) return null;
+    return `https://github.com/${tarefa.repoGithub}/issues/${tarefa.issueGithub}`;
+}
+
+function prNumero(url: string): string | null {
+    return /\/pull\/(\d+)(?:$|[/?#])/.exec(url)?.[1] ?? null;
+}
+
+function pathVsCode(path: string): string {
+    const expandido = path.startsWith('~/') ? `/home/carlos-jesus/${path.slice(2)}` : path;
+    return `vscode://file/${encodeURI(expandido)}`;
 }
 
 function CartaoTarefa({
     tarefa,
     mae,
     destacada,
+    repoPaths,
     onHoverBloqueio,
     onPromover,
-    onRetomar,
+    onAbrirKillSwitch,
 }: {
     tarefa: Tarefa;
     mae: Tarefa | null; // a tarefa que bloqueia esta (dependência em aberto)
     destacada: boolean; // esta É a mãe de quem está com o rato no cadeado
+    repoPaths: Record<string, string>;
     onHoverBloqueio: (maeId: string | null) => void;
     onPromover: (t: Tarefa) => void; // backlog sem issue → cria + liga
-    onRetomar: (t: Tarefa) => void; // ligada → comentar e re-disparar (pós-🔴)
+    onAbrirKillSwitch: (t: Tarefa) => void;
 }) {
     const concluida = tarefa.estado === 'terminado';
+    const repoPath = tarefa.repoGithub ? repoPaths[tarefa.repoGithub] : null;
+    const hrefCodigo = concluida ? tarefa.relayPrUrl : (tarefa.relayPrUrl ?? issueUrl(tarefa));
+    const mostrarLinksCodigo = Boolean(hrefCodigo) || (!concluida && tarefa.estado === 'backlog');
     return (
         <div
             draggable={!concluida}
+            title={
+                tarefa.relayEstado === 'bloqueado'
+                    ? 'Duplo clique para abrir o contexto do bloqueio no chat'
+                    : undefined
+            }
+            onDoubleClick={() => {
+                if (tarefa.relayEstado === 'bloqueado') onAbrirKillSwitch(tarefa);
+            }}
             onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_TAREFA_ID, tarefa.id);
                 e.dataTransfer.effectAllowed = 'move';
@@ -128,12 +171,12 @@ function CartaoTarefa({
                     )}
                 </span>
             </div>
-            <div className="flex items-start gap-2">
+            <div className="mb-1 flex items-start gap-2">
                 <span
-                    title={`Prioridade ${tarefa.prioridade}`}
+                    title={tituloIndicadorTarefa(tarefa)}
                     className={cn(
                         'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                        corPrioridade(tarefa.prioridade),
+                        corIndicadorTarefa(tarefa),
                     )}
                 />
                 <p
@@ -143,43 +186,78 @@ function CartaoTarefa({
                     {tarefa.titulo}
                 </p>
             </div>
-            <div className="flex items-center gap-1.5 pl-4 text-[0.65rem] text-muted-foreground">
-                <span title={`Criada em ${dataPt(tarefa.criadaEm)}`}>
-                    ➕ {dataCurtaPt(tarefa.criadaEm)}
+            <div
+                className={cn(
+                    'flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground',
+                    concluida && 'mb-1',
+                )}
+            >
+                <span className="min-w-0 truncate" title={`Criada em ${dataPt(tarefa.criadaEm)}`}>
+                    + {dataCurtaPt(tarefa.criadaEm)}
                 </span>
-                {tarefa.dataFim && (
-                    <span title={`Data fim: ${dataPt(tarefa.dataFim)}`}>
-                        📅 {dataCurtaPt(tarefa.dataFim)}
-                    </span>
-                )}
-                {tarefa.concluidaEm && (
-                    <span title={`Concluída em ${dataPt(tarefa.concluidaEm)}`}>
-                        ✅ {dataCurtaPt(tarefa.concluidaEm)}
-                    </span>
-                )}
+                <span className="flex shrink-0 items-center gap-2">
+                    {tarefa.dataFim && (
+                        <span
+                            className="inline-flex items-center gap-1"
+                            title={`Data fim: ${dataPt(tarefa.dataFim)}`}
+                        >
+                            <CalendarClock className="h-3 w-3" />
+                            {dataCurtaPt(tarefa.dataFim)}
+                        </span>
+                    )}
+                    {tarefa.concluidaEm && (
+                        <span title={`Concluída em ${dataPt(tarefa.concluidaEm)}`}>
+                            {dataCurtaPt(tarefa.concluidaEm)}
+                        </span>
+                    )}
+                </span>
             </div>
-            {/* Relay: ligada a uma issue → badge + retomar; backlog sem issue → promover. */}
-            {!concluida && (tarefa.issueGithub || tarefa.estado === 'backlog') && (
-                <div className="flex items-center gap-2 pl-4 pt-1 text-[0.65rem]">
-                    {tarefa.issueGithub ? (
+            {/* Relay: ligada a uma issue → links úteis; backlog sem issue → promover. */}
+            {mostrarLinksCodigo && (
+                <div className="flex items-center justify-between gap-2 text-[0.65rem]">
+                    {hrefCodigo ? (
                         <>
-                            <span className="text-muted-foreground" title={tarefa.repoGithub ?? ''}>
-                                {semaforoRelay(tarefa.relayEstado)} ⧉ #{tarefa.issueGithub}
+                            <span className="flex min-w-0 items-center gap-2">
+                                <a
+                                    className="inline-flex min-w-0 items-center gap-1 text-muted-foreground hover:text-foreground"
+                                    href={hrefCodigo}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={hrefCodigo}
+                                >
+                                    {tarefa.relayPrUrl ? (
+                                        <GitPullRequest className="h-3 w-3 shrink-0" />
+                                    ) : (
+                                        <ExternalLink className="h-3 w-3 shrink-0" />
+                                    )}
+                                    <span className="truncate">
+                                        {tarefa.relayPrUrl
+                                            ? `PR #${prNumero(tarefa.relayPrUrl) ?? tarefa.issueGithub}`
+                                            : `issue #${tarefa.issueGithub}`}
+                                    </span>
+                                </a>
+                                {tarefa.relayFase && (
+                                    <span className="shrink-0 text-muted-foreground">
+                                        {RELAY_FASE_LABEL[tarefa.relayFase] ?? tarefa.relayFase}
+                                    </span>
+                                )}
                             </span>
-                            <Button
-                                type="button"
-                                variant="link"
-                                className="h-auto p-0 text-[0.65rem]"
-                                onClick={() => onRetomar(tarefa)}
-                            >
-                                ↻ retomar
-                            </Button>
+                            {!concluida && repoPath && (
+                                <a
+                                    className="inline-flex shrink-0 items-center gap-1 text-muted-foreground hover:text-foreground"
+                                    href={pathVsCode(repoPath)}
+                                    title={`Abrir ${repoPath} no VS Code`}
+                                >
+                                    <Code2 className="h-3 w-3" />
+                                    VS Code
+                                </a>
+                            )}
                         </>
                     ) : (
                         <Button
                             type="button"
                             variant="link"
-                            className="h-auto p-0 text-[0.65rem]"
+                            className="ml-auto h-auto p-0 text-[0.65rem]"
                             onClick={() => onPromover(tarefa)}
                         >
                             ⤴ promover a issue
@@ -207,16 +285,11 @@ export function KanbanBoard() {
         tipo: 'concluir' | 'apagar';
         tarefa: Tarefa;
     } | null>(null);
-    // Relay: repos ligados (picker da promoção), modais de promover/retomar, e o
-    // aviso do disparo (o estado real vive na issue).
+    // Relay: repos ligados (picker da promoção + path local) e aviso do disparo.
     const [reposLigados, setReposLigados] = useState<string[]>([]);
+    const [repoPaths, setRepoPaths] = useState<Record<string, string>>({});
     const [promover, setPromover] = useState<Tarefa | null>(null);
     const [repoEscolhido, setRepoEscolhido] = useState('');
-    const [retomar, setRetomar] = useState<{
-        tarefa: Tarefa;
-        comentarios: { autor: string; corpo: string }[];
-        texto: string;
-    } | null>(null);
     const [relayInfo, setRelayInfo] = useState<string | null>(null);
     const [relayBusy, setRelayBusy] = useState(false);
     const loadSeqRef = useRef(0);
@@ -238,18 +311,40 @@ export function KanbanBoard() {
         carregarTarefas();
     }, [workspaceVersion, carregarTarefas]);
 
+    const relayEmCurso = abertas.some((t) => t.relayEstado === 'processando');
+
+    useEffect(() => {
+        if (!relayEmCurso) return;
+        const id = window.setInterval(carregarTarefas, 5000);
+        return () => window.clearInterval(id);
+    }, [relayEmCurso, carregarTarefas]);
+
     // Repos ligados para o picker da promoção (a key nunca vem; só os nomes).
     useEffect(() => {
         void runClientAction({ area: 'kanban', action: 'lerReposLigados', meta: {} }, () =>
             getJson<DefinicoesVista>('/api/definicoes'),
         ).then((d) => {
-            if (d) setReposLigados(d.githubRepos.map((r) => r.repo));
+            if (!d) return;
+            setReposLigados(d.githubRepos.map((r) => r.repo));
+            setRepoPaths(
+                Object.fromEntries(
+                    d.githubRepos.flatMap((r) => (r.path ? [[r.repo, r.path]] : [])),
+                ),
+            );
         });
     }, []);
 
     function abrirPromover(t: Tarefa) {
         setPromover(t);
         setRepoEscolhido(reposLigados[0] ?? '');
+    }
+
+    function abrirKillSwitch(t: Tarefa) {
+        const repoPath = t.repoGithub ? (repoPaths[t.repoGithub] ?? null) : null;
+        emitirPrefillChat(promptKillSwitchRelay(t, repoPath));
+        setRelayInfo(
+            `Contexto do kill-switch carregado no chat: ${t.repoGithub ?? ''} #${t.issueGithub ?? ''}`,
+        );
     }
 
     async function confirmarPromover() {
@@ -263,24 +358,6 @@ export function KanbanBoard() {
             carregarTarefas();
             notificarWorkspaceMudou();
         }
-    }
-
-    async function abrirRetomar(t: Tarefa) {
-        setRetomar({ tarefa: t, comentarios: [], texto: '' });
-        if (t.repoGithub && t.issueGithub) {
-            const cs = await lerComentariosRelay(t.repoGithub, t.issueGithub);
-            setRetomar((r) => (r && r.tarefa.id === t.id ? { ...r, comentarios: cs } : r));
-        }
-    }
-
-    async function confirmarRetomar() {
-        const alvo = retomar?.tarefa;
-        if (!alvo?.repoGithub || !alvo.issueGithub || !retomar) return;
-        setRelayBusy(true);
-        const r = await comentarERetomar(alvo.repoGithub, alvo.issueGithub, retomar.texto);
-        setRelayBusy(false);
-        setRelayInfo(r.detalhe);
-        setRetomar(null);
     }
 
     const abertasIds = new Set(abertas.map((t) => t.id));
@@ -343,9 +420,11 @@ export function KanbanBoard() {
         // Trigger do relay: arrastar para Análise ou Em Desenvolvimento dispara
         // o pipeline para a issue ligada. Cartões leves (sem issue) só mudam de coluna.
         if (relayAlvo) {
-            void dispararRelay(relayAlvo.repo, relayAlvo.issue).then((r) =>
-                setRelayInfo(r.detalhe),
-            );
+            void dispararRelay(relayAlvo.repo, relayAlvo.issue).then((r) => {
+                setRelayInfo(r.detalhe);
+                carregarTarefas();
+                notificarWorkspaceMudou();
+            });
         }
     }
 
@@ -437,9 +516,10 @@ export function KanbanBoard() {
                                             : null
                                     }
                                     destacada={maeDestacada === t.id}
+                                    repoPaths={repoPaths}
                                     onHoverBloqueio={setMaeDestacada}
                                     onPromover={abrirPromover}
-                                    onRetomar={abrirRetomar}
+                                    onAbrirKillSwitch={abrirKillSwitch}
                                 />
                             ))}
                         </div>
@@ -504,50 +584,6 @@ export function KanbanBoard() {
                             disabled={!repoEscolhido || relayBusy}
                         >
                             {relayBusy ? 'A criar…' : 'Criar issue'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Retoma (chat-under-kanban): vê o trace na issue, comenta a correção e re-dispara. */}
-            <AlertDialog open={!!retomar} onOpenChange={(o) => !o && setRetomar(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Retomar {retomar?.tarefa.repoGithub} #{retomar?.tarefa.issueGithub}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Comenta a correção (vai para a issue como humano) e o relay retoma,
-                            relendo os comentários.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    {retomar && retomar.comentarios.length > 0 && (
-                        <div className="max-h-40 space-y-2 overflow-y-auto rounded border p-2 text-xs">
-                            {retomar.comentarios.slice(-6).map((c, i) => (
-                                <p
-                                    key={i}
-                                    className="whitespace-pre-wrap border-b pb-1 last:border-0"
-                                >
-                                    {c.corpo.split('\n')[0]}
-                                </p>
-                            ))}
-                        </div>
-                    )}
-                    <Textarea
-                        value={retomar?.texto ?? ''}
-                        onChange={(e) =>
-                            setRetomar((r) => (r ? { ...r, texto: e.target.value } : r))
-                        }
-                        placeholder="A correção / o que falta…"
-                        className="h-24 text-xs"
-                    />
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmarRetomar}
-                            disabled={!retomar?.texto.trim() || relayBusy}
-                        >
-                            {relayBusy ? 'A retomar…' : 'Comentar e retomar'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

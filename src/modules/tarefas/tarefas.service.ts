@@ -23,7 +23,7 @@ export interface PainelTarefas {
 
 // #47: o projeto é um FK real; o nome vem por join (display/serializar).
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado';
+    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado, relay_fase, relay_pr_url';
 
 interface TarefaRow {
     id: string;
@@ -40,6 +40,8 @@ interface TarefaRow {
     repo_github: string | null;
     issue_github: number | null;
     relay_estado: string | null;
+    relay_fase: string | null;
+    relay_pr_url: string | null;
 }
 
 function toTarefa(r: TarefaRow): Tarefa {
@@ -58,23 +60,45 @@ function toTarefa(r: TarefaRow): Tarefa {
         repoGithub: r.repo_github,
         issueGithub: r.issue_github,
         relayEstado: r.relay_estado,
+        relayFase: r.relay_fase,
+        relayPrUrl: r.relay_pr_url,
     };
 }
 
-// Vista kanban segue o relay: o orchestrator escreve o semáforo no cartão ligado
-// à issue. Best-effort (a verdade é a issue) — não lança se não houver cartão.
+// Vista kanban segue o relay: o orchestrator escreve semáforo, fase, PR e coluna
+// no cartão ligado à issue. Best-effort (a verdade é a issue) — não lança.
+export async function atualizarRelayPorIssueCom(
+    db: SupabaseClient,
+    repo: string,
+    issue: number,
+    campos: {
+        relayEstado?: string;
+        relayFase?: string | null;
+        relayPrUrl?: string | null;
+        estado?: Exclude<EstadoTarefa, 'terminado'>;
+    },
+): Promise<void> {
+    const update: Record<string, string | null> = {};
+    if (campos.relayEstado !== undefined) update.relay_estado = campos.relayEstado;
+    if (campos.relayFase !== undefined) update.relay_fase = campos.relayFase;
+    if (campos.relayPrUrl !== undefined) update.relay_pr_url = campos.relayPrUrl;
+    if (campos.estado !== undefined) update.estado = campos.estado;
+    if (Object.keys(update).length === 0) return;
+    const { error } = await db
+        .from('tarefas')
+        .update(update)
+        .eq('repo_github', repo)
+        .eq('issue_github', issue);
+    if (error) console.error('atualizar relay no cartão falhou (segue):', error.message);
+}
+
 export async function atualizarRelayEstadoPorIssueCom(
     db: SupabaseClient,
     repo: string,
     issue: number,
     estado: string,
 ): Promise<void> {
-    const { error } = await db
-        .from('tarefas')
-        .update({ relay_estado: estado })
-        .eq('repo_github', repo)
-        .eq('issue_github', issue);
-    if (error) console.error('atualizar relay_estado falhou (segue):', error.message);
+    await atualizarRelayPorIssueCom(db, repo, issue, { relayEstado: estado });
 }
 
 // Liga o cartão a uma issue (a promoção): grava repo + número. Só o dono (RLS).

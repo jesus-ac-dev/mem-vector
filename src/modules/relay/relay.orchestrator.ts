@@ -18,7 +18,8 @@ import {
 } from '@/lib/github';
 import { blocoKernelRelayCom } from '@/agent/kernel';
 import { expandirHome } from '@/lib/paths';
-import { atualizarRelayEstadoPorIssueCom } from '@/modules/tarefas/tarefas.service';
+import { atualizarRelayPorIssueCom } from '@/modules/tarefas/tarefas.service';
+import type { EstadoTarefa } from '@/modules/tarefas/tarefas.schema';
 import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
 import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
 import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.service';
@@ -37,35 +38,43 @@ import { correrCruzamento, parseVeredito, type ResultadoCruzamento } from './rel
 // fim), e — no verde — commit/push/PR. v1 SEM auto-merge: pára em 🟢 para o smoke.
 
 export type Semaforo = 'processando' | 'bloqueado' | 'pronto';
+export type RelayFase = Cruzamento | 'pr' | 'erro';
 
-export const SEMAFORO_LABEL: Record<Semaforo, string> = {
-    processando: 'relay:🟠',
-    bloqueado: 'relay:🔴',
-    pronto: 'relay:🟢',
+const SEMAFORO_COR: Record<Semaforo, { nome: string; hex: string }> = {
+    processando: { nome: 'laranja', hex: 'f59e0b' },
+    bloqueado: { nome: 'vermelho', hex: 'ef4444' },
+    pronto: { nome: 'verde', hex: '22c55e' },
 };
 
+const TODAS_FASES_LABEL: RelayFase[] = [...CRUZAMENTOS, 'pr', 'erro'];
+const LABELS_RELAY_ATIVAS = TODAS_FASES_LABEL.flatMap((fase) =>
+    (Object.keys(SEMAFORO_COR) as Semaforo[]).map((semaforo) => relayFaseLabel(fase, semaforo)),
+);
+
 const RELAY_LABELS = [
-    { name: SEMAFORO_LABEL.processando, color: 'f59e0b', description: 'Relay em processamento' },
-    { name: SEMAFORO_LABEL.bloqueado, color: 'ef4444', description: 'Relay bloqueado' },
-    { name: SEMAFORO_LABEL.pronto, color: '22c55e', description: 'Relay pronto para smoke' },
-    ...CRUZAMENTOS.map((c) => ({
-        name: faseLabel(c),
-        color: '64748b',
-        description: `Fase de retoma do relay: ${c}`,
-    })),
+    ...TODAS_FASES_LABEL.flatMap((fase) =>
+        (Object.keys(SEMAFORO_COR) as Semaforo[]).map((semaforo) => ({
+            name: relayFaseLabel(fase, semaforo),
+            color: SEMAFORO_COR[semaforo].hex,
+            description: `Relay ${fase}: ${SEMAFORO_COR[semaforo].nome}`,
+        })),
+    ),
 ];
+
+export const LABELS_RELAY_REMOVER = [...LABELS_RELAY_ATIVAS];
 
 const FASES_RELAY: Cruzamento[] = ['analise', 'dev', 'testes', 'docs'];
 
-// Retoma cirúrgica: a fase onde o relay parou fica gravada numa label `relay:fase:<c>`.
-// A retoma (re-disparo) lê-a e recomeça AÍ — não sempre na Análise.
-export function faseLabel(c: Cruzamento): string {
-    return `relay:fase:${c}`;
+export function relayFaseLabel(fase: RelayFase, semaforo: Semaforo): string {
+    return `${fase}:${SEMAFORO_COR[semaforo].nome}`;
 }
 
 /** A fase de retoma gravada nas labels da issue, ou null (recomeça do início). */
 export function faseDeRetoma(labels: string[]): Cruzamento | null {
-    for (const c of CRUZAMENTOS) if (labels.includes(faseLabel(c))) return c;
+    for (const label of labels) {
+        const m = /^([^:]+):(laranja|vermelho|verde)$/.exec(label);
+        if (m && (CRUZAMENTOS as readonly string[]).includes(m[1])) return m[1] as Cruzamento;
+    }
     return null;
 }
 
@@ -176,6 +185,11 @@ export function promptValidador(
 export interface IoOrquestrador {
     comentar(body: string): Promise<void>;
     moverSemaforo(de: Semaforo | null, para: Semaforo): Promise<void>;
+    atualizarProgresso?(
+        fase: RelayFase,
+        semaforo: Semaforo,
+        campos?: { prUrl?: string | null },
+    ): Promise<void>;
     // retoma=true continua o branch existente (não reseta — preserva o trabalho).
     abrirBranch(branch: string, retoma: boolean): Promise<void>;
     diff(): Promise<string>;
@@ -186,7 +200,7 @@ export interface IoOrquestrador {
     // Test-gate opcional: corre a suite do repo depois dos substeps de escrita.
     // Vermelho devolve o output ao principal na ronda seguinte.
     testar?(): Promise<{ ok: boolean; output: string }>;
-    // Grava/limpa a fase de retoma (label `relay:fase:<c>`); null = limpa. Opcional.
+    // Grava/limpa a fase de retoma no SaaS; a label ativa já transporta a fase.
     marcarRetoma?(cruzamento: Cruzamento | null): Promise<void>;
 }
 
@@ -194,6 +208,27 @@ export type ResultadoOrquestracao =
     | { estado: 'pr-aberto'; prUrl: string }
     | { estado: 'pronto' } // verde mas sem alterações de código (sem PR)
     | { estado: 'bloqueado'; cruzamento: Cruzamento };
+
+function estadoKanbanDaFase(fase: RelayFase): Exclude<EstadoTarefa, 'terminado'> | null {
+    if (fase === 'analise') return 'analise';
+    if (fase === 'dev') return 'desenvolvimento';
+    if (fase === 'testes') return 'testes';
+    if (fase === 'docs' || fase === 'auditoria' || fase === 'pr') return 'documentacao';
+    return null;
+}
+
+async function atualizarProgressoRelay(
+    io: IoOrquestrador,
+    fase: RelayFase,
+    semaforo: Semaforo,
+    campos: { prUrl?: string | null } = {},
+): Promise<void> {
+    if (io.atualizarProgresso) {
+        await io.atualizarProgresso(fase, semaforo, campos);
+        return;
+    }
+    await io.moverSemaforo(null, semaforo);
+}
 
 // Corre UM cruzamento com handoffs por substep. Reaproveita o round-loop puro do
 // miolo (correrCruzamento) — aqui só se ligam os providers reais + os comentários.
@@ -441,7 +476,7 @@ export async function orquestrarCom(opts: {
     const maxRondas = opts.maxRondas ?? 3;
     const branch = nomeBranch(issue);
 
-    const executar =
+    const executarBase =
         opts.executarCruzamento ??
         ((cruzamento: Cruzamento, specCruzamento: string) => {
             // Override REAL do user: se configurou esta fase nas Definições
@@ -472,8 +507,23 @@ export async function orquestrarCom(opts: {
                 escritores: r.escritores,
             });
         });
+    let ultimoProgresso: string | null = null;
+    const marcarProgresso = async (
+        fase: RelayFase,
+        semaforo: Semaforo,
+        campos: { prUrl?: string | null } = {},
+    ) => {
+        const chave = `${fase}:${semaforo}:${campos.prUrl ?? ''}`;
+        if (chave === ultimoProgresso) return;
+        ultimoProgresso = chave;
+        await atualizarProgressoRelay(io, fase, semaforo, campos);
+    };
+    const executar = async (cruzamento: Cruzamento, specCruzamento: string) => {
+        await marcarProgresso(cruzamento, 'processando');
+        return executarBase(cruzamento, specCruzamento);
+    };
 
-    await io.moverSemaforo(null, 'processando');
+    await marcarProgresso(desde ?? 'analise', 'processando');
     // Retoma (desde definido) continua o branch; senão abre fresh do ramo default.
     await io.abrirBranch(branch, desde !== undefined);
 
@@ -490,13 +540,13 @@ export async function orquestrarCom(opts: {
     if (!pipeline.completo) {
         const cruzamento = pipeline.ordem.at(-1) ?? 'analise';
         const ultimo = pipeline.porCruzamento[cruzamento];
-        await io.moverSemaforo('processando', 'bloqueado');
+        await marcarProgresso(cruzamento, 'bloqueado');
         // Grava a fase: a retoma recomeça AQUI, não na Análise.
         await io.marcarRetoma?.(cruzamento);
         await io.comentar(
             `🔴 Bloqueado no cruzamento "${cruzamento}" (não convergiu em ${ultimo?.rondas ?? '?'} ronda(s)).\n\n` +
                 `Última objeção:\n${ultimo?.historico.at(-1)?.veredito?.feedback ?? '—'}\n\n` +
-                'Comenta a correção e re-arrasta para o relay retomar (recomeça nesta fase).',
+                'Comenta a correção na issue e re-arrasta para o relay retomar nesta fase.',
         );
         return { estado: 'bloqueado', cruzamento };
     }
@@ -515,7 +565,7 @@ export async function orquestrarCom(opts: {
                 `Pipeline do relay (${pipeline.ordem.join(' → ')}). ` +
                 `O trace por substep está nos comentários da issue.\n\nCloses #${issue}`,
         });
-        await io.moverSemaforo('processando', 'pronto');
+        await marcarProgresso('pr', 'pronto', { prUrl });
         await io.comentar(
             `🟢 Pronto para smoke — PR: ${prUrl}\n\n` +
                 'v1 sem auto-merge: revê, faz o smoke e fazes tu o merge.',
@@ -523,7 +573,7 @@ export async function orquestrarCom(opts: {
         return { estado: 'pr-aberto', prUrl };
     }
 
-    await io.moverSemaforo('processando', 'pronto');
+    await marcarProgresso((pipeline.ordem.at(-1) ?? 'analise') as RelayFase, 'pronto');
     await io.comentar('🟢 Pipeline concluído sem alterações de código (nada para PR).');
     return { estado: 'pronto' };
 }
@@ -540,32 +590,37 @@ export function construirIo(opts: {
     db?: SupabaseClient; // p/ a vista kanban seguir o semáforo (best-effort)
 }): IoOrquestrador {
     const { token, repo, issue, cwd, base, defs, db } = opts;
+    const atualizarProgressoReal = async (
+        fase: RelayFase,
+        semaforo: Semaforo,
+        campos: { prUrl?: string | null } = {},
+    ) => {
+        const ativa = relayFaseLabel(fase, semaforo);
+        await editarLabels(token, {
+            repo,
+            number: issue,
+            add: [ativa],
+            remove: LABELS_RELAY_REMOVER.filter((label) => label !== ativa),
+        });
+        if (db) {
+            await atualizarRelayPorIssueCom(db, repo, issue, {
+                relayEstado: semaforo,
+                relayFase: fase,
+                relayPrUrl: campos.prUrl,
+                estado: estadoKanbanDaFase(fase) ?? undefined,
+            });
+        }
+    };
     return {
         comentar: (body) => comentarIssue(token, { repo, number: issue, body }).then(() => {}),
-        moverSemaforo: async (_de, para) => {
-            await editarLabels(token, {
-                repo,
-                number: issue,
-                add: [SEMAFORO_LABEL[para]],
-                remove: Object.values(SEMAFORO_LABEL).filter(
-                    (label) => label !== SEMAFORO_LABEL[para],
-                ),
-            });
-            // A vista kanban segue as labels: espelha o semáforo no cartão ligado.
-            if (db) await atualizarRelayEstadoPorIssueCom(db, repo, issue, para);
-        },
+        moverSemaforo: async (_de, para) => atualizarProgressoReal('erro', para),
+        atualizarProgresso: atualizarProgressoReal,
         abrirBranch: (branch, retoma) => abrirBranch(cwd, branch, base, token, retoma),
         diff: () => diffDoRepo(cwd),
         testar: () => correrTestes(cwd),
         marcarRetoma: async (cruzamento) => {
-            const manter = cruzamento ? faseLabel(cruzamento) : null;
             try {
-                await editarLabels(token, {
-                    repo,
-                    number: issue,
-                    add: manter ? [manter] : [],
-                    remove: CRUZAMENTOS.map(faseLabel).filter((l) => l !== manter),
-                });
+                if (db) await atualizarRelayPorIssueCom(db, repo, issue, { relayFase: cruzamento });
             } catch (e) {
                 console.error('marcar fase de retoma falhou (segue):', e);
             }

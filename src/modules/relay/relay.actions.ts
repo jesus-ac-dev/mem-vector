@@ -6,15 +6,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { lerDefinicoesServidorCom } from '@/modules/definicoes/definicoes.service';
 import type { DefinicoesServidor } from '@/modules/definicoes/definicoes.schema';
-import { criarIssue, comentarIssue, editarLabels, numeroDoUrl, verIssue } from '@/lib/github';
+import { criarIssue, comentarIssue, editarLabels, numeroDoUrl } from '@/lib/github';
 import { expandirHome } from '@/lib/paths';
 import {
-    atualizarRelayEstadoPorIssueCom,
+    atualizarRelayPorIssueCom,
     getTarefaCom,
     ligarIssueTarefaCom,
 } from '@/modules/tarefas/tarefas.service';
 
-import { orquestrar, SEMAFORO_LABEL } from './relay.orchestrator';
+import { LABELS_RELAY_REMOVER, orquestrar, relayFaseLabel } from './relay.orchestrator';
 import { providersAtivos } from './relay.resolver';
 
 // Lock de um-relay-por-repo (working copy partilhado): dois disparos no mesmo
@@ -43,11 +43,12 @@ async function marcarFalhaRelay(opts: {
 }): Promise<void> {
     const detalhe = opts.erro instanceof Error ? opts.erro.message : String(opts.erro);
     try {
+        const ativa = relayFaseLabel('erro', 'bloqueado');
         await editarLabels(opts.token, {
             repo: opts.repo,
             number: opts.issue,
-            add: [SEMAFORO_LABEL.bloqueado],
-            remove: [SEMAFORO_LABEL.processando, SEMAFORO_LABEL.pronto],
+            add: [ativa],
+            remove: LABELS_RELAY_REMOVER.filter((label) => label !== ativa),
         });
     } catch (e) {
         console.error('[relay] marcar 🔴 falhou:', e);
@@ -63,7 +64,10 @@ async function marcarFalhaRelay(opts: {
     } catch (e) {
         console.error('[relay] comentar falha falhou:', e);
     }
-    await atualizarRelayEstadoPorIssueCom(opts.db, opts.repo, opts.issue, 'bloqueado');
+    await atualizarRelayPorIssueCom(opts.db, opts.repo, opts.issue, {
+        relayEstado: 'bloqueado',
+        relayFase: 'erro',
+    });
 }
 
 // Trigger do relay: dispara o pipeline para uma (repo, issue). Valida cedo, trava
@@ -138,44 +142,5 @@ export async function promoverTarefa(
         return { ok: true, detalhe: `Issue #${numero} criada e ligada.`, issue: numero };
     } catch (e) {
         return { ok: false, detalhe: e instanceof Error ? e.message : 'promoção falhou' };
-    }
-}
-
-// Retoma pós-🔴 (a junta humano-máquina): comenta a correção na issue e re-dispara
-// o relay. O pipeline relê os comentários humanos (montarSpec) e integra. É o
-// miolo do "chat-under-kanban" — sem UI nova de chat, reusa a issue como canal.
-export async function comentarERetomar(
-    repo: string,
-    issue: number,
-    texto: string,
-): Promise<{ ok: boolean; detalhe: string }> {
-    if (!texto.trim()) return { ok: false, detalhe: 'Escreve a correção antes de retomar.' };
-    const v = await defsValidadas(repo);
-    if ('erro' in v) return { ok: false, detalhe: v.erro };
-    try {
-        await comentarIssue(v.defs.githubToken!, {
-            repo,
-            number: issue,
-            body: `— Carlos · humano\n\n${texto.trim()}`,
-        });
-    } catch (e) {
-        return { ok: false, detalhe: e instanceof Error ? e.message : 'comentar falhou' };
-    }
-    return dispararRelay(repo, issue);
-}
-
-// Os comentários da issue (o trace do relay + as correções), para o painel de
-// retoma mostrar o que se passou antes de o humano comentar.
-export async function lerComentariosRelay(
-    repo: string,
-    issue: number,
-): Promise<{ autor: string; corpo: string }[]> {
-    const v = await defsValidadas(repo);
-    if ('erro' in v) return [];
-    try {
-        const d = await verIssue(v.defs.githubToken!, { repo, number: issue });
-        return d.comentarios;
-    } catch {
-        return [];
     }
 }

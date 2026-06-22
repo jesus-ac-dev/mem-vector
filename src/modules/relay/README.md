@@ -82,10 +82,11 @@ por-issue), e cada substep deixa rasto.
   `npm test`): a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
 - **`relay.actions.ts`** — `dispararRelay` (trigger, com **lock** de um-relay-por-repo) ·
-  `promoverTarefa` (cartão→issue) · `comentarERetomar` (retoma) · `lerComentariosRelay`.
-- **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (semáforos)/`criarPR`/`ramoPrincipal`/`numeroDoUrl`.
+  `promoverTarefa` (cartão→issue).
+- **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (fase+cor)/`criarPR`/`ramoPrincipal`/`numeroDoUrl`.
 
-**Semáforos** (labels): `relay:🟠` processa · `relay:🔴` bloqueado · `relay:🟢` pronto.
+**Progresso GitHub** (labels): estado ativo único em formato curto `<fase>:<cor>`, por exemplo
+`analise:laranja`, `dev:vermelho`, `pr:verde`.
 
 ## Trigger no kanban (2026-06-21) — o fluxo do Carlos
 
@@ -94,11 +95,16 @@ por-issue), e cada substep deixa rasto.
   a issue**. Liga `tarefas.repo_github`/`issue_github`.
 - **Arrastar Backlog→Análise** dispara o relay para a issue ligada (checa precedências; cartões leves
   só mudam de coluna).
-- **Retoma** (chat-under-kanban): num cartão ligado, **↻ retomar** mostra os comentários da issue +
-  caixa de correção → comenta como humano e re-dispara (o `montarSpec` relê e integra).
+- Cartão ligado mostra link para issue/PR e, se o repo tiver path local nas Definições, link **VS Code**
+  para abrir o working copy.
+- Cartão bloqueado (`<fase>:vermelho`) aceita **duplo clique**: carrega no chat do rodapé um prompt de
+  recuperação com tarefa, repo, issue, fase, PR e working copy. É a fase 1 do kill-switch conversacional
+  (#129); o envio fica manual para o humano poder ajustar o contexto.
 - Disparo alternativo direto: página do módulo GitHub (Definições) — repo + nº da issue + **⚡ Disparar**.
-- O estado vive na issue (handoffs + semáforos); a **vista kanban segue** (o cartão mostra 🟠🔴🟢 via
-  `tarefas.relay_estado`, escrito pelo orchestrator).
+- O estado vive na issue (handoffs + label fase+cor); a **vista kanban segue** via
+  `tarefas.relay_estado`/`relay_fase`/`relay_pr_url`, escritos pelo orchestrator. Enquanto houver
+  cartão `processando`, o kanban faz refresh periódico; quando o PR abre, o cartão fica em
+  **Documentação** e aponta diretamente para o PR.
 
 ## Fidelidade ao desenho (2026-06-21)
 
@@ -107,15 +113,18 @@ por-issue), e cada substep deixa rasto.
   sem multiplicar o Kernel inteiro por fase/ronda/provider.
 - **Docs de volta no SaaS:** no verde, o orchestrator escreve uma **nota no projeto** (vectorizada) com
   a issue + o PR — não só os `docs/` do repo (`registarNoSaasCom`).
-- **Vista kanban ↔ labels:** o semáforo da issue espelha-se no cartão (`relay_estado`).
+- **Vista kanban ↔ labels:** a label `<fase>:<cor>` espelha-se no cartão (`relay_estado`,
+  `relay_fase`, `relay_pr_url`) e empurra a coluna: Análise → Desenvolvimento → Testes →
+  Documentação/PR.
 - **Agregação fina:** os **N providers configurados debatem** nas rondas — any-rejeita move-as (uma
   objeção não é votada para fora; um validador a apanhar um bug real não é silenciado). Se ao fim das
   rondas (N, configurável por `maxRondas`) os N agentes **não chegam a consenso**, é "sem consenso" →
   🔴 → **o humano decide** (a paragem do kill-switch). Um **split** (uns aprovam, outros objetam) chega
   rotulado **"SEM CONSENSO"** com os dois lados. NÃO há maioria nem um 4.º agente a desempatar.
-- **Retoma cirúrgica:** o kill-switch grava a fase numa label `relay:fase:<c>`; o re-disparo recomeça
-  **nessa fase** (não na Análise), reusando o goal da Análise dos comentários (`faseDeRetoma`/
-  `goalDaAnalise`/`correrPipeline({desde, analiseInicial})`). Sem goal guardado → recomeça do início.
+- **Retoma cirúrgica:** o kill-switch grava a fase na label ativa (`<fase>:vermelho`); o
+  re-disparo recomeça **nessa fase** (não na Análise), reusando o goal da Análise dos comentários
+  (`faseDeRetoma`/`goalDaAnalise`/`correrPipeline({desde, analiseInicial})`). Sem goal guardado →
+  recomeça do início.
   Na retoma a `abrirBranch` **continua** o branch (`buildRetomaArgs`: não reseta de base) — o trabalho
   não-commitado da fase anterior fica no working tree do disco (commit só no verde; o lock impede outro
   relay no mesmo path). Resetar apagava-o (achado do Audit).

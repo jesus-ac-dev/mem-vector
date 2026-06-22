@@ -39,6 +39,7 @@ import { gravarEscolhaChat } from '@/modules/definicoes/definicoes.actions';
 import { ProviderIcon } from '@/components/layout/chat/provider-icon';
 import { YoutubeModal } from '@/components/layout/youtube/youtube-modal';
 import type { IngestaoResult } from '@/modules/youtube/youtube.actions';
+import { CHAT_PREFILL_EVENT, type ChatPrefillDetail } from '@/modules/chat/chat.events';
 import {
     DEFINICOES_MUDARAM_EVENT,
     pedirDefinicoes,
@@ -635,6 +636,18 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, pending]);
+
+    useEffect(() => {
+        function handlePrefill(ev: Event) {
+            const detail = (ev as CustomEvent<ChatPrefillDetail>).detail;
+            if (!detail?.prompt) return;
+            abrirChat();
+            setInput(detail.prompt);
+            requestAnimationFrame(() => inputRef.current?.focus());
+        }
+        window.addEventListener(CHAT_PREFILL_EVENT, handlePrefill);
+        return () => window.removeEventListener(CHAT_PREFILL_EVENT, handlePrefill);
+    }, [abrirChat]);
 
     useEffect(() => {
         const alvo = conversaAberta; // string | null

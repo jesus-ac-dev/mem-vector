@@ -14,7 +14,9 @@ import {
     orquestrarFaseSequencialCom,
     promptPrincipal,
     promptValidador,
+    relayFaseLabel,
     type IoOrquestrador,
+    type RelayFase,
     type Semaforo,
 } from './relay.orchestrator';
 
@@ -25,10 +27,14 @@ function resp(text: string): RespostaRepo {
 function fakeIo(over: Partial<IoOrquestrador> = {}) {
     const comentarios: string[] = [];
     const semaforos: Semaforo[] = [];
+    const progressos: { fase: RelayFase; semaforo: Semaforo; prUrl?: string | null }[] = [];
     const corridas: { provider: Provider; escrever: boolean }[] = [];
     const io: IoOrquestrador = {
         comentar: vi.fn(async (b: string) => void comentarios.push(b)),
         moverSemaforo: vi.fn(async (_de, para) => void semaforos.push(para)),
+        atualizarProgresso: vi.fn(async (fase, semaforo, campos) => {
+            progressos.push({ fase, semaforo, prUrl: campos?.prUrl });
+        }),
         abrirBranch: vi.fn(async () => {}),
         diff: vi.fn(async () => 'diff fake'),
         commitPush: vi.fn(async () => {}),
@@ -39,7 +45,7 @@ function fakeIo(over: Partial<IoOrquestrador> = {}) {
         }),
         ...over,
     };
-    return { io, comentarios, semaforos, corridas };
+    return { io, comentarios, semaforos, progressos, corridas };
 }
 
 const okCruzamento: ResultadoCruzamento = {
@@ -51,7 +57,7 @@ const okCruzamento: ResultadoCruzamento = {
 
 describe('orquestrarCom — pipeline verde', () => {
     it('abre branch, corre os cruzamentos, e no verde com código faz PR (sem auto-merge)', async () => {
-        const { io, comentarios, semaforos } = fakeIo();
+        const { io, comentarios, progressos } = fakeIo();
         const ordem: Cruzamento[] = [];
         const out = await orquestrarCom({
             issue: 42,
@@ -68,7 +74,11 @@ describe('orquestrarCom — pipeline verde', () => {
         expect(io.abrirBranch).toHaveBeenCalledWith('feat/issue-42', false); // fresh, não retoma
         // Estrela: análise antes da execução.
         expect(ordem).toEqual(['analise', 'dev']);
-        expect(semaforos).toEqual(['processando', 'pronto']);
+        expect(progressos).toEqual([
+            { fase: 'analise', semaforo: 'processando', prUrl: undefined },
+            { fase: 'dev', semaforo: 'processando', prUrl: undefined },
+            { fase: 'pr', semaforo: 'pronto', prUrl: 'https://github.com/o/r/pull/9' },
+        ]);
         expect(io.commitPush).toHaveBeenCalledTimes(1);
         expect(comentarios.some((c) => c.includes('🟢'))).toBe(true);
     });
@@ -169,7 +179,7 @@ describe('orquestrarCom — pipeline verde', () => {
 
 describe('orquestrarCom — kill-switch', () => {
     it('um cruzamento que não valida → 🔴 bloqueado, sem PR', async () => {
-        const { io, comentarios, semaforos } = fakeIo();
+        const { io, comentarios, progressos } = fakeIo();
         const out = await orquestrarCom({
             issue: 7,
             spec: 's',
@@ -194,7 +204,11 @@ describe('orquestrarCom — kill-switch', () => {
         expect(out).toEqual({ estado: 'bloqueado', cruzamento: 'dev' });
         expect(io.criarPR).not.toHaveBeenCalled();
         expect(io.commitPush).not.toHaveBeenCalled();
-        expect(semaforos).toEqual(['processando', 'bloqueado']);
+        expect(progressos).toEqual([
+            { fase: 'analise', semaforo: 'processando', prUrl: undefined },
+            { fase: 'dev', semaforo: 'processando', prUrl: undefined },
+            { fase: 'dev', semaforo: 'bloqueado', prUrl: undefined },
+        ]);
         expect(comentarios.some((c) => c.includes('🔴') && c.includes('falta o teste'))).toBe(true);
     });
 });
@@ -371,11 +385,18 @@ describe('normalizarDefsRelay', () => {
 
 describe('faseDeRetoma', () => {
     it('encontra a fase gravada nas labels', () => {
-        expect(faseDeRetoma(['relay:🟠', 'relay:fase:dev'])).toBe('dev');
-        expect(faseDeRetoma(['relay:fase:auditoria'])).toBe('auditoria');
+        expect(faseDeRetoma(['dev:vermelho'])).toBe('dev');
+        expect(faseDeRetoma(['auditoria:vermelho'])).toBe('auditoria');
     });
     it('null quando não há label de fase', () => {
-        expect(faseDeRetoma(['relay:🔴', 'bug'])).toBeNull();
+        expect(faseDeRetoma(['bug', 'relay'])).toBeNull();
+    });
+});
+
+describe('relayFaseLabel', () => {
+    it('usa o formato curto <fase>:<cor>', () => {
+        expect(relayFaseLabel('analise', 'processando')).toBe('analise:laranja');
+        expect(relayFaseLabel('pr', 'pronto')).toBe('pr:verde');
     });
 });
 
