@@ -41,15 +41,20 @@ import {
     MODULO_LABEL,
     MODULOS,
     modoEfetivo,
+    CRUZAMENTO_LABEL,
+    CRUZAMENTOS,
     PROVIDER_LABEL,
     PROVIDERS,
     type AgenteVista,
+    type Cruzamento,
+    type CruzamentoConfig,
     type Definicoes,
     type DefinicoesVista,
     type MetodoDestilacao,
     type ModoAgente,
     type Modulo,
     type Provider,
+    type Validador,
 } from '@/modules/definicoes/definicoes.schema';
 import { ProviderIcon } from '@/components/layout/chat/provider-icon';
 import { providersPorForcarTeste } from '@/components/layout/definicoes/definicoes-modal.logic';
@@ -291,6 +296,27 @@ export function DefinicoesModal({
         } finally {
             setCarregandoRepos(false);
         }
+    }
+
+    // Relay: muda o principal/validadores de um cruzamento (cria a entrada se não existe).
+    function mudarCruzamento(c: Cruzamento, patch: Partial<CruzamentoConfig>) {
+        const atual: CruzamentoConfig = defs.cruzamentos[c] ?? {
+            principal: 'claude',
+            validadores: [],
+        };
+        editar({ ...defs, cruzamentos: { ...defs.cruzamentos, [c]: { ...atual, ...patch } } });
+    }
+
+    // Liga/desliga um validador (self ou um provider) no painel de um cruzamento.
+    function toggleValidador(c: Cruzamento, v: Validador, on: boolean) {
+        const atual = defs.cruzamentos[c]?.validadores ?? [];
+        const validadores = on ? [...new Set([...atual, v])] : atual.filter((x) => x !== v);
+        mudarCruzamento(c, { validadores });
+    }
+
+    function desligarCruzamento(c: Cruzamento) {
+        const { [c]: _removido, ...restantes } = defs.cruzamentos;
+        editar({ ...defs, cruzamentos: restantes });
     }
 
     async function correrTeste(p: Provider): Promise<boolean> {
@@ -558,8 +584,8 @@ export function DefinicoesModal({
                                     </div>
                                 )}
                                 <p className="text-xs text-muted-foreground">
-                                    Regras de proatividade, estilo e personalidade vivem no Kernel
-                                    do workspace.
+                                    Proatividade, estilo e personalidade do agente vão acumulando
+                                    aqui.
                                 </p>
                             </div>
                         ) : pagina === 'agentes' ? (
@@ -719,8 +745,8 @@ export function DefinicoesModal({
                                     <h3 className="text-sm font-medium">Relay — pipeline de dev</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
                                         O relay real corre os providers ativos, sequencialmente, em
-                                        Análise, Desenvolvimento, Testes e Documentação. Ativa ou
-                                        desativa participantes na página Agentes.
+                                        Análise, Desenvolvimento, Testes e Documentação. Estes
+                                        campos ficam como override fino por fase.
                                     </p>
                                 </div>
                                 <div>
@@ -745,6 +771,92 @@ export function DefinicoesModal({
                                         className="mt-2 h-8 w-24 text-xs"
                                     />
                                 </div>
+                                <ul className="space-y-3">
+                                    {CRUZAMENTOS.map((c) => {
+                                        const cfg = defs.cruzamentos[c];
+                                        return (
+                                            <li key={c} className="rounded-md border p-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-sm font-medium">
+                                                        {CRUZAMENTO_LABEL[c]}
+                                                    </p>
+                                                    {cfg && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => desligarCruzamento(c)}
+                                                            className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                                        >
+                                                            Desligar
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground">
+                                                        principal
+                                                    </span>
+                                                    <Select
+                                                        value={cfg?.principal ?? ''}
+                                                        onValueChange={(v) =>
+                                                            mudarCruzamento(c, {
+                                                                principal: v as Provider,
+                                                            })
+                                                        }
+                                                    >
+                                                        <SelectTrigger className="h-8 w-28 text-xs">
+                                                            <SelectValue placeholder="—" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {PROVIDERS.filter(
+                                                                (p) => defs.agentes[p]?.ativo,
+                                                            ).map((p) => (
+                                                                <SelectItem key={p} value={p}>
+                                                                    {PROVIDER_LABEL[p]}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                {cfg && (
+                                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            validadores
+                                                        </span>
+                                                        {(
+                                                            [
+                                                                'self',
+                                                                ...PROVIDERS.filter(
+                                                                    (p) => defs.agentes[p]?.ativo,
+                                                                ),
+                                                            ] as Validador[]
+                                                        ).map((v) => (
+                                                            <label
+                                                                key={v}
+                                                                className="flex items-center gap-1.5 text-xs"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={cfg.validadores.includes(
+                                                                        v,
+                                                                    )}
+                                                                    onCheckedChange={(on) =>
+                                                                        toggleValidador(
+                                                                            c,
+                                                                            v,
+                                                                            on === true,
+                                                                        )
+                                                                    }
+                                                                />
+                                                                {v === 'self'
+                                                                    ? 'o mesmo'
+                                                                    : PROVIDER_LABEL[v as Provider]}
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
                             </div>
                         ) : pagina === 'modulos' ? (
                             <div className="max-w-md space-y-4">

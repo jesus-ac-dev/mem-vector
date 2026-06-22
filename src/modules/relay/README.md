@@ -52,6 +52,9 @@ por-issue), e cada substep deixa rasto.
   providers ativos** sequencialmente em cada fase: cada provider atua como principal uma vez, e os
   restantes validam. Em fases que escrevem ficheiros, só providers com execução no repo entram como
   principais; os restantes providers ativos continuam a validar o diff/output.
+  **Override real por fase:** se o utilizador **declarar** uma fase nas Definições (`cruzamentos`:
+  principal + validadores), essa fase usa a declaração dele (1 principal escolhido + os validadores
+  escolhidos) em vez da rotação (`fasesConfiguradas`); as fases NÃO declaradas rodam todos os ativos.
   A fase **Testes** = regressão/integração (confirma que o Dev respeita a Análise + não partiu o
   resto da app), distinta do TDD do Dev e da segurança da Auditoria.
     - `orquestrarCruzamentoCom` — 1 cruzamento com **handoff assinado POR SUBSTEP** (não no fim).
