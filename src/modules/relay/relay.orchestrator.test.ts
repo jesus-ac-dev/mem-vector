@@ -97,7 +97,7 @@ describe('orquestrarCom — pipeline verde', () => {
         ]);
     });
 
-    it('override: fase configurada pelo user honra a config (1 principal), não roda', async () => {
+    it('fase configurada não encurta o relay: continuam a rodar os providers ativos', async () => {
         const { io, corridas } = fakeIo({ diff: vi.fn(async () => '   ') });
         await orquestrarCom({
             issue: 3,
@@ -110,10 +110,13 @@ describe('orquestrarCom — pipeline verde', () => {
                 },
             } as never,
             io,
-            // O user configurou 'dev' → override: só o claude (validadores: []).
-            fasesConfiguradas: ['dev'],
         });
-        expect(corridas).toEqual([{ provider: 'claude', escrever: true }]);
+        expect(corridas).toEqual([
+            { provider: 'claude', escrever: true },
+            { provider: 'codex', escrever: false },
+            { provider: 'codex', escrever: true },
+            { provider: 'claude', escrever: false },
+        ]);
     });
 
     it('retoma: abre o branch em modo CONTINUAR (retoma=true), não reseta', async () => {
@@ -292,7 +295,9 @@ describe('normalizarDefsRelay', () => {
             matchCount: 5,
             webHabilitada: false,
             githubRepos: [],
-            cruzamentos: {},
+            cruzamentos: {
+                auditoria: { principal: 'claude', validadores: [] },
+            },
             agentes: {
                 claude: { ativo: true, modo: 'cli' },
                 codex: { ativo: true, modo: 'cli' },

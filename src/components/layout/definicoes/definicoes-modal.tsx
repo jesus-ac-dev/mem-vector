@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 import { runClientAction } from '@/lib/client-error-log';
@@ -22,7 +23,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
     gravarDefinicoes,
     testarProvider,
@@ -31,8 +31,9 @@ import {
     testarProjeto,
     clonarProjetoGithub,
     importarProjeto,
+    importarIssuesProjeto,
 } from '@/modules/definicoes/definicoes.actions';
-import { dispararRelay } from '@/modules/relay/relay.actions';
+import { WORKSPACE_MUDOU_EVENT } from '@/components/layout/workspace/workspace-context';
 import { getJson } from '@/lib/api-get';
 import {
     DEFINICOES_VISTA_DEFAULT,
@@ -40,26 +41,21 @@ import {
     MODULO_LABEL,
     MODULOS,
     modoEfetivo,
-    CRUZAMENTO_LABEL,
-    CRUZAMENTOS,
     PROVIDER_LABEL,
     PROVIDERS,
     type AgenteVista,
-    type Cruzamento,
-    type CruzamentoConfig,
     type Definicoes,
     type DefinicoesVista,
     type MetodoDestilacao,
     type ModoAgente,
     type Modulo,
     type Provider,
-    type Validador,
 } from '@/modules/definicoes/definicoes.schema';
 import { ProviderIcon } from '@/components/layout/chat/provider-icon';
 import { providersPorForcarTeste } from '@/components/layout/definicoes/definicoes-modal.logic';
 
 // Mega modal das definições (#60, design do Carlos): menu lateral à esquerda,
-// forms à direita. Aqui PARAMETRIZA-SE (Comportamento, Agentes, Módulos) com
+// forms à direita. Aqui PARAMETRIZA-SE (Chat, Agentes, Módulos) com
 // botão Guardar explícito — ao guardar, só os providers LIGADOS nesta sessão e
 // não testados são testados à força (mudar modelo/key ou desativar não dispara).
 // A ESCOLHA do provider/modelo do chat vive na mini-modal do link sobre o Enviar.
@@ -105,6 +101,7 @@ export function DefinicoesModal({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
+    const router = useRouter();
     const [pagina, setPagina] = useState<Pagina>('comportamento');
     const [defs, setDefs] = useState<DefinicoesVista>(DEFINICOES_VISTA_DEFAULT);
     // Keys escritas nesta sessão da modal ('' = limpar; só seguem no Guardar).
@@ -119,11 +116,6 @@ export function DefinicoesModal({
     // Estado por-repo do "test à dir" (testar → clonar → importar).
     const [testesProjeto, setTestesProjeto] = useState<
         Record<string, { ok: boolean; detalhe: string } | 'a-correr'>
-    >({});
-    // Trigger do relay por-repo: nº da issue + estado do disparo.
-    const [relayIssue, setRelayIssue] = useState<Record<string, string>>({});
-    const [relayEstado, setRelayEstado] = useState<
-        Record<string, { ok: boolean; detalhe: string } | 'a-disparar'>
     >({});
     const [carregandoRepos, setCarregandoRepos] = useState(false);
     const [testes, setTestes] = useState<
@@ -267,21 +259,20 @@ export function DefinicoesModal({
         }
         if (res.ok) {
             const imp = await importarProjeto(r, path);
-            res = imp.ok ? { ok: true, detalhe: 'Projeto pronto e importado.' } : imp;
+            if (imp.ok) {
+                // Lança também as issues do repo como cartões (trabalho para arrancar).
+                const iss = await importarIssuesProjeto(r);
+                res = { ok: true, detalhe: `Projeto importado. ${iss.detalhe}` };
+                // Kanban (cartões): client-fetched, refresca pelo workspaceVersion.
+                window.dispatchEvent(new Event(WORKSPACE_MUDOU_EVENT));
+                // Explorer (pasta + nota): a árvore vem do servidor como prop —
+                // o router.refresh re-busca-a sem F5 (o evento não a toca).
+                router.refresh();
+            } else {
+                res = imp;
+            }
         }
         setTestesProjeto((t) => ({ ...t, [r]: res }));
-    }
-
-    // Dispara o relay para a issue indicada (corre em background; segue-se na issue).
-    async function dispararRelayRepo(r: string) {
-        const n = Number(relayIssue[r]);
-        if (!Number.isInteger(n) || n <= 0) {
-            setRelayEstado((s) => ({ ...s, [r]: { ok: false, detalhe: 'Nº de issue inválido.' } }));
-            return;
-        }
-        setRelayEstado((s) => ({ ...s, [r]: 'a-disparar' }));
-        const res = await dispararRelay(r, n);
-        setRelayEstado((s) => ({ ...s, [r]: res }));
     }
 
     // "Testar ligação": valida o token no GitHub e, em SUCESSO, guarda (não "guardar e rezar").
@@ -300,27 +291,6 @@ export function DefinicoesModal({
         } finally {
             setCarregandoRepos(false);
         }
-    }
-
-    // Relay: muda o principal/validadores de um cruzamento (cria a entrada se não existe).
-    function mudarCruzamento(c: Cruzamento, patch: Partial<CruzamentoConfig>) {
-        const atual: CruzamentoConfig = defs.cruzamentos[c] ?? {
-            principal: 'claude',
-            validadores: [],
-        };
-        editar({ ...defs, cruzamentos: { ...defs.cruzamentos, [c]: { ...atual, ...patch } } });
-    }
-
-    // Liga/desliga um validador (self ou um provider) no painel de um cruzamento.
-    function toggleValidador(c: Cruzamento, v: Validador, on: boolean) {
-        const atual = defs.cruzamentos[c]?.validadores ?? [];
-        const validadores = on ? [...new Set([...atual, v])] : atual.filter((x) => x !== v);
-        mudarCruzamento(c, { validadores });
-    }
-
-    function desligarCruzamento(c: Cruzamento) {
-        const { [c]: _removido, ...restantes } = defs.cruzamentos;
-        editar({ ...defs, cruzamentos: restantes });
     }
 
     async function correrTeste(p: Provider): Promise<boolean> {
@@ -385,15 +355,14 @@ export function DefinicoesModal({
             chatProvider: defs.chatProvider,
             matchCount: defs.matchCount,
             webHabilitada: defs.webHabilitada,
-            // #122: como o agente-autor age (texto livre, injetado no prompt).
-            comportamento: defs.comportamento,
             // undefined = manter a key cifrada; '' = limpar; string = cifrar.
             webKey: webKeyNova,
             // M7: mesmo contrato do token; os repos viajam como a lista atual.
             githubToken: githubTokenNova,
             githubRepos: defs.githubRepos,
-            // relay: o mapa cruzamento→provider (config, não código).
+            // relay: o mapa cruzamento→provider (config, não código) + máx. rondas.
             cruzamentos: defs.cruzamentos,
+            maxRondas: defs.maxRondas,
             agentes: Object.fromEntries(
                 (Object.entries(defs.agentes) as [Provider, AgenteVista][]).map(([p, a]) => [
                     p,
@@ -451,9 +420,7 @@ export function DefinicoesModal({
             <DialogContent className="grid h-[85vh] max-w-5xl grid-rows-[auto,1fr,auto] gap-0 p-0">
                 <DialogHeader className="border-b px-6 py-4">
                     <DialogTitle>Definições</DialogTitle>
-                    <DialogDescription>
-                        Comportamento, agentes e módulos deste workspace.
-                    </DialogDescription>
+                    <DialogDescription>Chat, agentes e módulos deste workspace.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid min-h-0 grid-cols-[12rem,1fr]">
@@ -462,7 +429,7 @@ export function DefinicoesModal({
                         <p className="px-2 pb-1 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
                             Principais
                         </p>
-                        {itemMenu('comportamento', 'Comportamento')}
+                        {itemMenu('comportamento', 'Chat')}
                         {itemMenu('agentes', 'Agentes')}
                         {itemMenu('modulos', 'Módulos')}
                         {defs.modulosAtivos.length > 0 && (
@@ -480,29 +447,9 @@ export function DefinicoesModal({
                         {!carregado ? (
                             <p className="text-sm text-muted-foreground">A carregar…</p>
                         ) : pagina === 'comportamento' ? (
-                            // Comportamento (#60 r2): COMO o agente-autor age — a
-                            // secção acumula (proatividade, estilo, personalidade
-                            // hão de entrar aqui; ver memória de alto nível).
+                            // Chat: método de destilação, nº de fontes do retrieval e
+                            // pesquisa web. (O moldar do agente vive no Kernel, não aqui.)
                             <div className="max-w-md space-y-4">
-                                <div>
-                                    <h3 className="text-sm font-medium">Comportamento do agente</h3>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        Em texto livre, como queres que o agente-autor aja —
-                                        proatividade, estilo, ênfases, o que evitar. É injetado nas
-                                        instruções dele (o equivalente web a editar o CLAUDE.md),
-                                        por cima do contrato base e da pasta Kernel.
-                                    </p>
-                                    <Textarea
-                                        value={defs.comportamento ?? ''}
-                                        onChange={(e) =>
-                                            editar({ ...defs, comportamento: e.target.value })
-                                        }
-                                        placeholder="ex.: Sê mais conciso. Prioriza decisões. Não cries tarefas sem eu pedir."
-                                        rows={5}
-                                        maxLength={4000}
-                                        className="mt-2 text-sm"
-                                    />
-                                </div>
                                 <div>
                                     <h3 className="text-sm font-medium">Método de destilação</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
@@ -611,8 +558,8 @@ export function DefinicoesModal({
                                     </div>
                                 )}
                                 <p className="text-xs text-muted-foreground">
-                                    Proatividade, estilo e personalidade do agente vão acumulando
-                                    aqui.
+                                    Regras de proatividade, estilo e personalidade vivem no Kernel
+                                    do workspace.
                                 </p>
                             </div>
                         ) : pagina === 'agentes' ? (
@@ -772,96 +719,32 @@ export function DefinicoesModal({
                                     <h3 className="text-sm font-medium">Relay — pipeline de dev</h3>
                                     <p className="mt-1 text-xs text-muted-foreground">
                                         O relay real corre os providers ativos, sequencialmente, em
-                                        Análise, Desenvolvimento, Testes e Documentação. Estes
-                                        campos ficam como override fino por fase.
+                                        Análise, Desenvolvimento, Testes e Documentação. Ativa ou
+                                        desativa participantes na página Agentes.
                                     </p>
                                 </div>
-                                <ul className="space-y-3">
-                                    {CRUZAMENTOS.map((c) => {
-                                        const cfg = defs.cruzamentos[c];
-                                        return (
-                                            <li key={c} className="rounded-md border p-3">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <p className="text-sm font-medium">
-                                                        {CRUZAMENTO_LABEL[c]}
-                                                    </p>
-                                                    {cfg && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => desligarCruzamento(c)}
-                                                            className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                                                        >
-                                                            Desligar
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                                <div className="mt-2 flex flex-wrap items-center gap-2">
-                                                    <span className="text-xs text-muted-foreground">
-                                                        principal
-                                                    </span>
-                                                    <Select
-                                                        value={cfg?.principal ?? ''}
-                                                        onValueChange={(v) =>
-                                                            mudarCruzamento(c, {
-                                                                principal: v as Provider,
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="h-8 w-28 text-xs">
-                                                            <SelectValue placeholder="—" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {PROVIDERS.filter(
-                                                                (p) => defs.agentes[p]?.ativo,
-                                                            ).map((p) => (
-                                                                <SelectItem key={p} value={p}>
-                                                                    {PROVIDER_LABEL[p]}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                {cfg && (
-                                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            validadores
-                                                        </span>
-                                                        {(
-                                                            [
-                                                                'self',
-                                                                ...PROVIDERS.filter(
-                                                                    (p) => defs.agentes[p]?.ativo,
-                                                                ),
-                                                            ] as Validador[]
-                                                        ).map((v) => (
-                                                            <label
-                                                                key={v}
-                                                                className="flex items-center gap-1.5 text-xs"
-                                                            >
-                                                                <Checkbox
-                                                                    checked={cfg.validadores.includes(
-                                                                        v,
-                                                                    )}
-                                                                    onCheckedChange={(on) =>
-                                                                        toggleValidador(
-                                                                            c,
-                                                                            v,
-                                                                            on === true,
-                                                                        )
-                                                                    }
-                                                                />
-                                                                {v === 'self'
-                                                                    ? 'o mesmo'
-                                                                    : PROVIDER_LABEL[v as Provider]}
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
+                                <div>
+                                    <h3 className="text-sm font-medium">
+                                        Máximo de rondas (kill-switch)
+                                    </h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Quantas rondas os providers debatem numa fase antes de o
+                                        relay parar (🔴) e te chamar. Sem consenso ao fim disto =
+                                        volta para ti.
+                                    </p>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        value={defs.maxRondas ?? 3}
+                                        onChange={(e) => {
+                                            const n = Number(e.target.value);
+                                            if (Number.isInteger(n) && n >= 1 && n <= 10)
+                                                editar({ ...defs, maxRondas: n });
+                                        }}
+                                        className="mt-2 h-8 w-24 text-xs"
+                                    />
+                                </div>
                             </div>
                         ) : pagina === 'modulos' ? (
                             <div className="max-w-md space-y-4">
@@ -1008,7 +891,6 @@ export function DefinicoesModal({
                                                             (x) => x.repo === r,
                                                         );
                                                         const tp = testesProjeto[r];
-                                                        const re = relayEstado[r];
                                                         return (
                                                             <div key={r} className="space-y-1">
                                                                 <label className="flex items-center gap-2 text-xs">
@@ -1069,57 +951,6 @@ export function DefinicoesModal({
                                                                             )}
                                                                         >
                                                                             {tp.detalhe}
-                                                                        </p>
-                                                                    )}
-                                                                {ligado && (
-                                                                    <div className="flex items-center gap-2 pl-6">
-                                                                        <Input
-                                                                            value={
-                                                                                relayIssue[r] ?? ''
-                                                                            }
-                                                                            onChange={(e) =>
-                                                                                setRelayIssue(
-                                                                                    (s) => ({
-                                                                                        ...s,
-                                                                                        [r]: e
-                                                                                            .target
-                                                                                            .value,
-                                                                                    }),
-                                                                                )
-                                                                            }
-                                                                            placeholder="nº da issue"
-                                                                            inputMode="numeric"
-                                                                            className="h-7 w-24 text-xs"
-                                                                        />
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="sm"
-                                                                            onClick={() =>
-                                                                                void dispararRelayRepo(
-                                                                                    r,
-                                                                                )
-                                                                            }
-                                                                            disabled={
-                                                                                re === 'a-disparar'
-                                                                            }
-                                                                            className="h-7 text-xs"
-                                                                        >
-                                                                            {re === 'a-disparar'
-                                                                                ? 'A disparar…'
-                                                                                : '⚡ Disparar relay'}
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
-                                                                {ligado &&
-                                                                    re &&
-                                                                    re !== 'a-disparar' && (
-                                                                        <p
-                                                                            className={cn(
-                                                                                'pl-6 text-xs',
-                                                                                corTeste(re.ok),
-                                                                            )}
-                                                                        >
-                                                                            {re.detalhe}
                                                                         </p>
                                                                     )}
                                                             </div>

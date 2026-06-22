@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { signOut } from '@/modules/auth/auth.actions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,13 +20,18 @@ import { PerfilModal } from '@/components/layout/perfil/perfil-modal';
 import type { PerfilVista } from '@/modules/perfil/perfil.schema';
 
 export function ProfileMenu({ perfil }: { perfil: PerfilVista }) {
+    const router = useRouter();
     const initials = perfil.displayName.slice(0, 2).toUpperCase() || '?';
     // Definições (#60) e Perfil (#92) abrem a partir do badge.
     const [definicoesAbertas, setDefinicoesAbertas] = useState(false);
     const [perfilAberto, setPerfilAberto] = useState(false);
     return (
         <>
-            <DropdownMenu>
+            {/* modal={false}: o menu não tranca o pointer-events do body. Sem isto,
+                abrir um Dialog (Definições/Perfil) a partir de um item deixava o
+                body com `pointer-events: none` preso ao fechar — app não-clicável
+                (Radix: dois overlays modais a pisar a gestão do body). */}
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="ghost"
@@ -55,7 +61,11 @@ export function ProfileMenu({ perfil }: { perfil: PerfilVista }) {
                         onClick={() =>
                             void runClientAction(
                                 { area: 'profile-menu', action: 'signOut' },
-                                signOut,
+                                async () => {
+                                    await signOut(); // limpa a sessão (sem redirect no servidor)
+                                    router.replace('/login'); // navegação no cliente
+                                    router.refresh(); // limpa o cache do layout autenticado
+                                },
                             )
                         }
                     >

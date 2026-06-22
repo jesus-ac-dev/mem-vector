@@ -151,12 +151,12 @@ export interface DefinicoesVista {
     // #45: key Tavily da pesquisa web — máscara (a key nunca volta ao browser).
     webTemKey: boolean;
     webKeySufixo?: string;
-    comportamento?: string; // #122: como o agente-autor age (texto livre)
     // M7: connection GitHub — o token nunca volta ao browser (só máscara).
     githubTemToken: boolean;
     githubKeySufixo?: string;
     githubRepos: RepoLigado[];
     cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
+    maxRondas?: number; // relay: máx. rondas antes do kill-switch (default 3)
     agentes: Partial<Record<Provider, AgenteVista>>;
 }
 
@@ -177,10 +177,10 @@ export interface DefinicoesServidor {
     matchCount: number;
     webHabilitada: boolean;
     webKey?: string; // #45: decifrada, p/ a pesquisa web; nunca serializada p/ fora
-    comportamento?: string; // #122: injetado no prompt do agente a seguir ao Kernel
     githubToken?: string; // M7: decifrado, vira o GH_TOKEN do subprocesso; nunca serializado p/ fora
     githubRepos: RepoLigado[]; // M7: repos ligados (repo + path local)
     cruzamentos: Cruzamentos; // relay: mapa cruzamento→provider
+    maxRondas?: number; // relay: máx. rondas antes do kill-switch (default 3)
     agentes: Partial<Record<Provider, AgenteServidor>>;
 }
 
@@ -267,10 +267,6 @@ export const DefinicoesSchema = z.object({
     // #45: key de pesquisa web (Tavily por omissão; opcional). undefined = manter
     // a cifrada; '' = limpar; string = cifrar. Mesmo contrato das keys dos providers.
     webKey: z.string().optional(),
-    // #122 (Ponte F): texto livre onde o utilizador molda COMO o agente-autor age
-    // (o equivalente web a editar o CLAUDE.md). Injetado no prompt a seguir ao
-    // Kernel. Cap alinhado com o do Kernel para não engolir o prompt.
-    comportamento: z.string().max(4000).optional(),
     // M7 Fatia 1: token GitHub (PAT fine-grained) — MESMO contrato das keys:
     // undefined = manter a cifrada; '' = limpar; string = cifrar. Decifrado vira
     // o GH_TOKEN do subprocesso gh (a conta do user do SaaS, não o gh do host).
@@ -280,6 +276,10 @@ export const DefinicoesSchema = z.object({
     githubRepos: z.array(RepoLigadoSchema).max(50).optional(),
     // Relay (módulo de dev): o mapa cruzamento→provider — config, não código.
     cruzamentos: CruzamentosSchema.optional(),
+    // Relay: máximo de rondas do debate entre os N providers numa fase antes do
+    // kill-switch (→ humano). Configurável (o "5 por exemplo" do Carlos); o código
+    // defaulta a 3 quando ausente.
+    maxRondas: z.number().int().min(1).max(10).optional(),
     agentes: AgentesSchema,
 });
 
@@ -298,5 +298,6 @@ export const DEFINICOES_VISTA_DEFAULT: DefinicoesVista = {
     githubTemToken: false,
     githubRepos: [],
     cruzamentos: {},
+    maxRondas: 3,
     agentes: {},
 };

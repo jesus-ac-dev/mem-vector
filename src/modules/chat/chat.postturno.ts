@@ -25,7 +25,7 @@ import type { DefinicoesServidor } from '@/modules/definicoes/definicoes.schema'
 import { acrescentarAoDailyCom } from '@/modules/daily/daily.service';
 import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import { destilarTurnoAgenticCom } from '@/agent/destilar-agentic';
-import { blocoKernelCom, blocoComportamento } from '@/agent/kernel';
+import { blocoKernelCom } from '@/agent/kernel';
 
 // Miolo do pós-turno, extraído de chat.actions (M2, #38): importável por
 // scripts e pela suite de evals sem passar pelo runtime de server actions.
@@ -76,16 +76,16 @@ export async function executarDestilacaoTurnoCom(
     // da destilação (não-fatal: sem Kernel, comportamento de sempre).
     const kernelBase = await blocoKernelCom(db);
 
-    // #122 (Ponte F): definições do utilizador, lidas UMA vez — o campo
-    // Comportamento (injetado no prompt a seguir ao Kernel) e o método de
-    // destilação saem daqui. Não-fatal: sem leitura, segue nos defaults.
+    // Definições do utilizador, lidas UMA vez — o método de destilação sai daqui.
+    // Não-fatal: sem leitura, segue nos defaults. (O moldar do agente vive no
+    // Kernel — a nota "Regras do agente" —, não num campo à parte.)
     let definicoes: DefinicoesServidor | null = null;
     try {
         definicoes = await lerDefinicoesCom(db);
     } catch (e) {
         console.error('ler definições falhou (segue defaults):', e);
     }
-    const kernel = kernelBase + blocoComportamento(definicoes?.comportamento);
+    const kernel = kernelBase;
 
     // Tarefas em aberto (#21): o agente decide criar/concluir com a lista à
     // frente (não duplica, não inventa ids). Não-fatal.

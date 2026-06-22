@@ -26,8 +26,8 @@ contra esse path já preparado — não clona por-issue.
 
 ## Ficheiros
 
-| Ficheiro                        | Responsabilidade                                           |
-| ------------------------------- | ---------------------------------------------------------- |
-| `projeto-importado.service.ts`  | `construirNotaResumo` (puro) + `importarProjetoCom` (pasta + nota) |
-| `src/lib/github.ts`             | `testarProjetoLocal` / `clonarProjeto` + arg-builders puros |
-| `definicoes.actions.ts`         | `testarProjeto` / `clonarProjetoGithub` / `importarProjeto` |
+| Ficheiro                       | Responsabilidade                                                   |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `projeto-importado.service.ts` | `construirNotaResumo` (puro) + `importarProjetoCom` (pasta + nota) |
+| `src/lib/github.ts`            | `testarProjetoLocal` / `clonarProjeto` + arg-builders puros        |
+| `definicoes.actions.ts`        | `testarProjeto` / `clonarProjetoGithub` / `importarProjeto`        |

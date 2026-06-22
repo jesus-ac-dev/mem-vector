@@ -14,8 +14,19 @@ import {
     lerDefinicoesServidorCom,
 } from './definicoes.service';
 import { criarProvider } from '@/lib/providers/factory';
-import { validarToken, listarRepos, testarProjetoLocal, clonarProjeto } from '@/lib/github';
-import { importarProjetoCom } from '@/modules/projeto-importado/projeto-importado.service';
+import {
+    validarToken,
+    listarRepos,
+    testarProjetoLocal,
+    clonarProjeto,
+    lerIssues,
+} from '@/lib/github';
+import {
+    importarProjetoCom,
+    estadoDaIssue,
+    nomeCurtoDoRepo,
+} from '@/modules/projeto-importado/projeto-importado.service';
+import { criarTarefaDeIssueCom, tarefaPorIssueCom } from '@/modules/tarefas/tarefas.service';
 import { createClient } from '@/lib/supabase/server';
 
 // As actions devolvem SEMPRE a vista (keys mascaradas) — a key real nunca
@@ -129,6 +140,44 @@ export async function importarProjeto(
         return { ok: true, detalhe: 'importado' };
     } catch (e) {
         return { ok: false, detalhe: e instanceof Error ? e.message : 'import falhou' };
+    }
+}
+
+// Importa as issues do repo como CARTÕES de código (tarefas especiais ligadas),
+// com o estado mapeado do estado da issue (aberta→backlog, fechada→terminada).
+// Dedup por (repo, issue) — re-importar não duplica. Dá trabalho para arrancar.
+export async function importarIssuesProjeto(
+    repo: string,
+): Promise<{ ok: boolean; detalhe: string }> {
+    const token = await tokenGithub();
+    if (!token) return { ok: false, detalhe: 'Sem token GitHub.' };
+    const db = await createClient();
+    try {
+        const issues = await lerIssues(token, { repo, state: 'all', limit: 100 });
+        if (issues.length === 0) return { ok: true, detalhe: 'Sem issues no repo.' };
+        const projeto = nomeCurtoDoRepo(repo);
+        let criadas = 0;
+        let ignoradas = 0;
+        for (const it of issues) {
+            if (await tarefaPorIssueCom(db, repo, it.number)) {
+                ignoradas++;
+                continue;
+            }
+            await criarTarefaDeIssueCom(db, {
+                titulo: it.title,
+                projeto,
+                repo,
+                issue: it.number,
+                estado: estadoDaIssue(it.state),
+            });
+            criadas++;
+        }
+        return {
+            ok: true,
+            detalhe: `${criadas} issue(s) → cartões${ignoradas ? ` (${ignoradas} já existiam)` : ''}.`,
+        };
+    } catch (e) {
+        return { ok: false, detalhe: e instanceof Error ? e.message : 'importar issues falhou' };
     }
 }
 

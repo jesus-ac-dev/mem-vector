@@ -20,6 +20,20 @@ describe('DefinicoesSchema matchCount (#67)', () => {
     });
 });
 
+describe('DefinicoesSchema maxRondas (relay)', () => {
+    it('opcional (ausente = undefined; o código defaulta a 3)', () => {
+        expect(DefinicoesSchema.parse({ agentes: {} }).maxRondas).toBeUndefined();
+    });
+    it('aceita 1..10', () => {
+        expect(DefinicoesSchema.parse({ agentes: {}, maxRondas: 5 }).maxRondas).toBe(5);
+    });
+    it('rejeita fora dos limites e não-inteiros', () => {
+        expect(() => DefinicoesSchema.parse({ agentes: {}, maxRondas: 0 })).toThrow();
+        expect(() => DefinicoesSchema.parse({ agentes: {}, maxRondas: 11 })).toThrow();
+        expect(() => DefinicoesSchema.parse({ agentes: {}, maxRondas: 2.5 })).toThrow();
+    });
+});
+
 // M7 Fatia 1: connection GitHub — token (mesmo contrato das keys) + repos ligados.
 describe('DefinicoesSchema github (M7)', () => {
     it('githubToken e githubRepos são opcionais (undefined = manter/ausente)', () => {

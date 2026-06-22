@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { lerDefinicoesServidorCom } from '@/modules/definicoes/definicoes.service';
 import type { DefinicoesServidor } from '@/modules/definicoes/definicoes.schema';
 import { criarIssue, comentarIssue, editarLabels, numeroDoUrl, verIssue } from '@/lib/github';
+import { expandirHome } from '@/lib/paths';
 import {
     atualizarRelayEstadoPorIssueCom,
     getTarefaCom,
@@ -30,7 +31,7 @@ async function defsValidadas(repo: string): Promise<DefsValidadas> {
     if (!defs.githubToken) return { erro: 'Sem token GitHub (Definições > módulo GitHub).' };
     const ligado = defs.githubRepos.find((r) => r.repo === repo);
     if (!ligado?.path) return { erro: `Repo "${repo}" sem path local — corre o Testar primeiro.` };
-    return { db, defs, path: ligado.path };
+    return { db, defs, path: expandirHome(ligado.path) };
 }
 
 async function marcarFalhaRelay(opts: {

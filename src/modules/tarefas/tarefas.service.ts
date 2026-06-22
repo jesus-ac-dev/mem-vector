@@ -100,6 +100,55 @@ export async function getTarefaCom(db: SupabaseClient, id: string): Promise<Tare
     return data ? toTarefa(data as unknown as TarefaRow) : null;
 }
 
+// Dedup do import de issues: já há cartão ligado a esta (repo, issue)? Só o dono (RLS).
+export async function tarefaPorIssueCom(
+    db: SupabaseClient,
+    repo: string,
+    issue: number,
+): Promise<Tarefa | null> {
+    const { data, error } = await db
+        .from('tarefas')
+        .select(COLUNAS)
+        .eq('repo_github', repo)
+        .eq('issue_github', issue)
+        .maybeSingle();
+    if (error) throw new Error(`procurar tarefa por issue falhou: ${error.message}`);
+    return data ? toTarefa(data as unknown as TarefaRow) : null;
+}
+
+// Importa uma issue do GitHub como cartão de código (ligado, com o estado já mapeado
+// do estado da issue). Insere direto (estado explícito, sem passar por backlog).
+export async function criarTarefaDeIssueCom(
+    db: SupabaseClient,
+    input: { titulo: string; projeto: string; repo: string; issue: number; estado: EstadoTarefa },
+): Promise<Tarefa> {
+    const {
+        data: { user },
+    } = await db.auth.getUser();
+    if (!user) throw new Error('sem sessão');
+    const projeto = await resolverProjetoCom(db, input.projeto);
+    const { data, error } = await db
+        .from('tarefas')
+        .insert({
+            titulo: input.titulo,
+            projeto_id: projeto.id,
+            prioridade: 'normal',
+            estado: input.estado,
+            owner_id: user.id,
+            visibility: 'privado',
+            repo_github: input.repo,
+            issue_github: input.issue,
+            // Issue fechada entra como terminada com data — não reaparece como trabalho.
+            concluida_em: input.estado === 'terminado' ? new Date().toISOString() : null,
+        })
+        .select(COLUNAS)
+        .single();
+    if (error || !data) {
+        throw new Error(`criar tarefa de issue falhou: ${error?.message ?? 'sem dados'}`);
+    }
+    return toTarefa(data as unknown as TarefaRow);
+}
+
 export async function listarTarefasAbertasCom(db: SupabaseClient): Promise<Tarefa[]> {
     const { data, error } = await db
         .from('tarefas')

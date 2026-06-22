@@ -76,4 +76,22 @@ describe('runClientAction + app stale (#49)', () => {
         expect(ouvinte).not.toHaveBeenCalled();
         window.removeEventListener(STALE_APP_EVENT, ouvinte);
     });
+
+    it('control-flow do Next (NEXT_REDIRECT) é engolido — não loga nem re-lança', async () => {
+        const { runClientAction, isErroDeNavegacaoNext } = await import('./client-error-log');
+        const redirectErr = Object.assign(new Error('NEXT_REDIRECT'), {
+            digest: 'NEXT_REDIRECT;push;/login;307;',
+        });
+        expect(isErroDeNavegacaoNext(redirectErr)).toBe(true);
+
+        const erro = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // Engole (return undefined): não re-lança (evita unhandledrejection no void)
+        // nem loga (não é erro). Quem navega fá-lo no cliente.
+        const r = await runClientAction({ area: 'profile-menu', action: 'signOut' }, async () => {
+            throw redirectErr;
+        });
+        expect(r).toBeUndefined();
+        expect(erro).not.toHaveBeenCalled();
+        erro.mockRestore();
+    });
 });

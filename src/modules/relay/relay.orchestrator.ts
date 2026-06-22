@@ -17,6 +17,7 @@ import {
     verIssue,
 } from '@/lib/github';
 import { blocoKernelCom } from '@/agent/kernel';
+import { expandirHome } from '@/lib/paths';
 import { atualizarRelayEstadoPorIssueCom } from '@/modules/tarefas/tarefas.service';
 import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
 import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
@@ -333,16 +334,16 @@ function providersPrincipaisDaFase(defs: DefinicoesServidor, cruzamento: Cruzame
     return ativos.filter((p) => podeEscreverNoRepo(p, defs));
 }
 
-// Garante que as fases canónicas CORREM mesmo sem o user as configurar: preenche
-// SÓ as que faltam com um placeholder (todos os ativos). A config que o user
-// definiu fica INTACTA — é o override real, honrado pelo executor.
+// Garante que só as fases canónicas do relay real correm. Config antiga de
+// cruzamentos fica fora daqui; o executor roda os providers ativos nas fases
+// canónicas e estes valores só mantêm o pipeline compatível.
 export function normalizarDefsRelay(defs: DefinicoesServidor): DefinicoesServidor {
     const ativos = providersAtivos(defs).map((p) => p.provider);
     if (ativos.length === 0) return defs;
     const [principal, ...resto] = ativos;
-    const cruzamentos = { ...defs.cruzamentos };
+    const cruzamentos: DefinicoesServidor['cruzamentos'] = {};
     for (const fase of FASES_RELAY) {
-        if (!cruzamentos[fase]) cruzamentos[fase] = { principal, validadores: resto };
+        cruzamentos[fase] = { principal, validadores: resto };
     }
     return { ...defs, cruzamentos };
 }
@@ -357,26 +358,18 @@ export async function orquestrarCom(opts: {
     // Retoma cirúrgica: recomeça nesta fase com a Análise já produzida.
     desde?: Cruzamento;
     analiseInicial?: string;
-    // Fases que o USER configurou nas Definições (override real). Numa dessas, usa-se
-    // a config (1 principal); nas restantes fases canónicas, rodam todos os ativos.
-    fasesConfiguradas?: Cruzamento[];
     // Injetável p/ teste: corre 1 cruzamento (default = o real, com handoffs).
     executarCruzamento?: (cruzamento: Cruzamento, spec: string) => Promise<ResultadoCruzamento>;
 }): Promise<ResultadoOrquestracao> {
     const { issue, defs, spec, io, memoria, desde, analiseInicial } = opts;
-    const fasesConfiguradas = opts.fasesConfiguradas ?? [];
     const maxRondas = opts.maxRondas ?? 3;
     const branch = nomeBranch(issue);
 
     const executar =
         opts.executarCruzamento ??
         ((cruzamento: Cruzamento, specCruzamento: string) => {
-            // Override REAL do user: se configurou esta fase nas Definições
-            // (principal + validadores), honra-a — 1 principal escolhido, não a
-            // rotação. Sem config, rodam TODOS os ativos como principal (o debate).
-            const override = fasesConfiguradas.includes(cruzamento);
             const ativos = providersAtivos(defs).map((p) => p.provider);
-            if (!override && ativos.length > 0 && FASES_RELAY.includes(cruzamento)) {
+            if (ativos.length > 0 && FASES_RELAY.includes(cruzamento)) {
                 return orquestrarFaseSequencialCom({
                     cruzamento,
                     spec: specCruzamento,
@@ -540,7 +533,7 @@ export async function orquestrar(opts: {
             `Repo "${repo}" sem path local — define-o e corre o Testar nas Definições.`,
         );
     }
-    const cwd = ligado.path;
+    const cwd = expandirHome(ligado.path);
 
     // O ramo default REAL (não assumir "main": o próprio mem-vector está em "master").
     const base = await ramoPrincipal(token, repo);
@@ -560,9 +553,7 @@ export async function orquestrar(opts: {
     const goal = fase && fase !== 'analise' ? goalDaAnalise(issueDados.comentarios) : null;
     const desde = fase && (fase === 'analise' || goal) ? fase : undefined;
 
-    // Normaliza (preenche as fases canónicas que faltam) para o pipeline as correr;
-    // as fases que o user JÁ configurou viajam como override real (fasesConfiguradas).
-    const fasesConfiguradas = Object.keys(defs.cruzamentos) as Cruzamento[];
+    // Normaliza (preenche as fases canónicas que faltam) para o pipeline as correr.
     const defsRelay = normalizarDefsRelay(defs);
     const io = construirIo({ token, repo, issue, cwd, base, defs: defsRelay, db });
     const resultado = await orquestrarCom({
@@ -570,11 +561,11 @@ export async function orquestrar(opts: {
         defs: defsRelay,
         spec,
         io,
-        maxRondas: opts.maxRondas,
+        // O máximo de rondas vem das Definições (configurável); fallback 3.
+        maxRondas: opts.maxRondas ?? defs.maxRondas,
         memoria,
         desde,
         analiseInicial: goal ?? undefined,
-        fasesConfiguradas,
     });
 
     // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no
