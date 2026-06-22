@@ -76,8 +76,9 @@ models`, solução do Carlos r6; claude/codex em api = `/v1/models` real): as
   **UX:** botão **"Testar ligação"** valida o token (`gh api user`) e guarda em sucesso
   (não "guardar e rezar"); os repos escolhem-se por **checkbox** (carregados via
   `gh repo list`, ações `testarGithub`/`listarReposGithub`), não à mão. O **relay**
-  vive dentro desta página como add-on de dev: usa os providers ativos em fases
-  canónicas (Análise→Dev→Testes→Docs) e expõe só o limite de rondas/kill-switch.
+  vive dentro desta página como add-on de dev: por fase (Análise→Dev→Testes→Docs) o
+  utilizador **declara o principal + os validadores** (`cruzamentos`) — fase declarada
+  usa essa config, fase em branco roda todos os ativos —, mais o limite de rondas/kill-switch.
   O transporte é o **`gh` CLI** (requisito declarado no README do
   repo); o token vira `GH_TOKEN` no subprocesso = a conta do utilizador do SaaS,
   não o `gh` do host (passa o fresh-pc-test — requisito declarado ≠ andaime
