@@ -16,6 +16,10 @@ export interface NotaKernel {
 // Caps para o Kernel não engolir o prompt: ~1k tokens por nota, ~3k no total.
 const CAP_NOTA = 4000;
 const CAP_TOTAL = 12000;
+const CAP_RELAY_NOTA = 2000;
+const CAP_RELAY_TOTAL = 6000;
+const TITULOS_RELAY_RE =
+    /regras?|m[ée]todo|modo|trabalho|craft|voz|prioridades?|qualidade|c[oó]digo|dev|desenvolvimento|relay/i;
 
 export async function lerKernelCom(db: SupabaseClient): Promise<NotaKernel[]> {
     const {
@@ -47,17 +51,22 @@ export async function lerKernelCom(db: SupabaseClient): Promise<NotaKernel[]> {
     return (notas ?? []).map((n) => ({ title: n.title, contentMd: n.content_md }));
 }
 
-export function blocoKernel(notas: NotaKernel[]): string {
+export function blocoKernel(
+    notas: NotaKernel[],
+    opts: { capNota?: number; capTotal?: number; cabecalho?: string } = {},
+): string {
     if (!notas.length) return '';
+    const capNota = opts.capNota ?? CAP_NOTA;
+    const capTotal = opts.capTotal ?? CAP_TOTAL;
     const partes: string[] = [];
     let total = 0;
     for (const n of notas) {
         let corpo = n.contentMd.trim();
-        if (corpo.length > CAP_NOTA) {
-            corpo = `${corpo.slice(0, CAP_NOTA)}\n[cortado: nota maior que o cap do Kernel]`;
+        if (corpo.length > capNota) {
+            corpo = `${corpo.slice(0, capNota)}\n[cortado: nota maior que o cap do Kernel]`;
         }
         const parte = `--- ${n.title} ---\n${corpo}`;
-        if (total + parte.length > CAP_TOTAL) {
+        if (total + parte.length > capTotal) {
             partes.push('[cortado: Kernel maior que o cap total]');
             break;
         }
@@ -65,11 +74,28 @@ export function blocoKernel(notas: NotaKernel[]): string {
         total += parte.length;
     }
     return (
-        'KERNEL DO WORKSPACE (escrito pelo utilizador — identidade, prioridades e regras dele; ' +
-        'respeita-o em tudo o que fizeres):\n' +
+        (opts.cabecalho ??
+            'KERNEL DO WORKSPACE (escrito pelo utilizador — identidade, prioridades e regras dele; ' +
+                'respeita-o em tudo o que fizeres):') +
+        '\n' +
         partes.join('\n\n') +
         '\n'
     );
+}
+
+export function notasKernelParaRelay(notas: NotaKernel[]): NotaKernel[] {
+    const focadas = notas.filter((n) => TITULOS_RELAY_RE.test(n.title));
+    return focadas.length ? focadas : notas;
+}
+
+export function blocoKernelRelay(notas: NotaKernel[]): string {
+    return blocoKernel(notasKernelParaRelay(notas), {
+        capNota: CAP_RELAY_NOTA,
+        capTotal: CAP_RELAY_TOTAL,
+        cabecalho:
+            'KERNEL DO WORKSPACE PARA RELAY (subset focado em método, voz, prioridades e regras; ' +
+            'aplica-o a todas as fases, principais e validadores):',
+    });
 }
 
 // Conveniência dos arranques: kernel como bloco pronto, não-fatal por design —
@@ -79,6 +105,15 @@ export async function blocoKernelCom(db: SupabaseClient): Promise<string> {
         return blocoKernel(await lerKernelCom(db));
     } catch (e) {
         console.error('ler Kernel falhou (segue sem):', e);
+        return '';
+    }
+}
+
+export async function blocoKernelRelayCom(db: SupabaseClient): Promise<string> {
+    try {
+        return blocoKernelRelay(await lerKernelCom(db));
+    } catch (e) {
+        console.error('ler Kernel para relay falhou (segue sem):', e);
         return '';
     }
 }
