@@ -350,6 +350,9 @@ async function executarTool(
     args: Args,
 ): Promise<string> {
     switch (name) {
+        // Datamark: envolvemos conteúdo EXTERNO/de-terceiros (ler_url, procurar_web,
+        // ler_nota, ler_issues). procurar_notas/listar_tarefas devolvem só metadata da DB
+        // do próprio utilizador (id/título/slug/estado) — não é input externo, não se envolve.
         case 'procurar_notas': {
             const notas = await candidatosParaFactoCom(db, texto(args, 'texto'));
             if (!notas.length) return 'Sem notas relacionadas.';
@@ -540,7 +543,7 @@ async function executarTool(
         case 'ler_issues': {
             const issues = await lerIssues(GITHUB_TOKEN!, { repo: repoLigado(args) });
             if (!issues.length) return 'Sem issues abertas nesse repo.';
-            return JSON.stringify(issues, null, 2);
+            return envolverDados(JSON.stringify(issues, null, 2), 'github');
         }
         case 'criar_issue': {
             const url = await criarIssue(GITHUB_TOKEN!, {
