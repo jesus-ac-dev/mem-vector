@@ -27,6 +27,7 @@ import {
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
+import { envolverDados } from '../lib/datamark';
 import { criarIssue, lerIssues, comentarIssue, numeroDoUrl } from '../lib/github';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
@@ -361,10 +362,13 @@ async function executarTool(
         case 'ler_nota': {
             const nota = await getNotaPorIdCom(db, texto(args, 'id'));
             if (!nota) return 'Nota não encontrada.';
-            return JSON.stringify(
-                { id: nota.id, slug: nota.slug, title: nota.title, content_md: nota.contentMd },
-                null,
-                2,
+            return envolverDados(
+                JSON.stringify(
+                    { id: nota.id, slug: nota.slug, title: nota.title, content_md: nota.contentMd },
+                    null,
+                    2,
+                ),
+                'nota',
             );
         }
         case 'criar_nota': {
@@ -513,7 +517,7 @@ async function executarTool(
                         registarWeb(RESULT_FILE, { tipo: 'web', url: r.url, titulo: r.titulo });
                     }
                 }
-                return JSON.stringify(resultados, null, 2);
+                return envolverDados(JSON.stringify(resultados, null, 2), 'web');
             } catch (e) {
                 // Limite/bloqueio do provider sem-key: devolve uma instrução para o
                 // agente AVISAR o utilizador a configurar a key (regra do Carlos).
@@ -528,7 +532,7 @@ async function executarTool(
             try {
                 const conteudo = await lerUrl(url);
                 if (RESULT_FILE) registarWeb(RESULT_FILE, { tipo: 'web', url, titulo: url });
-                return conteudo || '(página sem texto)';
+                return conteudo ? envolverDados(conteudo, 'web') : '(página sem texto)';
             } catch (e) {
                 return `Erro ao ler ${url}: ${e instanceof Error ? e.message : 'desconhecido'}`;
             }
