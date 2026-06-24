@@ -26,7 +26,13 @@ process.loadEnvFile('.env.local');
 
 const STUDY_DIR = process.env.AGENT_STUDY_DIR ?? join(process.env.HOME ?? '', 'src/agent-study');
 const REPORTS_DIR = join(STUDY_DIR, 'reports');
-const FOLDER_NAME = 'agents';
+// Caminho-destino na DB (o estudo vive sob AI/software/agents — movido pelo Carlos da raiz).
+// Resolve/cria cada segmento por (nome, parent); nunca duplica na raiz.
+const FOLDER_PATH = (process.env.AGENT_STUDY_FOLDER ?? 'AI/software/agents')
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+const FOLDER_LABEL = FOLDER_PATH.join('/');
 const DRY = process.env.DRY === '1';
 const EMAIL = process.env.MEMVECTOR_IMPORT_EMAIL ?? 'dev@mem-vector.local';
 const PASSWORD = process.env.MEMVECTOR_IMPORT_PASSWORD ?? 'dev-password-123';
@@ -38,11 +44,11 @@ const TITLE_OVERRIDE: Record<string, string> = {
 const META: Record<string, { summary: string; tags: string[] }> = {
     'INDEX.md': {
         summary:
-            'Índice dos 14 estudos de agentes open source: tipo, veredito e top-imports por agente.',
+            'Índice dos 15 estudos de agentes open source: tipo, veredito e top-imports por agente.',
         tags: ['agente-estudo', 'ai-software', 'indice'],
     },
     'SYNTHESIS.md': {
-        summary: 'Padrões transversais dos 14 agentes e o que importar primeiro para o mem-vector.',
+        summary: 'Padrões transversais dos 15 agentes e o que importar primeiro para o mem-vector.',
         tags: ['agente-estudo', 'ai-software', 'sintese'],
     },
 };
@@ -73,6 +79,11 @@ function splitFrontmatter(md: string): { fm: Record<string, string>; body: strin
 function h1(md: string): string {
     const m = md.match(/^#\s+(.+)$/m);
     return m ? m[1].trim() : 'sem título';
+}
+
+// Título curto (decisão do Carlos: mais legível). "Hermes Agent — estudo de source" → "Hermes Agent".
+function shortTitle(md: string): string {
+    return h1(md).replace(/\s*—\s*estudo de source\s*$/i, '').trim();
 }
 
 // clones/<owner__repo>/ficheiro → ficheiro (path relativo ao repo)
@@ -119,7 +130,7 @@ function build(): { notas: Nota[]; stats: { clones: number; wikilinks: number; h
     const fileToTitle = new Map<string, string>();
     for (const f of reportFiles) {
         const { body } = splitFrontmatter(readFileSync(join(REPORTS_DIR, f), 'utf8'));
-        fileToTitle.set(f, h1(body));
+        fileToTitle.set(f, shortTitle(body));
     }
     fileToTitle.set('INDEX.md', TITLE_OVERRIDE['INDEX.md']);
     fileToTitle.set('SYNTHESIS.md', TITLE_OVERRIDE['SYNTHESIS.md']);
@@ -142,7 +153,7 @@ function build(): { notas: Nota[]; stats: { clones: number; wikilinks: number; h
         );
         notas.push({
             file: f,
-            title: h1(body),
+            title: shortTitle(body),
             summary: fm.summary ?? '',
             tags: ['agente-estudo', 'ai-software'],
             content_md: content,
@@ -170,6 +181,29 @@ function build(): { notas: Nota[]; stats: { clones: number; wikilinks: number; h
     return { notas, stats };
 }
 
+// Resolve o caminho de pastas (ex. AI/software/agents), criando os segmentos em falta.
+// Procura sempre por (nome, parent) — nunca cria duplicado na raiz.
+async function resolveFolderPath(
+    db: Awaited<ReturnType<typeof userDb>>,
+    segments: string[],
+): Promise<{ id: string }> {
+    let pastas = await listarPastasCom(db);
+    let parentId: string | null = null;
+    let current: { id: string } | null = null;
+    for (const name of segments) {
+        let folder = pastas.find((p) => p.name === name && p.parentId === parentId);
+        if (!folder) {
+            folder = await criarPastaCom(db, name, parentId);
+            console.log(`pasta "${name}" criada sob ${parentId ?? 'RAIZ'}: ${folder.id}`);
+            pastas = await listarPastasCom(db);
+        }
+        current = { id: folder.id };
+        parentId = folder.id;
+    }
+    if (!current) throw new Error('Caminho de pasta vazio.');
+    return current;
+}
+
 async function userDb() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -186,7 +220,7 @@ async function main(): Promise<void> {
     const { notas, stats } = build();
 
     if (DRY) {
-        console.log(`[DRY] pasta destino: "${FOLDER_NAME}" (get-or-create na raiz)`);
+        console.log(`[DRY] pasta destino: "${FOLDER_LABEL}" (resolve/cria por caminho, nunca na raiz)`);
         console.log(`[DRY] ${notas.length} notas a escrever (autor=agent):\n`);
         for (const n of notas) console.log(`  - ${n.title}   [${n.tags.join(', ')}]`);
         console.log(
@@ -202,14 +236,8 @@ async function main(): Promise<void> {
     }
 
     const db = await userDb();
-    const pastas = await listarPastasCom(db);
-    let folder = pastas.find((p) => p.name === FOLDER_NAME && p.parentId === null);
-    if (!folder) {
-        folder = await criarPastaCom(db, FOLDER_NAME, null);
-        console.log(`pasta "${FOLDER_NAME}" criada: ${folder.id}`);
-    } else {
-        console.log(`pasta "${FOLDER_NAME}" já existia: ${folder.id} (upsert por slug)`);
-    }
+    const folder = await resolveFolderPath(db, FOLDER_PATH);
+    console.log(`pasta destino "${FOLDER_LABEL}": ${folder.id} (upsert por slug)`);
 
     for (const n of notas) {
         const r = await escreverNotaEmPastaCom(
@@ -227,7 +255,7 @@ async function main(): Promise<void> {
         );
         console.log(`✓ ${r.title} (${r.slug})`);
     }
-    console.log(`\nFeito: ${notas.length} notas na pasta "${FOLDER_NAME}".`);
+    console.log(`\nFeito: ${notas.length} notas na pasta "${FOLDER_LABEL}".`);
 }
 
 main().catch((e) => {
