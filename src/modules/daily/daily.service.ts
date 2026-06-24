@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { nomesDosAutoresCom } from '@/modules/knowledge/versoes-nomes';
-import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projector';
+import { projectarIndicesBestEffortCom } from '@/modules/workspace/index-projector';
 import { registarEdgeConversaCom } from '@/modules/knowledge/edges';
 
 export interface ResultadoAcrescento {
@@ -98,7 +98,7 @@ export async function acrescentarAoDailyCom(
     // Criada pela RPC `append_daily_entry`, no mesmo statement que atualiza o daily.
 
     // Projector retryable: chunks/embeddings/edges ficam num job durável, processado já.
-    await projectarIndicesAposEscritaCom(db, {
+    await projectarIndicesBestEffortCom(db, {
         entityType: 'daily',
         entityId: daily.id,
     });
@@ -163,7 +163,7 @@ export async function substituirDailyCom(
     });
     if (vErr) throw new Error(`inserir versão: ${vErr.message}`);
 
-    await projectarIndicesAposEscritaCom(db, {
+    await projectarIndicesBestEffortCom(db, {
         entityType: 'daily',
         entityId: daily.id,
     });
@@ -195,7 +195,7 @@ export async function substituirDailyPorIdCom(
     if (up.error || !up.data) throw new Error(`substituir daily por id: ${up.error?.message}`);
     const daily = up.data as ReplaceDailyEntryByIdRow;
 
-    await projectarIndicesAposEscritaCom(db, {
+    await projectarIndicesBestEffortCom(db, {
         entityType: 'daily',
         entityId: daily.id,
     });

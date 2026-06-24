@@ -211,3 +211,18 @@ export async function projectarIndicesAposEscritaCom(
     const jobId = await criarDerivedIndexJobCom(db, payload);
     return processarDerivedIndexJobCom(db, jobId);
 }
+
+// Best-effort: a nota/daily já está gravada (RPC) — a projeção é derivada e
+// retryable. Se falhar, o job fica durável (failed) e o sweeper retoma; NÃO
+// rebenta a escrita por um blip de projeção (embeddings/DB). Torna verdadeiro o
+// "Projector retryable... processado já".
+export async function projectarIndicesBestEffortCom(
+    db: SupabaseClient,
+    payload: DerivedIndexPayload,
+): Promise<void> {
+    try {
+        await projectarIndicesAposEscritaCom(db, payload);
+    } catch {
+        // Deixa o job (failed/durável) para varrerDerivedIndexPendentesCom retomar.
+    }
+}
