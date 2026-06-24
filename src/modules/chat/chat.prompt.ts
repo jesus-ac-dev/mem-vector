@@ -1,3 +1,5 @@
+import { REGRA_DATAMARK, envolverDados } from '@/lib/datamark';
+
 import type { Intencao } from './chat.intencao';
 
 export interface SourceMetadata {
@@ -85,7 +87,7 @@ function blocoConversa(historico: MensagemConversa[]): string {
     const linhas = historico
         .map((m) => `${m.role === 'user' ? 'Utilizador' : 'Assistente'}: ${m.content}`)
         .join('\n');
-    return `Conversa recente (mais antiga primeiro):\n${linhas}\n\n`;
+    return `Conversa recente (mais antiga primeiro):\n${envolverDados(linhas, 'conversa')}\n\n`;
 }
 
 // Monta o prompt do ping-pong a partir da pergunta e das fontes recuperadas.
@@ -98,12 +100,15 @@ export function buildPrompt(
     kernel = '',
 ): string {
     const context = sources.length
-        ? sources.map((s, i) => `[${i + 1}] ${s.content}`).join('\n\n')
+        ? envolverDados(sources.map((s, i) => `[${i + 1}] ${s.content}`).join('\n\n'), 'rag')
         : '(sem contexto)';
 
     const declarativa = intencao?.tipo === 'declarativa';
     const rotulo = declarativa ? 'Afirmação do utilizador' : 'Pergunta';
-    const regras = declarativa ? `${regraFacto(intencao?.incerta === true)}\n\n${REGRA}` : REGRA;
+    const regrasBase = declarativa
+        ? `${regraFacto(intencao?.incerta === true)}\n\n${REGRA}`
+        : REGRA;
+    const regras = `${regrasBase}\n\n${REGRA_DATAMARK}`;
 
     return (
         // Kernel do workspace (#34) primeiro: identidade/regras do utilizador
