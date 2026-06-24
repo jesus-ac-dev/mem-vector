@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { TurnoDestilado } from './chat.service';
 import { executarDestilacaoTurnoCom } from './chat.postturno';
+import { varrerJobsCom } from '@/lib/jobs-sweep';
 
 // #118: um 'running' cujo lock passou disto é órfão (processador morto). Alinhado
 // com a condição da claim_agent_job (10 min) — bem além do timeout de 5 min da
@@ -251,24 +252,10 @@ export async function processarDestilacaoJobCom(
     }
 }
 
-// Orquestração pura do sweeper: processa cada job, isolando falhas (uma não
-// derruba as outras). Sem deps de BD — testável com mocks.
-export async function varrerJobsCom(
-    ids: string[],
-    processar: (id: string) => Promise<unknown>,
-): Promise<{ processados: number; falhados: number }> {
-    let processados = 0;
-    let falhados = 0;
-    for (const id of ids) {
-        try {
-            await processar(id);
-            processados += 1;
-        } catch {
-            falhados += 1;
-        }
-    }
-    return { processados, falhados };
-}
+// `varrerJobsCom` (orquestrador puro) vive agora em `@/lib/jobs-sweep` para ser
+// partilhado com o sweeper da projeção sem dependência circular. Re-exportado
+// aqui (importado acima) para os consumidores/testes existentes não mudarem.
+export { varrerJobsCom };
 
 // O sweeper server-side: varre os jobs por processar do utilizador (o acabado de
 // criar + órfãos de turnos anteriores) e processa-os. Disparado por after() a

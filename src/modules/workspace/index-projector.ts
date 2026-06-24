@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { reindexEntity } from '@/lib/indexing';
 import { regenerarEdgesCom, reconciliarEdgesPendentesCom } from '@/modules/knowledge/edges';
 import { parseWikilinkTargets } from '@/modules/knowledge/knowledge.links';
+import { varrerJobsCom } from '@/lib/jobs-sweep';
 
 export const derivedIndexPayloadSchema = z.object({
     entityType: z.enum(['knowledge', 'daily']),
@@ -225,4 +226,36 @@ export async function projectarIndicesBestEffortCom(
     } catch {
         // Deixa o job (failed/durável) para varrerDerivedIndexPendentesCom retomar.
     }
+}
+
+const MAX_TENTATIVAS = 5; // pára de auto-retentar um job cronicamente partido
+const LOCK_EXPIRADO_MS = 10 * 60 * 1000; // running com lock mais velho = órfão
+
+// Jobs de projeção a (re)processar: pending, FAILED (≠ destilação — aqui a falha
+// é transitória, ex. blip de embeddings, e a projeção converge por hash) e
+// running órfão (processador morto). O cap de tentativas trava jobs partidos.
+export async function listarDerivedIndexJobsPendentesCom(
+    db: SupabaseClient,
+    limite = 20,
+): Promise<string[]> {
+    const corte = new Date(Date.now() - LOCK_EXPIRADO_MS).toISOString();
+    const { data, error } = await db
+        .from('agent_jobs')
+        .select('id')
+        .eq('type', 'derived_index_entity')
+        .lt('attempts', MAX_TENTATIVAS)
+        .or(`status.eq.pending,status.eq.failed,and(status.eq.running,locked_at.lt.${corte})`)
+        .order('created_at', { ascending: true })
+        .limit(limite);
+    if (error) throw new Error(`listar jobs de índices pendentes falhou: ${error.message}`);
+    return (data ?? []).map((r) => String((r as { id: string }).id));
+}
+
+// Sweeper: varre e reprocessa os jobs de projeção presos. Idempotente (re-projetar
+// converge por hash). Disparado por after() pós-resposta, ao lado do da destilação.
+export async function varrerDerivedIndexPendentesCom(
+    db: SupabaseClient,
+): Promise<{ processados: number; falhados: number }> {
+    const ids = await listarDerivedIndexJobsPendentesCom(db);
+    return varrerJobsCom(ids, (id) => processarDerivedIndexJobCom(db, id));
 }
