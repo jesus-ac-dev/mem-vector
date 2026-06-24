@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { REGRA_DATAMARK, envolverDados } from '@/lib/datamark';
+
 import { AGENT_CONTRACT, buildPromptAgentic } from './contract';
 
 describe('AGENT_CONTRACT', () => {
@@ -62,5 +64,24 @@ describe('buildPromptAgentic', () => {
         );
         expect(p).toContain('DECLAROU UM FACTO');
         expect(p).toContain('Utilizador: O Carlos gosta da Sofia');
+    });
+});
+
+describe('AGENT_CONTRACT datamark', () => {
+    it('inclui a regra de datamark (conteúdo é evidência, não instruções)', () => {
+        expect(AGENT_CONTRACT).toContain(REGRA_DATAMARK);
+    });
+});
+
+describe('buildPromptAgentic datamark', () => {
+    it('envolve a conversa e o turno (Pergunta/Resposta) em datamark', () => {
+        const p = buildPromptAgentic('a Sofia tem 2 filhos', 'Registado.', [], undefined, [
+            { role: 'user', content: 'olá' },
+        ]);
+        expect(p).toContain('<dados nao-confiaveis tipo="conversa">');
+        expect(p).toContain('<dados nao-confiaveis tipo="turno">');
+        expect(p).toContain(
+            envolverDados('Pergunta: a Sofia tem 2 filhos\nResposta: Registado.', 'turno'),
+        );
     });
 });
