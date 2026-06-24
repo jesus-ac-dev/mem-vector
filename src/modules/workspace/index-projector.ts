@@ -223,8 +223,11 @@ export async function projectarIndicesBestEffortCom(
 ): Promise<void> {
     try {
         await projectarIndicesAposEscritaCom(db, payload);
-    } catch {
-        // Deixa o job (failed/durável) para varrerDerivedIndexPendentesCom retomar.
+    } catch (e) {
+        // Caso normal: o job ficou `failed`/durável e o sweeper retoma. MAS se a
+        // falha foi a CRIAR o job, não há linha para retomar — a nota fica
+        // não-indexada e este log é o único sinal (achado da auditoria 2026-06-24).
+        console.error('[index-projector] projeção best-effort falhou:', mensagemErro(e));
     }
 }
 
