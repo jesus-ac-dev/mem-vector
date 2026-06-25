@@ -136,13 +136,24 @@ export async function responderComToolsCom(
         }));
         // M7-A: o agente registou pedidos de relay no result-file (não pode correr
         // o orquestrador no subprocesso MCP). Aqui (contexto Next) disparamo-los.
+        const avisosRelay: string[] = [];
         for (const p of lerRelaysPedidos(resultFile)) {
-            await dispararRelay(p.repo, p.issue).catch((e: unknown) =>
-                console.error('[relay] disparo pedido pelo agente falhou:', e),
-            );
+            try {
+                const r = await dispararRelay(p.repo, p.issue);
+                if (!r.ok)
+                    avisosRelay.push(
+                        `Relay não disparado para ${p.repo} #${p.issue}: ${r.detalhe}`,
+                    );
+            } catch (e: unknown) {
+                const detalhe = e instanceof Error ? e.message : String(e);
+                console.error('[relay] disparo pedido pelo agente falhou:', e);
+                avisosRelay.push(`Relay não disparado para ${p.repo} #${p.issue}: ${detalhe}`);
+            }
         }
+        const avisoRelay = avisosRelay.length ? `\n\n${avisosRelay.join('\n')}` : '';
+        if (avisoRelay) onTextDelta?.(avisoRelay);
         return {
-            text: g.text,
+            text: `${g.text}${avisoRelay}`,
             costUsd: g.costUsd,
             model: g.model,
             tokensIn: g.tokensIn,
