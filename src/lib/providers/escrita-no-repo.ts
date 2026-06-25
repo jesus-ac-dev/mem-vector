@@ -43,7 +43,25 @@ export interface RespostaRepo {
 // `npm`/`tsc`/`vitest`/`build` à espera de aprovação que no background não há
 // (o #150 mostrou-o: o claude ficou preso, o codex correu tudo).
 const RELAY_SEM_RESET_SUPABASE = 'Bash(supabase db reset:*)';
-const GUARDED_BINS = ['supabase', 'git', 'rm', 'npx', 'npm', 'pnpm', 'yarn'] as const;
+const GUARDED_BINS = [
+    'supabase',
+    'git',
+    'rm',
+    'npx',
+    'npm',
+    'pnpm',
+    'yarn',
+    // #relay-guard: auto-proteção do runtime — matar processos / desligar a máquina.
+    'kill',
+    'pkill',
+    'killall',
+    'reboot',
+    'shutdown',
+    'poweroff',
+    'halt',
+    'systemctl',
+    'sudo',
+] as const;
 type GuardedBin = (typeof GUARDED_BINS)[number];
 
 function flagChars(args: string[]): string {
@@ -54,6 +72,22 @@ function flagChars(args: string[]): string {
 }
 
 export function comandoRelayBloqueado(bin: string, args: string[]): string | null {
+    // #relay-guard: o agente escreve+testa código; o ciclo de vida de processos é da
+    // infra (timeouts do runner), não dele — sem uso legítimo de matar/desligar. Lista
+    // INLINE: esta função é serializada via .toString() para o wrapper, logo não pode
+    // referenciar constantes externas.
+    if (['kill', 'pkill', 'killall', 'reboot', 'shutdown', 'poweroff', 'halt'].includes(bin)) {
+        return `${bin} pode derrubar o runtime ou a máquina — proibido dentro do relay`;
+    }
+    if (bin === 'systemctl') {
+        const subcomando = args.find((arg) => !arg.startsWith('-')) ?? '';
+        if (['poweroff', 'reboot', 'halt', 'shutdown', 'kill'].includes(subcomando)) {
+            return `systemctl ${subcomando} pode derrubar o runtime ou a máquina — proibido dentro do relay`;
+        }
+    }
+    if (bin === 'sudo') {
+        return 'sudo eleva operações fora do contrato do relay — proibido dentro do relay';
+    }
     if (bin === 'supabase' && args[0] === 'db' && args[1] === 'reset') {
         return 'reset da base Supabase é proibido dentro do relay';
     }

@@ -84,6 +84,27 @@ describe('comandoRelayBloqueado', () => {
         expect(comandoRelayBloqueado('rm', ['-fr', '/'])).toMatch(/rm -rf/);
         expect(comandoRelayBloqueado('rm', ['-rf', 'dist'])).toBeNull();
     });
+
+    it('bloqueia matar processos e desligar a máquina (auto-proteção do runtime)', () => {
+        expect(comandoRelayBloqueado('kill', ['-9', '1234'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('pkill', ['-f', 'node'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('killall', ['node'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('reboot', [])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('shutdown', ['-h', 'now'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('poweroff', [])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('halt', [])).toMatch(/runtime|máquina/);
+        // systemctl: subcomandos que desligam/matam (vetor systemd)
+        expect(comandoRelayBloqueado('systemctl', ['poweroff'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('systemctl', ['reboot'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('systemctl', ['kill', 'nginx'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('systemctl', ['--user', 'reboot'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('sudo', ['reboot'])).toMatch(/proibido/);
+        // systemctl inócuo + não-controlados continuam livres
+        expect(comandoRelayBloqueado('systemctl', ['status'])).toBeNull();
+        expect(comandoRelayBloqueado('systemctl', ['--user', 'status'])).toBeNull();
+        expect(comandoRelayBloqueado('npm', ['run', 'test'])).toBeNull();
+        expect(comandoRelayBloqueado('git', ['status'])).toBeNull();
+    });
 });
 
 describe('correrNoRepo', () => {
