@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { generateAgentic, generateAgenticStream } from '@/lib/claude';
-import { lerWebConsultado } from './resultado';
+import { lerWebConsultado, lerRelaysPedidos } from './resultado';
+import { dispararRelay } from '@/modules/relay/relay.actions';
 
 // #85 fatia 2: o agente escalado (two-phase) responde com TOOLS — leitura do
 // workspace (notas/daily-por-data/tarefas) E web. O CLI não faz WebSearch/WebFetch
@@ -27,6 +28,8 @@ const TOOLS_RESPOSTA = [
     'mcp__memvector__criar_issue',
     'mcp__memvector__comentar_issue',
     'mcp__memvector__promover_a_issue',
+    'mcp__memvector__disparar_relay',
+    'mcp__memvector__ler_estado_relay',
 ];
 
 const SYSTEM_RESPOSTA =
@@ -53,7 +56,11 @@ const CONVENCAO_GITHUB =
     'de surpresa — PROPÕE ("queres que promova «X» a issue em owner/nome?") e só ages quando o ' +
     'utilizador CONFIRMA; se ele já pediu claramente, age direto. O repo é um dos LIGADOS (não ' +
     'inventes outro); antes de criar, usa ler_issues para não duplicar. O body leva enquadramento ' +
-    'completo (contexto, o que fazer, critério de pronto), não uma linha. Cita o URL na resposta.';
+    'completo (contexto, o que fazer, critério de pronto), não uma linha. Cita o URL na resposta.' +
+    '\n\nRELAY: para pôr os agentes a trabalhar uma issue (análise→dev→testes→docs→auditoria), usa ' +
+    'disparar_relay — mesma confirmação assistida (PROPÕE / só ages quando o utilizador confirma ou ' +
+    'pede claramente "vamos fazer a #N"). Corre em background: acompanha com ler_estado_relay e ' +
+    'relata fase/estado/PR. O MERGE é decisão do utilizador — nunca mergeas.';
 
 export interface RespostaTools {
     text: string;
@@ -127,6 +134,13 @@ export async function responderComToolsCom(
             url: r.url,
             titulo: r.titulo,
         }));
+        // M7-A: o agente registou pedidos de relay no result-file (não pode correr
+        // o orquestrador no subprocesso MCP). Aqui (contexto Next) disparamo-los.
+        for (const p of lerRelaysPedidos(resultFile)) {
+            await dispararRelay(p.repo, p.issue).catch((e: unknown) =>
+                console.error('[relay] disparo pedido pelo agente falhou:', e),
+            );
+        }
         return {
             text: g.text,
             costUsd: g.costUsd,
