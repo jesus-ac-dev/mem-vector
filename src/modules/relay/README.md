@@ -141,8 +141,9 @@ por-issue), e cada substep deixa rasto.
   não-commitado da fase anterior fica no working tree do disco (commit só no verde; o lock impede outro
   relay no mesmo path). Resetar apagava-o (achado do Audit).
 
-**Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); um
-`Set` em memória trava disparos concorrentes no mesmo path.
+**Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); uma
+fila FIFO em memória trava disparos concorrentes no mesmo path, deduplica a issue ativa/enfileirada
+e corre a próxima quando o relay atual termina.
 
 **Falta:** **skills por fase reais** (do [[agent-skills-compare]] — hoje prompts inline); o
 **smoke vivo** end-to-end.

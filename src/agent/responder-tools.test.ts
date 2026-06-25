@@ -128,6 +128,41 @@ describe('responderComToolsCom (#89)', () => {
         );
     });
 
+    it('não esconde relay enfileirado no caminho streaming', async () => {
+        generateAgenticStreamMock.mockImplementation(
+            async (_prompt: string, cfg: unknown, onTextDelta: (texto: string) => void) => {
+                const resultFile = (cfg as { env: Record<string, string> }).env
+                    .MEMVECTOR_AGENT_RESULT_FILE;
+                appendFileSync(
+                    resultFile,
+                    `${JSON.stringify({ tipo: 'relay', repo: 'jesus-ac-dev/mem-vector', issue: 171 })}\n`,
+                    'utf8',
+                );
+                onTextDelta('vou disparar');
+                return { text: 'vou disparar', costUsd: 0 };
+            },
+        );
+        dispararRelayMock.mockResolvedValue({
+            ok: true,
+            enfileirado: true,
+            detalhe: 'Relay enfileirado para jesus-ac-dev/mem-vector #171 (posição 1 na fila).',
+        });
+        const deltas: string[] = [];
+
+        const r = await responderComToolsCom(
+            fakeDb() as never,
+            'pergunta',
+            undefined,
+            undefined,
+            (d) => deltas.push(d),
+            undefined,
+            { token: 'gh', repos: ['jesus-ac-dev/mem-vector'] },
+        );
+
+        expect(r.text).toContain('Relay enfileirado para jesus-ac-dev/mem-vector #171');
+        expect(deltas.join('')).toContain('Relay enfileirado para jesus-ac-dev/mem-vector #171');
+    });
+
     it('com github ligado, instrui o agente a propor o relay proativamente', async () => {
         generateAgenticMock.mockResolvedValue({ text: 'ok', costUsd: 0 });
         await responderComToolsCom(

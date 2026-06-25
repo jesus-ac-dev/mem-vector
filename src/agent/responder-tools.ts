@@ -158,6 +158,8 @@ export async function responderComToolsCom(
                     avisosRelay.push(
                         `Relay não disparado para ${p.repo} #${p.issue}: ${r.detalhe}`,
                     );
+                // Enfileirado (repo ocupado): avisa que corre depois, não já.
+                else if (r.enfileirado) avisosRelay.push(r.detalhe);
             } catch (e: unknown) {
                 const detalhe = e instanceof Error ? e.message : String(e);
                 console.error('[relay] disparo pedido pelo agente falhou:', e);
