@@ -96,10 +96,16 @@ export async function atualizarRelayPorIssueCom(
 }
 
 // #M7-D: durabilidade — detetar relays órfãos (crashados; heartbeat congelado).
-const JANELA_ORFAO_MS = 30 * 60 * 1000; // > a fase mais longa do pipeline
+// Conservador de propósito: o heartbeat bate por FASE (não por ronda/spawn), e uma
+// fase pode chegar a ~maxRondas × providers × RELAY_REPO_TIMEOUT_MS (até ~120min no
+// pior caso, com tudo a esgotar o timeout). A janela TEM de exceder isso, senão
+// marca um relay vivo como órfão (falso-positivo = bolinha de erro num relay a
+// correr). Custo: deteção lenta. Hardening futuro = heartbeat por-spawn (rápido).
+const JANELA_ORFAO_MS = 120 * 60 * 1000;
 
-// Puro: um relay 'processando' é órfão se o heartbeat é null (não seguido) ou mais
-// velho que a janela (o processo morreu e parou de o bater).
+// Puro: um relay 'processando' é órfão se o heartbeat é null (não seguido — relay
+// crashado, ou o caso raro de um relay anterior a esta migration) ou mais velho que
+// a janela (o processo morreu e parou de o bater).
 export function relayEstaOrfao(
     heartbeat: string | null,
     agoraMs: number,
@@ -130,6 +136,8 @@ export async function varrerRelaysOrfaosCom(db: SupabaseClient): Promise<number>
     }[]) {
         if (!t.repo_github || !t.issue_github) continue;
         if (!relayEstaOrfao(t.relay_heartbeat, agora, JANELA_ORFAO_MS)) continue;
+        // O atualizar re-bate o heartbeat, mas é inócuo: o filtro 'processando' na
+        // query acima não re-apanha um que acabámos de marcar 'bloqueado'.
         await atualizarRelayPorIssueCom(db, t.repo_github, t.issue_github, {
             relayEstado: 'bloqueado',
             relayFase: 'órfão',
