@@ -30,4 +30,8 @@ describe('janelaSeparacao', () => {
     it('sobreposição → janela negativa', () => {
         expect(janelaSeparacao([0.79], [0.82]).janela).toBeLessThan(0);
     });
+    it('recusa arrays vazios para não devolver Infinity/NaN', () => {
+        expect(() => janelaSeparacao([], [0.8])).toThrow(RangeError);
+        expect(() => janelaSeparacao([0.8], [])).toThrow(RangeError);
+    });
 });

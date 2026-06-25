@@ -25,12 +25,15 @@ export interface JanelaSeparacao {
     corteSugerido: number;
 }
 
-// Separação entre o pior relevante e o melhor irrelevante. Assume arrays não-vazios
-// (o dataset garante-o). janela > 0 = corte limpo possível; < 0 = sobreposição.
+// Separação entre o pior relevante e o melhor irrelevante. janela > 0 = corte
+// limpo possível; < 0 = sobreposição.
 export function janelaSeparacao(
     simsRelevantes: number[],
     simsIrrelevantes: number[],
 ): JanelaSeparacao {
+    if (!simsRelevantes.length || !simsIrrelevantes.length) {
+        throw new RangeError('janelaSeparacao exige sims relevantes e irrelevantes');
+    }
     const minRel = Math.min(...simsRelevantes);
     const maxIrr = Math.max(...simsIrrelevantes);
     return { minRel, maxIrr, janela: minRel - maxIrr, corteSugerido: (minRel + maxIrr) / 2 };

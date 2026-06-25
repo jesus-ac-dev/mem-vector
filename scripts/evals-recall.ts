@@ -5,11 +5,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseAdmin } from '../src/lib/supabase-admin';
 import { escreverNotaCom } from '../src/modules/knowledge/knowledge.service';
 import { embedQuery } from '../src/lib/embeddings';
-import { relevantSources, type Source } from '../src/modules/chat/chat.prompt';
+import { RELEVANCE_THRESHOLD, relevantSources, type Source } from '../src/modules/chat/chat.prompt';
 import { recallAtK, janelaSeparacao, type ResultadoQuery } from '../src/lib/evals-recall';
 
-// Mede o recall do chat RAG (match_chunks_hybrid + relevantSources) contra um KB
-// fixo e queries rotuladas à mão. Medição-primeiro: imprime, não faz falhar.
+// Mede o recall direto do chat RAG (match_chunks_hybrid + relevantSources), antes
+// da expansão de fontes, contra um KB fixo e queries rotuladas à mão.
+// Medição-primeiro: imprime, não faz falhar.
 // Sem `generate` → $0 (só embeddings locais). Spec: docs/superpowers/specs/2026-06-25.
 
 process.loadEnvFile('.env.local');
@@ -86,7 +87,10 @@ const RELEVANTES: { query: string; notaEsperada: string }[] = [
     { query: 'Qual é a relação entre a Lua e o nível do mar?', notaEsperada: 'Marés' },
     { query: 'De onde vem a lava de uma erupção?', notaEsperada: 'Vulcões' },
     { query: 'Como é que se produz mel?', notaEsperada: 'Abelhas' },
-    { query: 'Como se ganha uma partida ao adversário no tabuleiro de 64 casas?', notaEsperada: 'Xadrez' },
+    {
+        query: 'Como se ganha uma partida ao adversário no tabuleiro de 64 casas?',
+        notaEsperada: 'Xadrez',
+    },
     { query: 'Que molécula em dupla hélice guarda os genes?', notaEsperada: 'ADN' },
     { query: 'Que instrumento aponta para o norte magnético?', notaEsperada: 'Bússola' },
 ];
@@ -147,7 +151,7 @@ async function correrQuery(
     const idx = notaEsperadaId
         ? sources.findIndex((s) => s.id && entidadePorChunk.get(s.id) === notaEsperadaId)
         : -1;
-    const mantidas = relevantSources(sources);
+    const mantidas = relevantSources(sources, RELEVANCE_THRESHOLD);
     const mantida = notaEsperadaId
         ? mantidas.some((s) => s.id && entidadePorChunk.get(s.id) === notaEsperadaId)
         : mantidas.length === 0; // irrelevante bem tratada = nada sobrevive ao corte
@@ -189,7 +193,7 @@ async function main(): Promise<void> {
     for (const q of IRRELEVANTES) resultados.push(await correrQuery(db, q, null, null));
 
     console.log('\n═══════════ EVALS DE RECALL ═══════════');
-    console.log('rank | sim   | @0.78 | query → nota esperada');
+    console.log(`rank | sim   | @${RELEVANCE_THRESHOLD.toFixed(2)} | query → nota esperada`);
     for (const r of resultados) {
         const sim = r.simEsperada !== null ? r.simEsperada.toFixed(3) : '  -  ';
         const rk = r.rank !== null ? String(r.rank) : r.notaEsperada ? '✗' : '·';
@@ -227,7 +231,9 @@ async function main(): Promise<void> {
         console.log(
             `janela separação    = ${js.janela.toFixed(3)}  (minRel ${js.minRel.toFixed(3)} vs maxIrr ${js.maxIrr.toFixed(3)})`,
         );
-        console.log(`corte sugerido      ≈ ${js.corteSugerido.toFixed(3)}  (atual: 0.780)`);
+        console.log(
+            `corte sugerido      ≈ ${js.corteSugerido.toFixed(3)}  (atual: ${RELEVANCE_THRESHOLD.toFixed(3)})`,
+        );
     } else {
         console.log('janela separação    = n/a (sims insuficientes — seed/recall falhou?)');
     }
