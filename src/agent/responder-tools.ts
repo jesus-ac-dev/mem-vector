@@ -97,6 +97,9 @@ export async function responderComToolsCom(
     } = await db.auth.getSession();
     if (!session) throw new Error('sem sessão para a resposta com web');
 
+    const githubToken = gh?.token ?? '';
+    const githubRepos = gh?.repos ?? [];
+    const githubLigado = Boolean(githubToken && githubRepos.length > 0);
     const resultFile = join(tmpdir(), `memvector-web-${randomUUID()}.jsonl`);
     // O pai cria o ficheiro (wx, 0600): ninguém o pode plantar com URLs falsos.
     writeFileSync(resultFile, '', { flag: 'wx', mode: 0o600 });
@@ -118,9 +121,9 @@ export async function responderComToolsCom(
         const cfg = {
             mcpConfig,
             allowedTools: TOOLS_RESPOSTA,
-            // M7: a convenção GitHub só entra com o módulo ligado (token presente) —
-            // senão o agente nem sabe das tools de issue.
-            systemPrompt: gh?.token ? `${SYSTEM_RESPOSTA}${CONVENCAO_GITHUB}` : SYSTEM_RESPOSTA,
+            // M7: a convenção GitHub só entra com o módulo ligado (token + repos)
+            // — senão o agente nem sabe das tools de issue/relay.
+            systemPrompt: githubLigado ? `${SYSTEM_RESPOSTA}${CONVENCAO_GITHUB}` : SYSTEM_RESPOSTA,
             model,
             env: {
                 // #159: só o access token — passar o refresh token deixava o agente
@@ -128,10 +131,10 @@ export async function responderComToolsCom(
                 MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
                 MEMVECTOR_AGENT_RESULT_FILE: resultFile,
                 ...(webKey ? { MEMVECTOR_AGENT_WEB_KEY: webKey } : {}),
-                ...(gh?.token
+                ...(githubLigado
                     ? {
-                          MEMVECTOR_AGENT_GITHUB_TOKEN: gh.token,
-                          MEMVECTOR_AGENT_GITHUB_REPOS: (gh.repos ?? []).join(','),
+                          MEMVECTOR_AGENT_GITHUB_TOKEN: githubToken,
+                          MEMVECTOR_AGENT_GITHUB_REPOS: githubRepos.join(','),
                       }
                     : {}),
             },

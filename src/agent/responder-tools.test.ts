@@ -172,5 +172,25 @@ describe('responderComToolsCom (#89)', () => {
         await responderComToolsCom(fakeDb() as never, 'pergunta');
         const cfg = generateAgenticMock.mock.calls[0][1] as { systemPrompt?: string };
         expect(cfg.systemPrompt).not.toContain('RELAY PROATIVO');
+        expect(cfg.systemPrompt).not.toContain('KILL-SWITCH');
+    });
+
+    it('com token mas sem repos, não promete tools GitHub que o MCP não expõe', async () => {
+        generateAgenticMock.mockResolvedValue({ text: 'ok', costUsd: 0 });
+        await responderComToolsCom(
+            fakeDb() as never,
+            'pergunta',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { token: 'gh', repos: [] },
+        );
+        const cfg = generateAgenticMock.mock.calls[0][1] as {
+            env?: Record<string, string>;
+            systemPrompt?: string;
+        };
+        expect(cfg.systemPrompt).not.toContain('GITHUB (modelo 2.2)');
+        expect(cfg.env).not.toHaveProperty('MEMVECTOR_AGENT_GITHUB_TOKEN');
     });
 });

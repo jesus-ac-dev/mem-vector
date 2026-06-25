@@ -261,6 +261,8 @@ const LABEL_FERRAMENTA: Record<string, string> = {
     ler_issues: 'a ver as issues',
     criar_issue: 'a abrir uma issue',
     comentar_issue: 'a comentar numa issue',
+    ler_estado_relay: 'a ver o estado do relay',
+    disparar_relay: 'a disparar o relay',
 };
 
 export function labelFerramenta(nome: string): string {
