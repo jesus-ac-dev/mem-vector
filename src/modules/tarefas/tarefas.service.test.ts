@@ -21,4 +21,7 @@ describe('relayEstaOrfao (#M7-D)', () => {
         const fronteira = new Date(AGORA - JANELA).toISOString();
         expect(relayEstaOrfao(fronteira, AGORA, JANELA)).toBe(false);
     });
+    it('heartbeat inválido → órfão defensivo', () => {
+        expect(relayEstaOrfao('isto-nao-e-data', AGORA, JANELA)).toBe(true);
+    });
 });

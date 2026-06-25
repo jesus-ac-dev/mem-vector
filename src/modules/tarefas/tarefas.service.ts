@@ -112,7 +112,9 @@ export function relayEstaOrfao(
     janelaMs: number,
 ): boolean {
     if (heartbeat === null) return true;
-    return Date.parse(heartbeat) < agoraMs - janelaMs;
+    const ts = Date.parse(heartbeat);
+    if (Number.isNaN(ts)) return true;
+    return ts < agoraMs - janelaMs;
 }
 
 // Sweeper: marca os relays 'processando' órfãos como bloqueado (→ bolinha de erro →
@@ -136,13 +138,31 @@ export async function varrerRelaysOrfaosCom(db: SupabaseClient): Promise<number>
     }[]) {
         if (!t.repo_github || !t.issue_github) continue;
         if (!relayEstaOrfao(t.relay_heartbeat, agora, JANELA_ORFAO_MS)) continue;
-        // O atualizar re-bate o heartbeat, mas é inócuo: o filtro 'processando' na
-        // query acima não re-apanha um que acabámos de marcar 'bloqueado'.
-        await atualizarRelayPorIssueCom(db, t.repo_github, t.issue_github, {
-            relayEstado: 'bloqueado',
-            relayFase: 'órfão',
-        });
-        marcados += 1;
+        // Atualização condicional: se um relay vivo bateu heartbeat entre o SELECT
+        // e este UPDATE, não o marcamos bloqueado com uma leitura antiga.
+        let q = db
+            .from('tarefas')
+            .update(
+                {
+                    relay_estado: 'bloqueado',
+                    relay_fase: 'órfão',
+                    relay_heartbeat: new Date().toISOString(),
+                },
+                { count: 'exact' },
+            )
+            .eq('repo_github', t.repo_github)
+            .eq('issue_github', t.issue_github)
+            .eq('relay_estado', 'processando');
+        q =
+            t.relay_heartbeat === null
+                ? q.is('relay_heartbeat', null)
+                : q.eq('relay_heartbeat', t.relay_heartbeat);
+        const { count, error: updateError } = await q;
+        if (updateError) {
+            console.error('marcar relay órfão falhou (segue):', updateError.message);
+            continue;
+        }
+        marcados += count ?? 0;
     }
     return marcados;
 }

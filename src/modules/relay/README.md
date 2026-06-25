@@ -112,7 +112,8 @@ por-issue), e cada substep deixa rasto.
   cartão `processando`, o kanban faz refresh periódico; quando o PR abre, o cartão fica em
   **Documentação** e aponta diretamente para o PR. Um relay crashado (restart/OOM) ficaria preso em
   `processando`; o **heartbeat** (`relay_heartbeat`, batido a cada progresso) + o sweeper no load do kanban
-  (`varrerRelaysOrfaosCom`) marcam-no `bloqueado` (órfão) → recuperável pela fatia C (#M7-D).
+  (`varrerRelaysOrfaosCom`) marcam-no `bloqueado` (órfão) → recuperável pela fatia C (#M7-D). A marcação
+  é condicional ao heartbeat lido para não transformar em bloqueado um relay vivo que acabou de progredir.
 
 ## Fidelidade ao desenho (2026-06-21)
 
