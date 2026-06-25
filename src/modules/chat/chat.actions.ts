@@ -12,6 +12,7 @@ import {
     processarDestilacaoJobCom,
     varrerDestilacaoPendentesCom,
 } from './chat.jobs';
+import { varrerDerivedIndexPendentesCom } from '@/modules/workspace/index-projector';
 
 export async function listarConversasAction() {
     return listarConversas();
@@ -113,6 +114,7 @@ export async function ask(
     // depois do retorno) — não depende do cliente. O sweeper apanha este job +
     // órfãos de turnos anteriores. Tab fechada ≠ rasto perdido.
     after(() => varrerDestilacaoPendentesCom(db).catch(() => {}));
+    after(() => varrerDerivedIndexPendentesCom(db).catch(() => {}));
 
     return { ...result, conversationId: convId, distillationJobId };
 }

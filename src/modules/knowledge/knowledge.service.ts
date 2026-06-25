@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { reindexEntity } from '@/lib/indexing';
-import { projectarIndicesAposEscritaCom } from '@/modules/workspace/index-projector';
+import { projectarIndicesBestEffortCom } from '@/modules/workspace/index-projector';
 import { resolverCor, COR_DEFAULT, COR_DAILY_DEFAULT, COR_CONVERSA_DEFAULT } from '@/lib/cores';
 import { embedQuery } from '@/lib/embeddings';
 import { reescreverWikilinks, slugify } from './knowledge.links';
@@ -171,7 +171,7 @@ export async function escreverNotaCom(
     const nota = up.data as WriteKnowledgeEntryRow;
 
     // Projector retryable: chunks/embeddings/edges ficam num job durável, processado já.
-    await projectarIndicesAposEscritaCom(db, {
+    await projectarIndicesBestEffortCom(db, {
         entityType: 'knowledge',
         entityId: nota.id,
     });
@@ -228,7 +228,7 @@ export async function escreverNotaEmPastaCom(
     if (up.error || !up.data) throw new Error(`escrever knowledge em pasta: ${up.error?.message}`);
     const nota = up.data as WriteKnowledgeEntryRow;
 
-    await projectarIndicesAposEscritaCom(db, {
+    await projectarIndicesBestEffortCom(db, {
         entityType: 'knowledge',
         entityId: nota.id,
     });
@@ -489,7 +489,7 @@ export async function atualizarNotaPorIdCom(
     if (up.error || !up.data) throw new Error(`atualizar nota por id: ${up.error?.message}`);
     const nota = up.data as WriteKnowledgeEntryByIdRow;
 
-    await projectarIndicesAposEscritaCom(db, {
+    await projectarIndicesBestEffortCom(db, {
         entityType: 'knowledge',
         entityId: nota.id,
     });
