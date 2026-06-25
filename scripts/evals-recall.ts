@@ -193,7 +193,8 @@ async function main(): Promise<void> {
     for (const r of resultados) {
         const sim = r.simEsperada !== null ? r.simEsperada.toFixed(3) : '  -  ';
         const rk = r.rank !== null ? String(r.rank) : r.notaEsperada ? '✗' : '·';
-        const keep = r.notaEsperada ? (r.mantida ? '✓' : '✗') : r.mantida ? 'dropd' : 'KEPT';
+        // ✓ = threshold acertou; LOST = relevante caiu (falso-negativo); LEAK = irrelevante passou (falso-positivo).
+        const keep = r.notaEsperada ? (r.mantida ? '✓' : 'LOST') : r.mantida ? '✓' : 'LEAK';
         console.log(
             `${rk.padStart(4)} | ${sim} | ${keep.padStart(5)} | ${r.query}${r.notaEsperada ? ` → ${r.notaEsperada}` : ' (irrelevante)'}`,
         );
@@ -201,11 +202,15 @@ async function main(): Promise<void> {
 
     const relev = resultados.filter((r) => r.notaEsperada !== null);
     const irrel = resultados.filter((r) => r.notaEsperada === null);
-    const simsRel = relev.map((r) => r.simEsperada).filter((s): s is number => s !== null);
+    // Só as RELEVANTES recuperadas (rank !== null) entram na janela: numa miss, a
+    // simEsperada é o top-1 de OUTRA nota e contaminaria o minRel (achado da auditoria).
+    const simsRel = relev
+        .filter((r) => r.rank !== null)
+        .map((r) => r.simEsperada)
+        .filter((s): s is number => s !== null);
     const simsIrr = irrel.map((r) => r.topSim).filter((s): s is number => s !== null);
     const mantidasRel = relev.filter((r) => r.mantida).length;
     const irrelOk = irrel.filter((r) => r.mantida).length;
-    const js = janelaSeparacao(simsRel, simsIrr);
 
     console.log('\n─────────── RESUMO ───────────');
     console.log(
@@ -217,10 +222,15 @@ async function main(): Promise<void> {
     console.log(
         `irrelevantes OK     = ${((irrelOk / irrel.length) * 100).toFixed(0)}%  (${irrelOk}/${irrel.length})`,
     );
-    console.log(
-        `janela separação    = ${js.janela.toFixed(3)}  (minRel ${js.minRel.toFixed(3)} vs maxIrr ${js.maxIrr.toFixed(3)})`,
-    );
-    console.log(`corte sugerido      ≈ ${js.corteSugerido.toFixed(3)}  (atual: 0.780)`);
+    if (simsRel.length && simsIrr.length) {
+        const js = janelaSeparacao(simsRel, simsIrr);
+        console.log(
+            `janela separação    = ${js.janela.toFixed(3)}  (minRel ${js.minRel.toFixed(3)} vs maxIrr ${js.maxIrr.toFixed(3)})`,
+        );
+        console.log(`corte sugerido      ≈ ${js.corteSugerido.toFixed(3)}  (atual: 0.780)`);
+    } else {
+        console.log('janela separação    = n/a (sims insuficientes — seed/recall falhou?)');
+    }
 }
 
 main().catch((e: unknown) => {
