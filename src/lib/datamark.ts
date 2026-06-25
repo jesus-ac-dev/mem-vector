@@ -22,9 +22,24 @@ function sanear(conteudo: string): string {
     return conteudo.replace(/<(\/?)dados/gi, `<${ZWSP}$1dados`);
 }
 
+function sanearTipo(tipo: string): string {
+    return tipo.replace(/[^a-z0-9_-]/gi, '-').slice(0, 40) || 'dados';
+}
+
 // Envolve conteúdo não-confiável. Vazio/whitespace → '' (não envolve).
 export function envolverDados(conteudo: string, tipo?: string): string {
     if (!conteudo || !conteudo.trim()) return '';
-    const abre = tipo ? `<dados nao-confiaveis tipo="${tipo}">` : '<dados nao-confiaveis>';
+    const abre = tipo
+        ? `<dados nao-confiaveis tipo="${sanearTipo(tipo)}">`
+        : '<dados nao-confiaveis>';
     return `${abre}\n${sanear(conteudo)}\n${TAG_FECHA}`;
+}
+
+export function envolverDadosOuFallback(
+    conteudo: string | null | undefined,
+    tipo: string,
+    fallback: string,
+): string {
+    const envolvido = envolverDados(conteudo ?? '', tipo);
+    return envolvido || fallback;
 }
