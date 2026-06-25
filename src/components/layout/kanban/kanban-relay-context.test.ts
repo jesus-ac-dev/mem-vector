@@ -37,6 +37,7 @@ describe('promptKillSwitchRelay', () => {
         expect(prompt).toContain('Repo: jesus-ac-dev/mem-vector');
         expect(prompt).toContain('Issue: #150');
         expect(prompt).toContain('Fase bloqueada: Testes');
+        expect(prompt).toContain('Motivo provável (sem-consenso)');
         expect(prompt).toContain('Link PR: https://github.com/jesus-ac-dev/mem-vector/pull/152');
         expect(prompt).toContain('Working copy local: ~/src/mem-vector');
     });

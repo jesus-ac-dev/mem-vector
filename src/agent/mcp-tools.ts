@@ -27,6 +27,7 @@ import {
     relayEstadoPorIssueCom,
     definirEstadoOperacionalCom,
 } from '../modules/tarefas/tarefas.service';
+import { motivoBloqueio } from '../modules/relay/relay.motivo';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb, registarRelay } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
@@ -663,7 +664,10 @@ async function executarTool(
             const e = await relayEstadoPorIssueCom(db, repo, issue);
             if (!e)
                 return `Sem estado para ${repo} #${issue} (ainda não disparado ou cartão não ligado).`;
-            return JSON.stringify(e);
+            // Bloqueado: junta o motivo derivado (porque parou) para o agente diagnosticar.
+            const saida =
+                e.relayEstado === 'bloqueado' ? { ...e, motivo: motivoBloqueio(e.relayFase) } : e;
+            return JSON.stringify(saida);
         }
         default:
             throw new Error(`tool desconhecida: ${name}`);
