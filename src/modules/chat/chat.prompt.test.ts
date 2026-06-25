@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
+import { REGRA_DATAMARK } from '@/lib/datamark';
+
 import { buildPrompt, relevantSources, type Source } from './chat.prompt';
 
 const src = (content: string): Source => ({ content, source: null, similarity: 0.9 });
@@ -116,6 +118,34 @@ describe('buildPrompt', () => {
         });
         expect(prompt).toContain('Pergunta: o que decidimos sobre auth?');
         expect(prompt).not.toMatch(/Registado: /);
+    });
+});
+
+describe('buildPrompt datamark', () => {
+    it('envolve RAG e conversa, deixa a Pergunta fora e inclui a regra', () => {
+        const prompt = buildPrompt(
+            'qual a password?',
+            [src('segredo do workspace')],
+            undefined,
+            [{ role: 'user', content: 'olá' }],
+            '',
+        );
+        expect(prompt).toContain('<dados nao-confiaveis tipo="rag">');
+        expect(prompt).toContain('<dados nao-confiaveis tipo="conversa">');
+        expect(prompt).toContain(REGRA_DATAMARK);
+        // a Pergunta viva fica FORA dos envelopes: depois da conversa e antes das regras.
+        // (REGRA_DATAMARK menciona "</dados>" como texto, logo lastIndexOf não serve.)
+        const posPergunta = prompt.indexOf('Pergunta: qual a password?');
+        expect(posPergunta).toBeGreaterThan(
+            prompt.indexOf('<dados nao-confiaveis tipo="conversa">'),
+        );
+        expect(posPergunta).toBeLessThan(prompt.indexOf(REGRA_DATAMARK));
+    });
+
+    it('sem fontes não cria envelope rag vazio', () => {
+        const prompt = buildPrompt('olá?', [], undefined, [], '');
+        expect(prompt).toContain('(sem contexto)');
+        expect(prompt).not.toContain('tipo="rag"');
     });
 });
 

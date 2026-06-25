@@ -2,6 +2,7 @@ import type { NotaCandidata } from '@/modules/knowledge/knowledge.schema';
 import type { Intencao } from '@/modules/chat/chat.intencao';
 import type { MensagemConversa } from '@/modules/chat/chat.prompt';
 import { hojeComDiaSemana } from '@/modules/daily/daily.capture';
+import { REGRA_DATAMARK, envolverDados } from '@/lib/datamark';
 
 // Agent Contract v0 (M1): o comportamento do agente-autor como system prompt
 // da sessão agentic. As regras que no caminho one-shot vivem espremidas em
@@ -12,6 +13,8 @@ export const AGENT_CONTRACT = [
         'Recebes a última troca de um chat (Pergunta do utilizador / Resposta do assistente) e ' +
         'tens tools para ler e escrever no workspace. O utilizador não lê a tua resposta: o teu ' +
         'produto são as escritas.',
+    '',
+    REGRA_DATAMARK,
     '',
     'O ciclo, por esta ordem:',
     '1. ORIENTA-TE: se a tarefa lista notas candidatas, lê as plausíveis com ler_nota ANTES de ' +
@@ -93,7 +96,7 @@ function blocoConversa(historico: MensagemConversa[]): string {
     const linhas = historico
         .map((m) => `${m.role === 'user' ? 'Utilizador' : 'Assistente'}: ${m.content}`)
         .join('\n');
-    return `Conversa recente (contexto para resolver pronomes e o assunto):\n${linhas}\n\n`;
+    return `Conversa recente (contexto para resolver pronomes e o assunto):\n${envolverDados(linhas, 'conversa')}\n\n`;
 }
 
 function blocoDeclarativa(intencao?: Intencao): string {
@@ -142,6 +145,6 @@ export function buildPromptAgentic(
         blocoDeclarativa(intencao) +
         blocoCandidatas(candidatos) +
         blocoTagsExistentes(tagsExistentes) +
-        `Pergunta: ${question}\nResposta: ${answer}`
+        envolverDados(`Pergunta: ${question}\nResposta: ${answer}`, 'turno')
     );
 }

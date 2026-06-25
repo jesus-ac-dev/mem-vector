@@ -28,6 +28,7 @@ import {
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
+import { envolverDados, envolverDadosOuFallback } from '../lib/datamark';
 import { criarIssue, lerIssues, comentarIssue, numeroDoUrl } from '../lib/github';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
@@ -330,6 +331,9 @@ async function executarTool(
     args: Args,
 ): Promise<string> {
     switch (name) {
+        // Datamark: envolvemos conteúdo livre que pode transportar instruções
+        // (notas, daily, web, issues). procurar_notas/listar_tarefas devolvem só
+        // metadata da DB do próprio utilizador (id/título/slug/estado) — não se envolve.
         case 'procurar_notas': {
             const notas = await candidatosParaFactoCom(db, texto(args, 'texto'));
             if (!notas.length) return 'Sem notas relacionadas.';
@@ -342,10 +346,13 @@ async function executarTool(
         case 'ler_nota': {
             const nota = await getNotaPorIdCom(db, texto(args, 'id'));
             if (!nota) return 'Nota não encontrada.';
-            return JSON.stringify(
-                { id: nota.id, slug: nota.slug, title: nota.title, content_md: nota.contentMd },
-                null,
-                2,
+            return envolverDados(
+                JSON.stringify(
+                    { id: nota.id, slug: nota.slug, title: nota.title, content_md: nota.contentMd },
+                    null,
+                    2,
+                ),
+                'nota',
             );
         }
         case 'criar_nota': {
@@ -426,7 +433,7 @@ async function executarTool(
         }
         case 'ler_daily_hoje': {
             const daily = await getDailyCom(db, hojeLisboa());
-            return daily?.contentMd ?? '(ainda não há daily hoje)';
+            return envolverDadosOuFallback(daily?.contentMd, 'daily', '(ainda não há daily hoje)');
         }
         case 'ler_daily': {
             const quando = texto(args, 'quando');
@@ -434,7 +441,7 @@ async function executarTool(
             if (!dia)
                 return `Data não reconhecida: "${quando}". Usa "hoje", "ontem" ou "AAAA-MM-DD".`;
             const daily = await getDailyCom(db, dia);
-            return daily?.contentMd ?? `(não há daily para ${dia})`;
+            return envolverDadosOuFallback(daily?.contentMd, 'daily', `(não há daily para ${dia})`);
         }
         case 'listar_tarefas_abertas': {
             const tarefas = await listarTarefasAbertasCom(db);
@@ -494,7 +501,7 @@ async function executarTool(
                         registarWeb(RESULT_FILE, { tipo: 'web', url: r.url, titulo: r.titulo });
                     }
                 }
-                return JSON.stringify(resultados, null, 2);
+                return envolverDados(JSON.stringify(resultados, null, 2), 'web');
             } catch (e) {
                 // Limite/bloqueio do provider sem-key: devolve uma instrução para o
                 // agente AVISAR o utilizador a configurar a key (regra do Carlos).
@@ -509,7 +516,7 @@ async function executarTool(
             try {
                 const conteudo = await lerUrl(url);
                 if (RESULT_FILE) registarWeb(RESULT_FILE, { tipo: 'web', url, titulo: url });
-                return conteudo || '(página sem texto)';
+                return envolverDadosOuFallback(conteudo, 'web', '(página sem texto)');
             } catch (e) {
                 return `Erro ao ler ${url}: ${e instanceof Error ? e.message : 'desconhecido'}`;
             }
@@ -517,7 +524,7 @@ async function executarTool(
         case 'ler_issues': {
             const issues = await lerIssues(GITHUB_TOKEN!, { repo: repoLigado(args) });
             if (!issues.length) return 'Sem issues abertas nesse repo.';
-            return JSON.stringify(issues, null, 2);
+            return envolverDados(JSON.stringify(issues, null, 2), 'github');
         }
         case 'criar_issue': {
             const url = await criarIssue(GITHUB_TOKEN!, {
