@@ -79,9 +79,14 @@ export function montarUpdateOperacional(campos: {
     evidence?: string | null;
 }): Record<string, string | null> {
     const update: Record<string, string | null> = {};
-    if (campos.acceptance !== undefined) update.acceptance = campos.acceptance || null;
-    if (campos.blocker !== undefined) update.blocker = campos.blocker || null;
-    if (campos.evidence !== undefined) update.evidence = campos.evidence || null;
+    const limpar = (valor: string | null): string | null => {
+        if (valor === null) return null;
+        const texto = valor.trim();
+        return texto || null;
+    };
+    if (campos.acceptance !== undefined) update.acceptance = limpar(campos.acceptance);
+    if (campos.blocker !== undefined) update.blocker = limpar(campos.blocker);
+    if (campos.evidence !== undefined) update.evidence = limpar(campos.evidence);
     return update;
 }
 

@@ -38,6 +38,12 @@ describe('montarUpdateOperacional (#tasks-operacional)', () => {
             blocker: 'x',
         });
     });
+    it('normaliza espaços e whitespace-only limpa o campo', () => {
+        expect(montarUpdateOperacional({ acceptance: '  pronto  ', evidence: '   ' })).toEqual({
+            acceptance: 'pronto',
+            evidence: null,
+        });
+    });
     it('sem campos → objeto vazio (o caller rejeita)', () => {
         expect(montarUpdateOperacional({})).toEqual({});
     });
