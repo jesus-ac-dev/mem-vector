@@ -31,6 +31,8 @@ export const AGENT_CONTRACT = [
     '4. TAREFAS: se a troca traz AÇÕES do utilizador (fazer/lembrar/acompanhar), cria-as com ' +
         'criar_tarefa — na dúvida, cria (apagar é barato). Antes de criar, listar_tarefas_abertas ' +
         'para não duplicar; se a conversa diz que algo está FEITO, concluir_tarefa com o id. ' +
+        'Se a conversa revelar PORQUÊ uma tarefa está parada, o CRITÉRIO de pronto, ou PROVA do ' +
+        'feito, usa definir_estado_operacional com o id (blocker / acceptance / evidence). ' +
         'Se a conversa traz um PRAZO ("até sexta", "este fim de semana"), passa dataFim com a ' +
         'data concreta (fim de semana = o domingo). O projeto é um nome real: usa um existente ' +
         'ou um nome novo curto; sem projeto, a tarefa cai no "Pessoal". ' +

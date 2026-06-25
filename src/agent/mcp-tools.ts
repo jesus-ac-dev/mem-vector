@@ -25,6 +25,7 @@ import {
     concluirTarefaCom,
     ligarIssueTarefaCom,
     relayEstadoPorIssueCom,
+    definirEstadoOperacionalCom,
 } from '../modules/tarefas/tarefas.service';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb, registarRelay } from './resultado';
@@ -211,6 +212,24 @@ const TOOLS = [
         inputSchema: {
             type: 'object',
             properties: { id: { type: 'string', description: 'Id da tarefa' } },
+            required: ['id'],
+        },
+    },
+    {
+        name: 'definir_estado_operacional',
+        description:
+            'Define o estado operacional de uma tarefa: acceptance (critério de pronto), blocker (porque está parada), evidence (prova do feito). O id vem de listar_tarefas_abertas. Usa quando a conversa o revela ("a #N está parada por X"; "feito = Y"). Pelo menos um campo; texto vazio limpa. PROPÕE antes de gravar, como nas outras escritas.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'Id da tarefa (de listar_tarefas_abertas)' },
+                acceptance: { type: 'string', description: 'Critério de pronto (o que é "feito")' },
+                blocker: {
+                    type: 'string',
+                    description: 'Porque está parada (vazio = desbloqueada)',
+                },
+                evidence: { type: 'string', description: 'Prova do feito (PR, teste, link)' },
+            },
             required: ['id'],
         },
     },
@@ -479,6 +498,11 @@ async function executarTool(
                     titulo: t.titulo,
                     projeto: t.projeto,
                     estado: t.estado,
+                    // #tasks-operacional: re-injeção leve — o agente fica ciente do
+                    // estado operacional (só os presentes, para não poluir).
+                    ...(t.acceptance ? { acceptance: t.acceptance } : {}),
+                    ...(t.blocker ? { blocker: t.blocker } : {}),
+                    ...(t.evidence ? { evidence: t.evidence } : {}),
                 })),
                 null,
                 2,
@@ -507,6 +531,22 @@ async function executarTool(
                 });
             }
             return `Tarefa criada: "${t.titulo}" (id: ${t.id}).`;
+        }
+        case 'definir_estado_operacional': {
+            const campos = {
+                acceptance: typeof args.acceptance === 'string' ? args.acceptance : undefined,
+                blocker: typeof args.blocker === 'string' ? args.blocker : undefined,
+                evidence: typeof args.evidence === 'string' ? args.evidence : undefined,
+            };
+            if (
+                campos.acceptance === undefined &&
+                campos.blocker === undefined &&
+                campos.evidence === undefined
+            ) {
+                return 'Indica pelo menos um campo: acceptance, blocker ou evidence.';
+            }
+            const t = await definirEstadoOperacionalCom(db, texto(args, 'id'), campos);
+            return `Estado operacional de "${t.titulo}" atualizado.`;
         }
         case 'concluir_tarefa': {
             const t = await concluirTarefaCom(db, texto(args, 'id'));

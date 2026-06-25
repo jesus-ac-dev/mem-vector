@@ -22,6 +22,9 @@ function tarefa(parcial: Partial<Tarefa> = {}): Tarefa {
         relayEstado: 'bloqueado',
         relayFase: 'testes',
         relayPrUrl: 'https://github.com/jesus-ac-dev/mem-vector/pull/152',
+        acceptance: null,
+        blocker: null,
+        evidence: null,
         ...parcial,
     };
 }

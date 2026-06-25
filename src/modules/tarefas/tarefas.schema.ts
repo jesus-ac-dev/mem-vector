@@ -92,6 +92,11 @@ export interface Tarefa {
     // Fase e PR do relay para o kanban seguir o progresso sem depender só do GitHub.
     relayFase: string | null;
     relayPrUrl: string | null;
+    // #tasks-operacional (Fase 4): estado operacional — critério de pronto, prova, e
+    // porquê está parada. O agente lê-os ao listar (re-injeção leve) e define-os.
+    acceptance: string | null;
+    blocker: string | null;
+    evidence: string | null;
 }
 
 // Id curto à vista (#58, ideia do Carlos): o início do uuid identifica a

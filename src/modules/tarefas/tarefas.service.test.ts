@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { relayEstaOrfao } from './tarefas.service';
+import { montarUpdateOperacional, relayEstaOrfao } from './tarefas.service';
 
 const AGORA = 1_000_000_000_000; // ms fixos (determinista)
 const JANELA = 30 * 60 * 1000;
@@ -23,5 +23,29 @@ describe('relayEstaOrfao (#M7-D)', () => {
     });
     it('heartbeat inválido → órfão defensivo', () => {
         expect(relayEstaOrfao('isto-nao-e-data', AGORA, JANELA)).toBe(true);
+    });
+});
+
+describe('montarUpdateOperacional (#tasks-operacional)', () => {
+    it('inclui só os campos presentes', () => {
+        expect(montarUpdateOperacional({ blocker: 'sem credenciais' })).toEqual({
+            blocker: 'sem credenciais',
+        });
+    });
+    it('string vazia limpa o campo (→ null)', () => {
+        expect(montarUpdateOperacional({ acceptance: '', blocker: 'x' })).toEqual({
+            acceptance: null,
+            blocker: 'x',
+        });
+    });
+    it('sem campos → objeto vazio (o caller rejeita)', () => {
+        expect(montarUpdateOperacional({})).toEqual({});
+    });
+    it('os três de uma vez', () => {
+        expect(montarUpdateOperacional({ acceptance: 'a', blocker: 'b', evidence: 'c' })).toEqual({
+            acceptance: 'a',
+            blocker: 'b',
+            evidence: 'c',
+        });
     });
 });
