@@ -84,12 +84,59 @@ export async function atualizarRelayPorIssueCom(
     if (campos.relayPrUrl !== undefined) update.relay_pr_url = campos.relayPrUrl;
     if (campos.estado !== undefined) update.estado = campos.estado;
     if (Object.keys(update).length === 0) return;
+    // #M7-D: cada progresso do relay bate o heartbeat — o sweeper deteta órfãos
+    // (crashados) por este timestamp ficar congelado.
+    update.relay_heartbeat = new Date().toISOString();
     const { error } = await db
         .from('tarefas')
         .update(update)
         .eq('repo_github', repo)
         .eq('issue_github', issue);
     if (error) console.error('atualizar relay no cartão falhou (segue):', error.message);
+}
+
+// #M7-D: durabilidade — detetar relays órfãos (crashados; heartbeat congelado).
+const JANELA_ORFAO_MS = 30 * 60 * 1000; // > a fase mais longa do pipeline
+
+// Puro: um relay 'processando' é órfão se o heartbeat é null (não seguido) ou mais
+// velho que a janela (o processo morreu e parou de o bater).
+export function relayEstaOrfao(
+    heartbeat: string | null,
+    agoraMs: number,
+    janelaMs: number,
+): boolean {
+    if (heartbeat === null) return true;
+    return Date.parse(heartbeat) < agoraMs - janelaMs;
+}
+
+// Sweeper: marca os relays 'processando' órfãos como bloqueado (→ bolinha de erro →
+// recuperação pela fatia [C]). NÃO auto-resume — o humano é o juiz. Disparado no
+// load do kanban. Devolve quantos marcou.
+export async function varrerRelaysOrfaosCom(db: SupabaseClient): Promise<number> {
+    const { data, error } = await db
+        .from('tarefas')
+        .select('repo_github, issue_github, relay_heartbeat')
+        .eq('relay_estado', 'processando');
+    if (error) {
+        console.error('varrer relays órfãos falhou (segue):', error.message);
+        return 0;
+    }
+    const agora = Date.now();
+    let marcados = 0;
+    for (const t of (data ?? []) as {
+        repo_github: string | null;
+        issue_github: number | null;
+        relay_heartbeat: string | null;
+    }[]) {
+        if (!t.repo_github || !t.issue_github) continue;
+        if (!relayEstaOrfao(t.relay_heartbeat, agora, JANELA_ORFAO_MS)) continue;
+        await atualizarRelayPorIssueCom(db, t.repo_github, t.issue_github, {
+            relayEstado: 'bloqueado',
+            relayFase: 'órfão',
+        });
+        marcados += 1;
+    }
+    return marcados;
 }
 
 // Espelho de leitura do atualizarRelayPorIssueCom: o estado do relay de um cartão
