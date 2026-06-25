@@ -102,14 +102,18 @@ por-issue), e cada substep deixa rasto.
   só mudam de coluna).
 - Cartão ligado mostra link para issue/PR e, se o repo tiver path local nas Definições, link **VS Code**
   para abrir o working copy.
-- Cartão bloqueado (`<fase>:vermelho`) aceita **duplo clique**: carrega no chat do rodapé um prompt de
-  recuperação com tarefa, repo, issue, fase, PR e working copy. É a fase 1 do kill-switch conversacional
-  (#129); o envio fica manual para o humano poder ajustar o contexto.
+- Cartão bloqueado (`<fase>:vermelho`) aceita **duplo clique**: **auto-envia** ao chat do rodapé um prompt
+  de recuperação (tarefa, repo, issue, fase, PR, working copy) — fatia C (#M7). O agente diagnostica porque
+  bloqueou + a ação mínima para retomar sem reiniciar; o humano decide e o agente re-dispara (retoma). Não
+  auto-resolve a escalada — o humano é o juiz.
 - Disparo alternativo direto: página do módulo GitHub (Definições) — repo + nº da issue + **⚡ Disparar**.
 - O estado vive na issue (handoffs + label fase+cor); a **vista kanban segue** via
   `tarefas.relay_estado`/`relay_fase`/`relay_pr_url`, escritos pelo orchestrator. Enquanto houver
   cartão `processando`, o kanban faz refresh periódico; quando o PR abre, o cartão fica em
-  **Documentação** e aponta diretamente para o PR.
+  **Documentação** e aponta diretamente para o PR. Um relay crashado (restart/OOM) ficaria preso em
+  `processando`; o **heartbeat** (`relay_heartbeat`, batido a cada progresso) + o sweeper no load do kanban
+  (`varrerRelaysOrfaosCom`) marcam-no `bloqueado` (órfão) → recuperável pela fatia C (#M7-D). A marcação
+  é condicional ao heartbeat lido para não transformar em bloqueado um relay vivo que acabou de progredir.
 
 ## Fidelidade ao desenho (2026-06-21)
 

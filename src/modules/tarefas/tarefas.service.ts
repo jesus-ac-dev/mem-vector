@@ -84,12 +84,87 @@ export async function atualizarRelayPorIssueCom(
     if (campos.relayPrUrl !== undefined) update.relay_pr_url = campos.relayPrUrl;
     if (campos.estado !== undefined) update.estado = campos.estado;
     if (Object.keys(update).length === 0) return;
+    // #M7-D: cada progresso do relay bate o heartbeat — o sweeper deteta órfãos
+    // (crashados) por este timestamp ficar congelado.
+    update.relay_heartbeat = new Date().toISOString();
     const { error } = await db
         .from('tarefas')
         .update(update)
         .eq('repo_github', repo)
         .eq('issue_github', issue);
     if (error) console.error('atualizar relay no cartão falhou (segue):', error.message);
+}
+
+// #M7-D: durabilidade — detetar relays órfãos (crashados; heartbeat congelado).
+// Conservador de propósito: o heartbeat bate por FASE (não por ronda/spawn), e uma
+// fase pode chegar a ~maxRondas × providers × RELAY_REPO_TIMEOUT_MS (até ~120min no
+// pior caso, com tudo a esgotar o timeout). A janela TEM de exceder isso, senão
+// marca um relay vivo como órfão (falso-positivo = bolinha de erro num relay a
+// correr). Custo: deteção lenta. Hardening futuro = heartbeat por-spawn (rápido).
+const JANELA_ORFAO_MS = 120 * 60 * 1000;
+
+// Puro: um relay 'processando' é órfão se o heartbeat é null (não seguido — relay
+// crashado, ou o caso raro de um relay anterior a esta migration) ou mais velho que
+// a janela (o processo morreu e parou de o bater).
+export function relayEstaOrfao(
+    heartbeat: string | null,
+    agoraMs: number,
+    janelaMs: number,
+): boolean {
+    if (heartbeat === null) return true;
+    const ts = Date.parse(heartbeat);
+    if (Number.isNaN(ts)) return true;
+    return ts < agoraMs - janelaMs;
+}
+
+// Sweeper: marca os relays 'processando' órfãos como bloqueado (→ bolinha de erro →
+// recuperação pela fatia [C]). NÃO auto-resume — o humano é o juiz. Disparado no
+// load do kanban. Devolve quantos marcou.
+export async function varrerRelaysOrfaosCom(db: SupabaseClient): Promise<number> {
+    const { data, error } = await db
+        .from('tarefas')
+        .select('repo_github, issue_github, relay_heartbeat')
+        .eq('relay_estado', 'processando');
+    if (error) {
+        console.error('varrer relays órfãos falhou (segue):', error.message);
+        return 0;
+    }
+    const agora = Date.now();
+    let marcados = 0;
+    for (const t of (data ?? []) as {
+        repo_github: string | null;
+        issue_github: number | null;
+        relay_heartbeat: string | null;
+    }[]) {
+        if (!t.repo_github || !t.issue_github) continue;
+        if (!relayEstaOrfao(t.relay_heartbeat, agora, JANELA_ORFAO_MS)) continue;
+        // Atualização condicional: se um relay vivo bateu heartbeat entre o SELECT
+        // e este UPDATE, não o marcamos bloqueado com uma leitura antiga.
+        let q = db
+            .from('tarefas')
+            .update(
+                {
+                    relay_estado: 'bloqueado',
+                    relay_fase: 'órfão',
+                    relay_heartbeat: new Date().toISOString(),
+                },
+                { count: 'exact' },
+            )
+            .eq('repo_github', t.repo_github)
+            .eq('issue_github', t.issue_github)
+            .eq('relay_estado', 'processando');
+        q =
+            t.relay_heartbeat === null
+                ? q.is('relay_heartbeat', null)
+                : q.eq('relay_heartbeat', t.relay_heartbeat);
+        const { count, error: updateError } = await q;
+        if (updateError) {
+            console.error('marcar relay órfão falhou (segue):', updateError.message);
+            continue;
+        }
+        marcados += count ?? 0;
+    }
+    return marcados;
 }
 
 // Espelho de leitura do atualizarRelayPorIssueCom: o estado do relay de um cartão

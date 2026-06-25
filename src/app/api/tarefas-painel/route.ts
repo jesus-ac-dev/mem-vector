@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import {
     listarTarefasAbertasCom,
     listarTarefasConcluidasCom,
+    varrerRelaysOrfaosCom,
 } from '@/modules/tarefas/tarefas.service';
 import { listarProjetosCom } from '@/modules/projetos/projetos.service';
 
@@ -14,6 +15,9 @@ export async function GET() {
     if (erro) return erro;
 
     const db = await createClient();
+    // #M7-D: marca relays órfãos (crashados) antes de listar → aparecem como
+    // bloqueado (bolinha de erro) no kanban, recuperáveis pela fatia [C].
+    await varrerRelaysOrfaosCom(db);
     const [abertas, concluidas, projetos] = await Promise.all([
         listarTarefasAbertasCom(db),
         listarTarefasConcluidasCom(db),
