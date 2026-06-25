@@ -15,6 +15,12 @@ describe('fila do relay (um por repo; o 2º disparo enfileira)', () => {
         expect(ocuparOuEnfileirar('/r', 3)).toEqual({ correr: false, posicao: 2 });
     });
 
+    it('dedup: re-disparo da issue ativa não a mete na fila', () => {
+        ocuparOuEnfileirar('/r', 1); // ocupa
+        expect(ocuparOuEnfileirar('/r', 1)).toEqual({ correr: false, posicao: 0 });
+        expect(proximaOuLibertar('/r')).toBeNull();
+    });
+
     it('dedup: re-disparo devolve a posição atual, não enfileira de novo', () => {
         ocuparOuEnfileirar('/r', 1); // ocupa
         ocuparOuEnfileirar('/r', 2); // posição 1

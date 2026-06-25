@@ -90,6 +90,13 @@ export async function dispararRelay(
     }
     const lugar = ocuparOuEnfileirar(path, issue);
     if (!lugar.correr) {
+        if (lugar.posicao === 0) {
+            return {
+                ok: true,
+                enfileirado: true,
+                detalhe: `Relay já está a correr para ${repo} #${issue} — não foi duplicado.`,
+            };
+        }
         return {
             ok: true,
             enfileirado: true,
