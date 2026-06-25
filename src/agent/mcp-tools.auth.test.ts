@@ -51,5 +51,10 @@ describe('criarDb do agente (#159)', () => {
 
         expect(error).toBeNull();
         expect(data.user?.id).toBe(userId);
+
+        // RLS: uma query de dados é aceite com a identidade do user (header →
+        // PostgREST valida o JWT), não só o getUser.
+        const sel = await db.from('knowledge').select('id').limit(1);
+        expect(sel.error).toBeNull();
     });
 });

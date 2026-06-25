@@ -15,8 +15,20 @@ export async function criarDb(): Promise<SupabaseClient> {
     const accessToken = process.env.MEMVECTOR_AGENT_ACCESS_TOKEN;
     if (!url || !anon) throw new Error('Falta NEXT_PUBLIC_SUPABASE_URL/ANON_KEY no ambiente.');
     if (!accessToken) throw new Error('Falta MEMVECTOR_AGENT_ACCESS_TOKEN no ambiente.');
-    return createClient(url, anon, {
+    const db = createClient(url, anon, {
         global: { headers: { Authorization: `Bearer ${accessToken}` } },
         auth: { persistSession: false, autoRefreshToken: false },
     });
+    // #159: valida o access token já (getUser verifica-o no servidor, sem
+    // refrescar nem rotar). Se expirou, falha alto aqui — em vez de o agente
+    // correr sem identidade e não escrever nada (no-op silencioso). Não trocamos
+    // o kick por uma falha invisível.
+    const {
+        data: { user },
+        error,
+    } = await db.auth.getUser();
+    if (error || !user) {
+        throw new Error(`sessão do agente inválida: ${error?.message ?? 'access token expirado?'}`);
+    }
+    return db;
 }
