@@ -148,6 +148,25 @@ describe('responderComToolsCom (#89)', () => {
         expect(cfg.systemPrompt).toContain('nunca disparas sem o OK do utilizador');
     });
 
+    it('com github ligado, instrui o agente a tratar o kill-switch (retoma)', async () => {
+        generateAgenticMock.mockResolvedValue({ text: 'ok', costUsd: 0 });
+        await responderComToolsCom(
+            fakeDb() as never,
+            'pergunta',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { token: 'gh', repos: ['a/b'] },
+        );
+        const cfg = generateAgenticMock.mock.calls[0][1] as { systemPrompt?: string };
+        expect(cfg.systemPrompt).toContain('KILL-SWITCH');
+        expect(cfg.systemPrompt).toContain('ler_estado_relay');
+        expect(cfg.systemPrompt).toContain('ler_issues');
+        expect(cfg.systemPrompt).toContain('RETOMAR sem reiniciar');
+        expect(cfg.systemPrompt).toContain('Não decides a escalada sozinho');
+    });
+
     it('sem github, o prompt não fala de relay proativo', async () => {
         generateAgenticMock.mockResolvedValue({ text: 'ok', costUsd: 0 });
         await responderComToolsCom(fakeDb() as never, 'pergunta');
