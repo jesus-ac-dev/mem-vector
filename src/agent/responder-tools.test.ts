@@ -34,4 +34,19 @@ describe('responderComToolsCom (#89)', () => {
         const cfg = generateAgenticMock.mock.calls[0][1] as { model?: string };
         expect(cfg.model).toBe('sonnet');
     });
+
+    it('passa só o access token ao MCP server do agente', async () => {
+        generateAgenticMock.mockResolvedValue({
+            text: 'ok',
+            costUsd: 0,
+        });
+
+        await responderComToolsCom(fakeDb() as never, 'pergunta');
+
+        const cfg = generateAgenticMock.mock.calls[0][1] as {
+            env?: Record<string, string>;
+        };
+        expect(cfg.env?.MEMVECTOR_AGENT_ACCESS_TOKEN).toBe('a');
+        expect(cfg.env).not.toHaveProperty('MEMVECTOR_AGENT_REFRESH_TOKEN');
+    });
 });
