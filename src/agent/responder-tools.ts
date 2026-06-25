@@ -105,8 +105,9 @@ export async function responderComToolsCom(
             systemPrompt: gh?.token ? `${SYSTEM_RESPOSTA}${CONVENCAO_GITHUB}` : SYSTEM_RESPOSTA,
             model,
             env: {
+                // #159: só o access token — passar o refresh token deixava o agente
+                // rotá-lo e derrubar a sessão do browser do utilizador.
                 MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
-                MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,
                 MEMVECTOR_AGENT_RESULT_FILE: resultFile,
                 ...(webKey ? { MEMVECTOR_AGENT_WEB_KEY: webKey } : {}),
                 ...(gh?.token

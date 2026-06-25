@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { criarDb } from './agent-db';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -63,26 +64,6 @@ function registarNotaTurno(estado: EstadoTurno, nota: DailyTurnoNota): void {
     const i = estado.notasDoTurno.findIndex((n) => n.slug === nota.slug);
     if (i >= 0) estado.notasDoTurno[i] = nota;
     else estado.notasDoTurno.push(nota);
-}
-
-async function criarDb(): Promise<SupabaseClient> {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const accessToken = process.env.MEMVECTOR_AGENT_ACCESS_TOKEN;
-    const refreshToken = process.env.MEMVECTOR_AGENT_REFRESH_TOKEN;
-    if (!url || !anon) throw new Error('Falta NEXT_PUBLIC_SUPABASE_URL/ANON_KEY no ambiente.');
-    if (!accessToken || !refreshToken) {
-        throw new Error('Falta MEMVECTOR_AGENT_ACCESS_TOKEN/REFRESH_TOKEN no ambiente.');
-    }
-    const db = createClient(url, anon, {
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { error } = await db.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-    });
-    if (error) throw new Error(`sessão do agente inválida: ${error.message}`);
-    return db;
 }
 
 const TOOLS = [

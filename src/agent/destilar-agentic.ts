@@ -90,8 +90,9 @@ export async function destilarTurnoAgenticCom(
                     ? `${AGENT_CONTRACT}\n\n${input.kernel}`
                     : AGENT_CONTRACT,
                 env: {
+                    // #159: só o access token — passar o refresh token deixava o
+                    // agente rotá-lo e derrubar a sessão do browser do utilizador.
                     MEMVECTOR_AGENT_ACCESS_TOKEN: session.access_token,
-                    MEMVECTOR_AGENT_REFRESH_TOKEN: session.refresh_token,
                     MEMVECTOR_AGENT_RESULT_FILE: resultFile,
                 },
             },
