@@ -1,4 +1,5 @@
 import type { Tarefa } from '@/modules/tarefas/tarefas.schema';
+import { motivoBloqueio } from '@/modules/relay/relay.motivo';
 
 const FASE_LABEL: Record<string, string> = {
     analise: 'Análise',
@@ -19,6 +20,7 @@ export function promptKillSwitchRelay(tarefa: Tarefa, repoPath: string | null): 
     const fase = tarefa.relayFase
         ? (FASE_LABEL[tarefa.relayFase] ?? tarefa.relayFase)
         : 'fase desconhecida';
+    const motivo = motivoBloqueio(tarefa.relayFase);
     const linhas = [
         `Quero recuperar o kill-switch do relay desta tarefa.`,
         '',
@@ -27,6 +29,7 @@ export function promptKillSwitchRelay(tarefa: Tarefa, repoPath: string | null): 
         `Repo: ${tarefa.repoGithub ?? '(sem repo)'}`,
         `Issue: ${tarefa.issueGithub ? `#${tarefa.issueGithub}` : '(sem issue)'}`,
         `Fase bloqueada: ${fase}`,
+        `Motivo provável (${motivo.codigo}): ${motivo.descricao}`,
         `Estado relay: ${tarefa.relayEstado ?? '(sem estado)'}`,
     ];
 
