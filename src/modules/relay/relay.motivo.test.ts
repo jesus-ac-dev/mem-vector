@@ -5,9 +5,12 @@ import { motivoBloqueio } from './relay.motivo';
 describe('motivoBloqueio (reason-code derivado do relay_fase)', () => {
     it("relay_fase 'erro' → erro (o relay falhou, ex. provider sem tokens)", () => {
         expect(motivoBloqueio('erro').codigo).toBe('erro');
+        expect(motivoBloqueio(' ERRO ').codigo).toBe('erro');
     });
     it("relay_fase 'órfão' → orfao (crash/restart a meio)", () => {
         expect(motivoBloqueio('órfão').codigo).toBe('orfao');
+        expect(motivoBloqueio('orfao').codigo).toBe('orfao');
+        expect(motivoBloqueio(' ÓRFÃO ').codigo).toBe('orfao');
     });
     it('uma fase real (dev/testes/…) → sem-consenso (não convergiu)', () => {
         expect(motivoBloqueio('testes').codigo).toBe('sem-consenso');

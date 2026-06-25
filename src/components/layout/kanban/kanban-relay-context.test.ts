@@ -41,4 +41,16 @@ describe('promptKillSwitchRelay', () => {
         expect(prompt).toContain('Link PR: https://github.com/jesus-ac-dev/mem-vector/pull/152');
         expect(prompt).toContain('Working copy local: ~/src/mem-vector');
     });
+
+    it('inclui reason-code de erro quando a fase bloqueada é erro', () => {
+        const prompt = promptKillSwitchRelay(tarefa({ relayFase: 'erro' }), '~/src/mem-vector');
+        expect(prompt).toContain('Fase bloqueada: Erro');
+        expect(prompt).toContain('Motivo provável (erro)');
+    });
+
+    it('inclui reason-code de órfão quando a fase bloqueada é órfão', () => {
+        const prompt = promptKillSwitchRelay(tarefa({ relayFase: 'órfão' }), '~/src/mem-vector');
+        expect(prompt).toContain('Fase bloqueada: órfão');
+        expect(prompt).toContain('Motivo provável (orfao)');
+    });
 });
