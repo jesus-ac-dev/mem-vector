@@ -22,6 +22,8 @@ definições (`cruzamentos`) → `resolverCruzamento` (resolve quem produz/valid
   a narrativa do anterior (não propaga a árvore torta).
 - **Kill switch:** não convergido em N rondas (máx. configurável) → **🔴 humano** (split = "sem
   consenso", os dois lados); o humano comenta na issue e **re-dispara** (a retoma relê e integra).
+  Se o principal repete o mesmo output e o validador continua a rejeitar, o runner marca **stall** e
+  corta cedo, deixando o bloqueio explícito em vez de gastar as rondas restantes.
 
 ## Ficheiros
 

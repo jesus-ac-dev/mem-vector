@@ -20,6 +20,9 @@ export interface ResultadoCruzamento {
     rondas: number;
     validado: boolean; // passou a validação (ou não havia validador)
     historico: { ronda: number; output: string; veredito?: Veredito }[];
+    // Parou cedo por repetição: o principal devolveu o mesmo output 2 rondas seguidas
+    // apesar do feedback (não convergia) → não se gastaram as rondas restantes.
+    stall?: boolean;
 }
 
 export async function correrCruzamento(opts: {
@@ -32,6 +35,7 @@ export async function correrCruzamento(opts: {
     const historico: ResultadoCruzamento['historico'] = [];
     let feedback: string | null = null;
     let output = '';
+    let outputAnterior: string | null = null;
 
     for (let ronda = 1; ronda <= maxRondas; ronda++) {
         output = await produzir(feedback);
@@ -44,7 +48,13 @@ export async function correrCruzamento(opts: {
         if (veredito.ok) {
             return { output, rondas: ronda, validado: true, historico };
         }
+        // Stall: repetiu o output da ronda anterior e continuou rejeitado apesar do
+        // feedback → não está a convergir; pára cedo (poupa rondas/tokens).
+        if (outputAnterior !== null && output === outputAnterior) {
+            return { output, rondas: ronda, validado: false, historico, stall: true };
+        }
         feedback = veredito.feedback ?? null;
+        outputAnterior = output;
     }
 
     // Esgotou as rondas sem passar (kill switch): devolve o último, NÃO validado —

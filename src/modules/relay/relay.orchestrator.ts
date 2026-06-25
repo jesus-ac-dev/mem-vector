@@ -382,6 +382,7 @@ export async function orquestrarFaseSequencialCom(opts: {
                 rondas,
                 validado: false,
                 historico,
+                stall: r.stall,
             };
         }
     }
@@ -543,8 +544,11 @@ export async function orquestrarCom(opts: {
         await marcarProgresso(cruzamento, 'bloqueado');
         // Grava a fase: a retoma recomeça AQUI, não na Análise.
         await io.marcarRetoma?.(cruzamento);
+        const motivoParagem = ultimo?.stall
+            ? `parou por repetição (stall) à ${ultimo.rondas}ª ronda — o agente repetia o output sem convergir`
+            : `não convergiu em ${ultimo?.rondas ?? '?'} ronda(s)`;
         await io.comentar(
-            `🔴 Bloqueado no cruzamento "${cruzamento}" (não convergiu em ${ultimo?.rondas ?? '?'} ronda(s)).\n\n` +
+            `🔴 Bloqueado no cruzamento "${cruzamento}" (${motivoParagem}).\n\n` +
                 `Última objeção:\n${ultimo?.historico.at(-1)?.veredito?.feedback ?? '—'}\n\n` +
                 'Comenta a correção na issue e re-arrasta para o relay retomar nesta fase.',
         );
