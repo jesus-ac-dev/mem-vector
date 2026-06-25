@@ -28,6 +28,7 @@ import {
     definirEstadoOperacionalCom,
 } from '../modules/tarefas/tarefas.service';
 import { motivoBloqueio } from '../modules/relay/relay.motivo';
+import { lerRunsRelayCom } from '../modules/relay/relay.runs';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb, registarRelay } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
@@ -341,6 +342,17 @@ const GITHUB_TOOLS = [
                 issue: { type: 'number', description: 'Número da issue' },
             },
             required: ['repo', 'issue'],
+        },
+    },
+    {
+        name: 'ler_runs_relay',
+        description:
+            'Lista os runs RECENTES do relay (histórico: que issue, como acabou — pronto/pr-aberto/bloqueado —, a fase onde parou, o PR, quando). Usa quando o utilizador pergunta como correram os relays. Sem repo = todos os ligados.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Filtrar por repo "owner/nome" (opcional)' },
+            },
         },
     },
 ];
@@ -668,6 +680,13 @@ async function executarTool(
             const saida =
                 e.relayEstado === 'bloqueado' ? { ...e, motivo: motivoBloqueio(e.relayFase) } : e;
             return JSON.stringify(saida);
+        }
+        case 'ler_runs_relay': {
+            const repo =
+                typeof args.repo === 'string' && args.repo.trim() ? args.repo.trim() : undefined;
+            const runs = await lerRunsRelayCom(db, { repo, limite: 10 });
+            if (!runs.length) return 'Sem runs de relay registados ainda.';
+            return JSON.stringify(runs, null, 2);
         }
         default:
             throw new Error(`tool desconhecida: ${name}`);

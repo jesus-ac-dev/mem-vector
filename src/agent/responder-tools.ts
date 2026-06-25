@@ -30,6 +30,7 @@ const TOOLS_RESPOSTA = [
     'mcp__memvector__promover_a_issue',
     'mcp__memvector__disparar_relay',
     'mcp__memvector__ler_estado_relay',
+    'mcp__memvector__ler_runs_relay',
 ];
 
 const SYSTEM_RESPOSTA =
