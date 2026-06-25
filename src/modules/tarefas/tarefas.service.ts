@@ -92,6 +92,34 @@ export async function atualizarRelayPorIssueCom(
     if (error) console.error('atualizar relay no cartão falhou (segue):', error.message);
 }
 
+// Espelho de leitura do atualizarRelayPorIssueCom: o estado do relay de um cartão
+// ligado, por (repo, issue). null = não há cartão ligado a essa issue.
+export async function relayEstadoPorIssueCom(
+    db: SupabaseClient,
+    repo: string,
+    issue: number,
+): Promise<{
+    estado: string | null;
+    relayEstado: string | null;
+    relayFase: string | null;
+    relayPrUrl: string | null;
+} | null> {
+    const { data, error } = await db
+        .from('tarefas')
+        .select('estado, relay_estado, relay_fase, relay_pr_url')
+        .eq('repo_github', repo)
+        .eq('issue_github', issue)
+        .maybeSingle();
+    if (error) throw new Error(`ler estado do relay falhou: ${error.message}`);
+    if (!data) return null;
+    return {
+        estado: data.estado ?? null,
+        relayEstado: data.relay_estado ?? null,
+        relayFase: data.relay_fase ?? null,
+        relayPrUrl: data.relay_pr_url ?? null,
+    };
+}
+
 export async function atualizarRelayEstadoPorIssueCom(
     db: SupabaseClient,
     repo: string,

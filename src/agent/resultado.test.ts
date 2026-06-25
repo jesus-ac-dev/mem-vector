@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { lerEscritas, reduzirEscritas, registarEscrita } from './resultado';
+import {
+    lerEscritas,
+    lerRelaysPedidos,
+    reduzirEscritas,
+    registarEscrita,
+    registarRelay,
+} from './resultado';
 
 let dir: string;
 
@@ -74,5 +80,32 @@ describe('reduzirEscritas', () => {
             { tipo: 'nota', slug: 'a', title: 'A v2', criada: false },
         ]);
         expect(r.notas).toEqual([{ slug: 'a', title: 'A v2', criada: false }]);
+    });
+});
+
+describe('registarRelay / lerRelaysPedidos', () => {
+    it('regista e lê os pedidos de relay por ordem', () => {
+        const file = join(dir, 'r.jsonl');
+        registarRelay(file, { tipo: 'relay', repo: 'a/b', issue: 12 });
+        registarRelay(file, { tipo: 'relay', repo: 'a/b', issue: 7 });
+        expect(lerRelaysPedidos(file)).toEqual([
+            { tipo: 'relay', repo: 'a/b', issue: 12 },
+            { tipo: 'relay', repo: 'a/b', issue: 7 },
+        ]);
+    });
+    it('dedup por repo#issue', () => {
+        const file = join(dir, 'r.jsonl');
+        registarRelay(file, { tipo: 'relay', repo: 'a/b', issue: 12 });
+        registarRelay(file, { tipo: 'relay', repo: 'a/b', issue: 12 });
+        expect(lerRelaysPedidos(file)).toHaveLength(1);
+    });
+    it('ficheiro inexistente → []', () => {
+        expect(lerRelaysPedidos(join(dir, 'nao-existe.jsonl'))).toEqual([]);
+    });
+    it('ignora linhas de outros tipos (nota/daily)', () => {
+        const file = join(dir, 'r.jsonl');
+        registarEscrita(file, { tipo: 'nota', slug: 'a', title: 'A', criada: true });
+        registarRelay(file, { tipo: 'relay', repo: 'a/b', issue: 5 });
+        expect(lerRelaysPedidos(file)).toEqual([{ tipo: 'relay', repo: 'a/b', issue: 5 }]);
     });
 });

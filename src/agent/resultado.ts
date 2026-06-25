@@ -119,3 +119,43 @@ export function reduzirEscritas(registos: RegistoEscrita[]): {
     }
     return { notas, daily, tarefas };
 }
+
+// M7-A: pedido de despacho de relay registado pela tool disparar_relay (subprocesso
+// MCP). O responder-tools (Next context) lê-o após o turno e chama dispararRelay —
+// o subprocesso não é contexto Next, não pode correr o orquestrador.
+export interface RegistoRelay {
+    tipo: 'relay';
+    repo: string;
+    issue: number;
+}
+
+export function registarRelay(file: string, registo: RegistoRelay): void {
+    appendFileSync(file, `${JSON.stringify(registo)}\n`, 'utf8');
+}
+
+export function lerRelaysPedidos(file: string): RegistoRelay[] {
+    let raw = '';
+    try {
+        raw = readFileSync(file, 'utf8');
+    } catch {
+        return [];
+    }
+    const vistos = new Set<string>();
+    const out: RegistoRelay[] = [];
+    for (const linha of raw.split('\n')) {
+        if (!linha.trim()) continue;
+        try {
+            const r = JSON.parse(linha) as RegistoRelay;
+            if (r?.tipo === 'relay' && r.repo && Number.isInteger(r.issue)) {
+                const k = `${r.repo}#${r.issue}`;
+                if (!vistos.has(k)) {
+                    vistos.add(k);
+                    out.push({ tipo: 'relay', repo: r.repo, issue: r.issue });
+                }
+            }
+        } catch {
+            // linha de outro tipo (nota/web/...) — ignora
+        }
+    }
+    return out;
+}
