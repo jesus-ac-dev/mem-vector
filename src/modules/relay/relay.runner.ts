@@ -43,16 +43,15 @@ export async function correrCruzamento(opts: {
             historico.push({ ronda, output });
             return { output, rondas: ronda, validado: true, historico };
         }
-        // Stall: repetiu o output da ronda anterior apesar do feedback → não está a
-        // convergir; pára cedo (poupa rondas/tokens) e devolve não-validado.
-        if (outputAnterior !== null && output === outputAnterior) {
-            historico.push({ ronda, output });
-            return { output, rondas: ronda, validado: false, historico, stall: true };
-        }
         const veredito = await validar(output);
         historico.push({ ronda, output, veredito });
         if (veredito.ok) {
             return { output, rondas: ronda, validado: true, historico };
+        }
+        // Stall: repetiu o output da ronda anterior e continuou rejeitado apesar do
+        // feedback → não está a convergir; pára cedo (poupa rondas/tokens).
+        if (outputAnterior !== null && output === outputAnterior) {
+            return { output, rondas: ronda, validado: false, historico, stall: true };
         }
         feedback = veredito.feedback ?? null;
         outputAnterior = output;

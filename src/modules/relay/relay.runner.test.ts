@@ -91,5 +91,19 @@ describe('correrCruzamento (round-loop do circuito)', () => {
         expect(r.stall).toBe(true);
         expect(r.rondas).toBe(2); // parou na 2ª (o repeat), não gastou as 5
         expect(chamadas).toBe(2); // poupou 3 produções
+        expect(r.historico.at(-1)?.veredito?.feedback).toBe('melhora');
+    });
+
+    it('output repetido que agora valida não é stall', async () => {
+        let validacoes = 0;
+        const r = await correrCruzamento({
+            maxRondas: 3,
+            produzir: async () => 'mesmo output',
+            validar: async () =>
+                ++validacoes === 2 ? { ok: true } : { ok: false, feedback: 'revê outra vez' },
+        });
+        expect(r.validado).toBe(true);
+        expect(r.stall).toBeFalsy();
+        expect(r.rondas).toBe(2);
     });
 });
