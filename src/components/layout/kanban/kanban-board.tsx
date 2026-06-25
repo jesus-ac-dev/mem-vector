@@ -186,7 +186,7 @@ function CartaoTarefa({
                     {tarefa.titulo}
                 </p>
             </div>
-            {tarefa.blocker && (
+            {tarefa.blocker && !concluida && (
                 <p
                     className="min-w-0 truncate text-[0.65rem] text-destructive"
                     title={`Bloqueada: ${tarefa.blocker}`}

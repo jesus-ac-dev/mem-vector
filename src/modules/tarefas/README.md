@@ -38,6 +38,7 @@ Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim
 | `concluida_em`                                        | `timestamptz` | carimbada pela RPC                                                           |
 | `repo_github` / `issue_github`                         |               | ligação opcional do cartão a uma issue de código                             |
 | `relay_estado` / `relay_fase` / `relay_pr_url`         |               | progresso do relay no kanban e link direto para o PR quando existir          |
+| `acceptance` / `blocker` / `evidence`                 | `text`        | estado operacional (#tasks-operacional): critério de pronto / porquê parada / prova; o agente lê ao listar e define |
 | `owner_id` / `visibility` / `group_id` / `created_at` |               | iguais ao resto do projeto                                                   |
 
 **RLS:** ler — dono ou grupo (`protected`); criar/apagar — só o dono; editar — dono ou
@@ -65,6 +66,8 @@ manuais, como no vault.
 ## Ligações
 
 - **Agente** — `src/agent/mcp-tools.ts` expõe `listar_tarefas_abertas` / `criar_tarefa` /
-  `concluir_tarefa`; o envelope one-shot traz `tarefas` + `concluir` (`chat.turno.ts`).
+  `concluir_tarefa` / `definir_estado_operacional`; o `listar` inclui o estado operacional
+  presente (re-injeção leve) e o `definir` grava acceptance/blocker/evidence a partir da
+  conversa (#tasks-operacional). O envelope one-shot traz `tarefas` + `concluir` (`chat.turno.ts`).
 - **RLS visibility/grupos** — enum `visibility` e `meus_grupos()` partilhados com
   `knowledge` e `daily`.

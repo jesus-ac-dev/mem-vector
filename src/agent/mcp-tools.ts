@@ -543,9 +543,17 @@ async function executarTool(
                 campos.blocker === undefined &&
                 campos.evidence === undefined
             ) {
-                return 'Indica pelo menos um campo: acceptance, blocker ou evidence.';
+                return 'Indica pelo menos um campo (acceptance, blocker ou evidence; vazio limpa).';
             }
             const t = await definirEstadoOperacionalCom(db, texto(args, 'id'), campos);
+            if (RESULT_FILE) {
+                registarEscrita(RESULT_FILE, {
+                    tipo: 'tarefa',
+                    acao: 'operacional',
+                    id: t.id,
+                    titulo: t.titulo,
+                });
+            }
             return `Estado operacional de "${t.titulo}" atualizado.`;
         }
         case 'concluir_tarefa': {
