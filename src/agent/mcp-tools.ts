@@ -603,8 +603,10 @@ async function executarTool(
             const issue = Number(args.issue);
             if (!Number.isInteger(issue) || issue <= 0) return 'Indica um número de issue válido.';
             // O subprocesso MCP não é contexto Next — regista a intenção; o
-            // responder-tools (Next) dispara o relay após o turno.
-            if (RESULT_FILE) registarRelay(RESULT_FILE, { tipo: 'relay', repo, issue });
+            // responder-tools (Next) dispara o relay após o turno. Sem result-file
+            // a intenção perder-se-ia em silêncio (o canal É o mecanismo) → erro.
+            if (!RESULT_FILE) return 'Erro interno: sem canal de resultado para despachar o relay.';
+            registarRelay(RESULT_FILE, { tipo: 'relay', repo, issue });
             return `Combinado — vou disparar o relay para ${repo} #${issue} (corre em background; pergunta-me o estado com ler_estado_relay).`;
         }
         case 'ler_estado_relay': {
