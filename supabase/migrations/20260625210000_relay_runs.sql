@@ -5,12 +5,13 @@ create table relay_runs (
   id           uuid primary key default gen_random_uuid(),
   owner_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
   repo_github  text not null,
-  issue_github integer not null,
-  estado       text not null,        -- pronto | pr-aberto | bloqueado
+  issue_github integer not null check (issue_github > 0),
+  estado       text not null check (estado in ('pronto', 'pr-aberto', 'bloqueado')),
   fase         text,                 -- cruzamento onde bloqueou (null se não bloqueou)
   pr_url       text,
   started_em   timestamptz not null,
-  ended_em     timestamptz not null default now()
+  ended_em     timestamptz not null default now(),
+  check (ended_em >= started_em)
 );
 
 create index relay_runs_owner_repo_ended_idx on relay_runs (owner_id, repo_github, ended_em desc);

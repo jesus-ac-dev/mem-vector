@@ -2,10 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ResultadoOrquestracao } from './relay.orchestrator';
 
+export type EstadoRunRelay = 'pronto' | 'pr-aberto' | 'bloqueado';
+
 // Run-ledger do relay (#observability): deriva os campos consultáveis do resultado
 // do orquestrador. 'bloqueado' guarda a fase onde parou; 'pr-aberto' o link do PR.
 export function runDoResultado(resultado: ResultadoOrquestracao): {
-    estado: string;
+    estado: EstadoRunRelay;
     fase: string | null;
     prUrl: string | null;
 } {
@@ -24,33 +26,38 @@ export async function registarRunRelayCom(
     db: SupabaseClient,
     opts: { repo: string; issue: number; resultado: ResultadoOrquestracao; inicio: Date },
 ): Promise<void> {
-    const { estado, fase, prUrl } = runDoResultado(opts.resultado);
-    // owner_id EXPLÍCITO (como o agent_jobs), não a depender do default auth.uid():
-    // se a sessão não estiver no contexto, salta com aviso em vez de falhar mudo.
-    const {
-        data: { session },
-    } = await db.auth.getSession();
-    const ownerId = session?.user?.id;
-    if (!ownerId) {
-        console.error('registar run do relay: sem sessão para o owner (saltado).');
-        return;
+    try {
+        const { estado, fase, prUrl } = runDoResultado(opts.resultado);
+        // owner_id EXPLÍCITO (como o agent_jobs), não a depender do default auth.uid():
+        // se a sessão não estiver no contexto, salta com aviso em vez de falhar mudo.
+        const {
+            data: { session },
+        } = await db.auth.getSession();
+        const ownerId = session?.user?.id;
+        if (!ownerId) {
+            console.error('registar run do relay: sem sessão para o owner (saltado).');
+            return;
+        }
+        const { error } = await db.from('relay_runs').insert({
+            owner_id: ownerId,
+            repo_github: opts.repo,
+            issue_github: opts.issue,
+            estado,
+            fase,
+            pr_url: prUrl,
+            started_em: opts.inicio.toISOString(),
+        });
+        if (error) console.error('registar run do relay falhou (segue):', error.message);
+    } catch (e) {
+        const detalhe = e instanceof Error ? e.message : String(e);
+        console.error('registar run do relay falhou (segue):', detalhe);
     }
-    const { error } = await db.from('relay_runs').insert({
-        owner_id: ownerId,
-        repo_github: opts.repo,
-        issue_github: opts.issue,
-        estado,
-        fase,
-        pr_url: prUrl,
-        started_em: opts.inicio.toISOString(),
-    });
-    if (error) console.error('registar run do relay falhou (segue):', error.message);
 }
 
 export interface RunRelay {
     repo: string;
     issue: number;
-    estado: string;
+    estado: EstadoRunRelay;
     fase: string | null;
     prUrl: string | null;
     terminadoEm: string;
@@ -61,11 +68,12 @@ export async function lerRunsRelayCom(
     db: SupabaseClient,
     opts: { repo?: string; limite?: number } = {},
 ): Promise<RunRelay[]> {
+    const limite = Math.min(Math.max(Math.trunc(opts.limite ?? 10), 1), 50);
     let q = db
         .from('relay_runs')
         .select('repo_github, issue_github, estado, fase, pr_url, ended_em')
         .order('ended_em', { ascending: false })
-        .limit(opts.limite ?? 10);
+        .limit(limite);
     if (opts.repo) q = q.eq('repo_github', opts.repo);
     const { data, error } = await q;
     if (error) throw new Error(`ler runs do relay falhou: ${error.message}`);
@@ -81,7 +89,7 @@ export async function lerRunsRelayCom(
         return {
             repo: row.repo_github,
             issue: row.issue_github,
-            estado: row.estado,
+            estado: row.estado as EstadoRunRelay,
             fase: row.fase,
             prUrl: row.pr_url,
             terminadoEm: row.ended_em,

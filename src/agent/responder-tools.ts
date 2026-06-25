@@ -61,7 +61,8 @@ const CONVENCAO_GITHUB =
     '\n\nRELAY: para pôr os agentes a trabalhar uma issue (análise→dev→testes→docs→auditoria), usa ' +
     'disparar_relay — mesma confirmação assistida (PROPÕE / só ages quando o utilizador confirma ou ' +
     'pede claramente "vamos fazer a #N"). Corre em background: acompanha com ler_estado_relay e ' +
-    'relata fase/estado/PR. O MERGE é decisão do utilizador — nunca mergeas.' +
+    'relata fase/estado/PR. Para perguntas de histórico/como correram os relays, usa ler_runs_relay. ' +
+    'O MERGE é decisão do utilizador — nunca mergeas.' +
     '\n\nRELAY PROATIVO: se detetares trabalho de CÓDIGO durável e BEM-DEFINIDO (claro o quê + ' +
     'critério de pronto) que o utilizador descreveu mas ainda não encaminhou, levanta a proposta de relay — ' +
     'sem issue ainda, propõe promover_a_issue; com issue já criada, propõe disparar_relay. Para ' +

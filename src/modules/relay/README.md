@@ -93,7 +93,8 @@ por-issue), e cada substep deixa rasto.
 - **`relay.actions.ts`** — `dispararRelay` (trigger, com **fila** por-repo — FIFO/dedup; o 2º
   disparo enfileira) · `promoverTarefa` (cartão→issue).
 - **`relay.runs.ts`** — **run-ledger** (#observability): um registo por corrida
-  (estado/fase/PR/timing) em `relay_runs`; a tool `ler_runs_relay` lê o histórico no chat.
+  (estado/fase/PR/timing) em `relay_runs`; escrita best-effort, RLS por owner e checks básicos
+  (`estado`, issue positiva, datas coerentes); a tool `ler_runs_relay` lê o histórico no chat.
 - **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (fase+cor)/`criarPR`/`ramoPrincipal`/`numeroDoUrl`.
 
 **Progresso GitHub** (labels): estado ativo único em formato curto `<fase>:<cor>`, por exemplo

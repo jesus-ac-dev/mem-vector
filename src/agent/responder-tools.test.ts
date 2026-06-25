@@ -179,6 +179,7 @@ describe('responderComToolsCom (#89)', () => {
         expect(cfg.systemPrompt).toContain('levanta a proposta de relay');
         expect(cfg.systemPrompt).toContain('sem issue ainda, propõe promover_a_issue');
         expect(cfg.systemPrompt).toContain('com issue já criada, propõe disparar_relay');
+        expect(cfg.systemPrompt).toContain('ler_runs_relay');
         expect(cfg.systemPrompt).toContain('NÃO proponhas');
         expect(cfg.systemPrompt).toContain('nunca disparas sem o OK do utilizador');
     });
