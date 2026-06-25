@@ -341,9 +341,10 @@ export function KanbanBoard() {
 
     function abrirKillSwitch(t: Tarefa) {
         const repoPath = t.repoGithub ? (repoPaths[t.repoGithub] ?? null) : null;
-        emitirPrefillChat(promptKillSwitchRelay(t, repoPath));
+        // #M7-C: auto-send — o agente engata logo o diagnóstico do kill-switch (salta o send manual).
+        emitirPrefillChat(promptKillSwitchRelay(t, repoPath), true);
         setRelayInfo(
-            `Contexto do kill-switch carregado no chat: ${t.repoGithub ?? ''} #${t.issueGithub ?? ''}`,
+            `Recuperação do kill-switch enviada ao chat: ${t.repoGithub ?? ''} #${t.issueGithub ?? ''}`,
         );
     }
 

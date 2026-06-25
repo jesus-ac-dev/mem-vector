@@ -610,6 +610,9 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
     const [traceAberto, setTraceAberto] = useState(false);
 
     const defsCanceladoRef = useRef(false);
+    // #M7-C: ref para o handleSend mais recente — o listener do prefill é de longa
+    // duração e não deve re-subscrever a cada render (o chat re-renderiza no streaming).
+    const handleSendRef = useRef<(q?: string) => void>(() => {});
     useEffect(() => {
         defsCanceladoRef.current = false;
         function carregarDefs() {
@@ -642,12 +645,26 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             const detail = (ev as CustomEvent<ChatPrefillDetail>).detail;
             if (!detail?.prompt) return;
             abrirChat();
+            // #M7-C: kill-switch → envia logo (salta o send manual); senão, preenche e espera.
+            if (detail.autoSend) {
+                // Põe o prompt no input ANTES de enviar — se o chat estiver ocupado
+                // (handleSend ignora quando pending), fica visível/recuperável em vez de
+                // se perder em silêncio; no envio bem-sucedido o handleSend limpa-o.
+                setInput(detail.prompt);
+                handleSendRef.current(detail.prompt);
+                return;
+            }
             setInput(detail.prompt);
             requestAnimationFrame(() => inputRef.current?.focus());
         }
         window.addEventListener(CHAT_PREFILL_EVENT, handlePrefill);
         return () => window.removeEventListener(CHAT_PREFILL_EVENT, handlePrefill);
     }, [abrirChat]);
+
+    // #M7-C: mantém o handleSendRef fresco sem re-subscrever o listener do prefill.
+    useEffect(() => {
+        handleSendRef.current = handleSend;
+    });
 
     useEffect(() => {
         const alvo = conversaAberta; // string | null
