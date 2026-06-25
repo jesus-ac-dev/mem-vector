@@ -90,8 +90,11 @@ por-issue), e cada substep deixa rasto.
   `main`); push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default
   `npm test`): a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
-- **`relay.actions.ts`** — `dispararRelay` (trigger, com **lock** de um-relay-por-repo) ·
-  `promoverTarefa` (cartão→issue).
+- **`relay.actions.ts`** — `dispararRelay` (trigger, com **fila** por-repo — FIFO/dedup; o 2º
+  disparo enfileira) · `promoverTarefa` (cartão→issue).
+- **`relay.runs.ts`** — **run-ledger** (#observability): um registo por corrida
+  (estado/fase/PR/timing) em `relay_runs`; escrita best-effort, RLS por owner e checks básicos
+  (`estado`, issue positiva, datas coerentes); a tool `ler_runs_relay` lê o histórico no chat.
 - **`src/lib/github.ts`** — `verIssue` (+ comentários)/`editarLabels` (fase+cor)/`criarPR`/`ramoPrincipal`/`numeroDoUrl`.
 
 **Progresso GitHub** (labels): estado ativo único em formato curto `<fase>:<cor>`, por exemplo

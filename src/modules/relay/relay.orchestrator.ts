@@ -29,6 +29,7 @@ import { abrirBranch, commitPush, correrTestes, diffDoRepo, nomeBranch } from '.
 import { correrPipeline, type ResultadoPipeline } from './relay.pipeline';
 import { providersAtivos, resolverCruzamento } from './relay.resolver';
 import { correrCruzamento, parseVeredito, type ResultadoCruzamento } from './relay.runner';
+import { registarRunRelayCom } from './relay.runs';
 
 // O orchestrator: faz o GitHub ser trigger + estado do PIPELINE de cruzamentos
 // (Análise→Dev→Testes→Docs) contra o working copy preparado (path das
@@ -664,6 +665,7 @@ export async function orquestrar(opts: {
     maxRondas?: number;
 }): Promise<ResultadoOrquestracao> {
     const { db, defs, repo, issue } = opts;
+    const inicio = new Date();
     const token = defs.githubToken;
     if (!token) throw new Error('Sem token GitHub (Definições > módulo GitHub).');
 
@@ -710,6 +712,9 @@ export async function orquestrar(opts: {
         analiseInicial: goal ?? undefined,
         fasesConfiguradas,
     });
+
+    // #observability: regista o run no ledger (histórico consultável na app) — best-effort.
+    await registarRunRelayCom(db, { repo, issue, resultado, inicio });
 
     // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no
     // projeto (nota vectorizada), não só nos docs/ do repo. Best-effort.
