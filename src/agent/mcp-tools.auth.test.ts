@@ -8,6 +8,11 @@ import { criarDb } from '@/agent/agent-db';
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+function restaurarEnv(nome: string, valor: string | undefined): void {
+    if (valor === undefined) delete process.env[nome];
+    else process.env[nome] = valor;
+}
+
 // #159: o agente partilhava o refresh_token do utilizador e fazia setSession → com
 // enable_refresh_token_rotation=true, refrescava e ROTAVA o refresh token,
 // invalidando a sessão do browser (kick). Fix: o agente autentica SÓ com o access
@@ -38,8 +43,8 @@ describe('criarDb do agente (#159)', () => {
     });
 
     afterAll(() => {
-        process.env.MEMVECTOR_AGENT_ACCESS_TOKEN = accessAntes;
-        process.env.MEMVECTOR_AGENT_REFRESH_TOKEN = refreshAntes;
+        restaurarEnv('MEMVECTOR_AGENT_ACCESS_TOKEN', accessAntes);
+        restaurarEnv('MEMVECTOR_AGENT_REFRESH_TOKEN', refreshAntes);
     });
 
     it('autentica como o user SÓ com o access token (sem refresh token no ambiente)', async () => {
