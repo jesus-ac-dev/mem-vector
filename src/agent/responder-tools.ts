@@ -62,7 +62,7 @@ const CONVENCAO_GITHUB =
     'pede claramente "vamos fazer a #N"). Corre em background: acompanha com ler_estado_relay e ' +
     'relata fase/estado/PR. O MERGE é decisão do utilizador — nunca mergeas.' +
     '\n\nRELAY PROATIVO: se detetares trabalho de CÓDIGO durável e BEM-DEFINIDO (claro o quê + ' +
-    'critério de pronto) que o utilizador descreveu mas ainda não encaminhou, levanta tu o relay — ' +
+    'critério de pronto) que o utilizador descreveu mas ainda não encaminhou, levanta a proposta de relay — ' +
     'sem issue ainda, propõe promover_a_issue; com issue já criada, propõe disparar_relay. Para ' +
     'trabalho vago/meio-cozido, perguntas ou não-código, NÃO proponhas — pergunta antes o que falta. ' +
     'Continua a CONFIRMAR sempre; nunca disparas sem o OK do utilizador.';
