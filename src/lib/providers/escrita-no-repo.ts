@@ -60,6 +60,7 @@ const GUARDED_BINS = [
     'poweroff',
     'halt',
     'systemctl',
+    'sudo',
 ] as const;
 type GuardedBin = (typeof GUARDED_BINS)[number];
 
@@ -78,11 +79,14 @@ export function comandoRelayBloqueado(bin: string, args: string[]): string | nul
     if (['kill', 'pkill', 'killall', 'reboot', 'shutdown', 'poweroff', 'halt'].includes(bin)) {
         return `${bin} pode derrubar o runtime ou a máquina — proibido dentro do relay`;
     }
-    if (
-        bin === 'systemctl' &&
-        ['poweroff', 'reboot', 'halt', 'shutdown', 'kill'].includes(args[0] ?? '')
-    ) {
-        return `systemctl ${args[0]} pode derrubar o runtime ou a máquina — proibido dentro do relay`;
+    if (bin === 'systemctl') {
+        const subcomando = args.find((arg) => !arg.startsWith('-')) ?? '';
+        if (['poweroff', 'reboot', 'halt', 'shutdown', 'kill'].includes(subcomando)) {
+            return `systemctl ${subcomando} pode derrubar o runtime ou a máquina — proibido dentro do relay`;
+        }
+    }
+    if (bin === 'sudo') {
+        return 'sudo eleva operações fora do contrato do relay — proibido dentro do relay';
     }
     if (bin === 'supabase' && args[0] === 'db' && args[1] === 'reset') {
         return 'reset da base Supabase é proibido dentro do relay';

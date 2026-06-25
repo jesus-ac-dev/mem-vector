@@ -97,8 +97,11 @@ describe('comandoRelayBloqueado', () => {
         expect(comandoRelayBloqueado('systemctl', ['poweroff'])).toMatch(/runtime|máquina/);
         expect(comandoRelayBloqueado('systemctl', ['reboot'])).toMatch(/runtime|máquina/);
         expect(comandoRelayBloqueado('systemctl', ['kill', 'nginx'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('systemctl', ['--user', 'reboot'])).toMatch(/runtime|máquina/);
+        expect(comandoRelayBloqueado('sudo', ['reboot'])).toMatch(/proibido/);
         // systemctl inócuo + não-controlados continuam livres
         expect(comandoRelayBloqueado('systemctl', ['status'])).toBeNull();
+        expect(comandoRelayBloqueado('systemctl', ['--user', 'status'])).toBeNull();
         expect(comandoRelayBloqueado('npm', ['run', 'test'])).toBeNull();
         expect(comandoRelayBloqueado('git', ['status'])).toBeNull();
     });
