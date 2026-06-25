@@ -647,6 +647,10 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
             abrirChat();
             // #M7-C: kill-switch → envia logo (salta o send manual); senão, preenche e espera.
             if (detail.autoSend) {
+                // Põe o prompt no input ANTES de enviar — se o chat estiver ocupado
+                // (handleSend ignora quando pending), fica visível/recuperável em vez de
+                // se perder em silêncio; no envio bem-sucedido o handleSend limpa-o.
+                setInput(detail.prompt);
                 handleSendRef.current(detail.prompt);
                 return;
             }
