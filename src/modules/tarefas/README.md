@@ -25,20 +25,21 @@ UI: `src/components/layout/tarefas-panel.tsx` (painel esquerdo).
 Tabela `tarefas` (base em `20260603120000`, kanban em `20260612090000`, data fim em
 `20260612110000`, relay GitHub em `20260621120000`/`20260621140000`/`20260622170000`):
 
-| Coluna                                                | Tipo          | Notas                                                                        |
-| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------- |
-| `id`                                                  | `uuid`        | PK                                                                           |
-| `titulo`                                              | `text`        | obrigatório                                                                  |
-| `estado`                                              | `text`        | `backlog → analise → desenvolvimento → testes → documentacao → terminado`    |
-| `prioridade`                                          | `text`        | `baixa` / `normal` / `alta`                                                  |
-| `projeto_id`                                          | `uuid`        | FK → `projetos` (#47); o nome vem por join — sem nome resolve para o Pessoal |
-| `descricao`                                           | `text`        | curta, opcional                                                              |
-| `depende_de`                                          | `uuid`        | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`) |
-| `data_fim`                                            | `date`        | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação           |
-| `concluida_em`                                        | `timestamptz` | carimbada pela RPC                                                           |
-| `repo_github` / `issue_github`                         |               | ligação opcional do cartão a uma issue de código                             |
-| `relay_estado` / `relay_fase` / `relay_pr_url`         |               | progresso do relay no kanban e link direto para o PR quando existir          |
-| `owner_id` / `visibility` / `group_id` / `created_at` |               | iguais ao resto do projeto                                                   |
+| Coluna                                                | Tipo          | Notas                                                                                                               |
+| ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                  | `uuid`        | PK                                                                                                                  |
+| `titulo`                                              | `text`        | obrigatório                                                                                                         |
+| `estado`                                              | `text`        | `backlog → analise → desenvolvimento → testes → documentacao → terminado`                                           |
+| `prioridade`                                          | `text`        | `baixa` / `normal` / `alta`                                                                                         |
+| `projeto_id`                                          | `uuid`        | FK → `projetos` (#47); o nome vem por join — sem nome resolve para o Pessoal                                        |
+| `descricao`                                           | `text`        | curta, opcional                                                                                                     |
+| `depende_de`                                          | `uuid`        | FK self; dependência aberta **bloqueia** a conclusão (RPC `concluir_tarefa`)                                        |
+| `data_fim`                                            | `date`        | deadline opcional (`@AAAA-MM-DD` no quick-add); manda na ordenação                                                  |
+| `concluida_em`                                        | `timestamptz` | carimbada pela RPC                                                                                                  |
+| `repo_github` / `issue_github`                        |               | ligação opcional do cartão a uma issue de código                                                                    |
+| `relay_estado` / `relay_fase` / `relay_pr_url`        |               | progresso do relay no kanban e link direto para o PR quando existir                                                 |
+| `acceptance` / `blocker` / `evidence`                 | `text`        | estado operacional (#tasks-operacional): critério de pronto / porquê parada / prova; o agente lê ao listar e define |
+| `owner_id` / `visibility` / `group_id` / `created_at` |               | iguais ao resto do projeto                                                                                          |
 
 **RLS:** ler — dono ou grupo (`protected`); criar/apagar — só o dono; editar — dono ou
 membro do grupo. Terminada não se reabre por `mudarEstado`.
@@ -65,6 +66,9 @@ manuais, como no vault.
 ## Ligações
 
 - **Agente** — `src/agent/mcp-tools.ts` expõe `listar_tarefas_abertas` / `criar_tarefa` /
-  `concluir_tarefa`; o envelope one-shot traz `tarefas` + `concluir` (`chat.turno.ts`).
+  `concluir_tarefa` / `definir_estado_operacional`; o `listar` inclui o estado operacional
+  presente (re-injeção leve) e o `definir` grava acceptance/blocker/evidence a partir da
+  conversa (#tasks-operacional), normalizando espaços e limpando o campo quando recebe vazio.
+  O envelope one-shot traz `tarefas` + `concluir` (`chat.turno.ts`).
 - **RLS visibility/grupos** — enum `visibility` e `meus_grupos()` partilhados com
   `knowledge` e `daily`.

@@ -19,7 +19,7 @@ export interface RegistoDaily {
 
 export interface RegistoTarefa {
     tipo: 'tarefa';
-    acao: 'criada' | 'concluida';
+    acao: 'criada' | 'concluida' | 'operacional';
     id: string;
     titulo: string;
 }
@@ -115,7 +115,8 @@ export function reduzirEscritas(registos: RegistoEscrita[]): {
             else notas.push(entrada);
         } else if (r.tipo === 'daily') daily = { dia: r.dia, criado: r.criado };
         else if (r.acao === 'criada') tarefas.criadas.push({ id: r.id, titulo: r.titulo });
-        else tarefas.concluidas.push({ id: r.id, titulo: r.titulo });
+        else if (r.acao === 'concluida') tarefas.concluidas.push({ id: r.id, titulo: r.titulo });
+        // 'operacional': registado no ficheiro (auditoria das escritas), fora do resumo.
     }
     return { notas, daily, tarefas };
 }

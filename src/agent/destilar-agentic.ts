@@ -23,6 +23,7 @@ const TOOLS_PERMITIDAS = [
     'mcp__memvector__listar_tarefas_abertas',
     'mcp__memvector__criar_tarefa',
     'mcp__memvector__concluir_tarefa',
+    'mcp__memvector__definir_estado_operacional',
 ];
 
 export interface TurnoAgenticInput {

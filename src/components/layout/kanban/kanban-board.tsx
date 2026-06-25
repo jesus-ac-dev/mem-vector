@@ -186,6 +186,14 @@ function CartaoTarefa({
                     {tarefa.titulo}
                 </p>
             </div>
+            {tarefa.blocker && !concluida && (
+                <p
+                    className="min-w-0 truncate text-[0.65rem] text-destructive"
+                    title={`Bloqueada: ${tarefa.blocker}`}
+                >
+                    ⚠ {tarefa.blocker}
+                </p>
+            )}
             <div
                 className={cn(
                     'flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground',

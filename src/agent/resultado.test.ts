@@ -81,6 +81,13 @@ describe('reduzirEscritas', () => {
         ]);
         expect(r.notas).toEqual([{ slug: 'a', title: 'A v2', criada: false }]);
     });
+
+    it('estado operacional de tarefa não aparece como criada/concluída', () => {
+        const r = reduzirEscritas([
+            { tipo: 'tarefa', acao: 'operacional', id: 't1', titulo: 'Desbloquear relay' },
+        ]);
+        expect(r.tarefas).toEqual({ criadas: [], concluidas: [] });
+    });
 });
 
 describe('registarRelay / lerRelaysPedidos', () => {

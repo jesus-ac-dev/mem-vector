@@ -23,7 +23,7 @@ export interface PainelTarefas {
 
 // #47: o projeto é um FK real; o nome vem por join (display/serializar).
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado, relay_fase, relay_pr_url';
+    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado, relay_fase, relay_pr_url, acceptance, blocker, evidence';
 
 interface TarefaRow {
     id: string;
@@ -42,6 +42,9 @@ interface TarefaRow {
     relay_estado: string | null;
     relay_fase: string | null;
     relay_pr_url: string | null;
+    acceptance: string | null;
+    blocker: string | null;
+    evidence: string | null;
 }
 
 function toTarefa(r: TarefaRow): Tarefa {
@@ -62,7 +65,50 @@ function toTarefa(r: TarefaRow): Tarefa {
         relayEstado: r.relay_estado,
         relayFase: r.relay_fase,
         relayPrUrl: r.relay_pr_url,
+        acceptance: r.acceptance,
+        blocker: r.blocker,
+        evidence: r.evidence,
     };
+}
+
+// #tasks-operacional (puro): só os campos presentes entram no update; '' ou null
+// limpa o campo. Vazio = nada para fazer (o caller rejeita).
+export function montarUpdateOperacional(campos: {
+    acceptance?: string | null;
+    blocker?: string | null;
+    evidence?: string | null;
+}): Record<string, string | null> {
+    const update: Record<string, string | null> = {};
+    const limpar = (valor: string | null): string | null => {
+        if (valor === null) return null;
+        const texto = valor.trim();
+        return texto || null;
+    };
+    if (campos.acceptance !== undefined) update.acceptance = limpar(campos.acceptance);
+    if (campos.blocker !== undefined) update.blocker = limpar(campos.blocker);
+    if (campos.evidence !== undefined) update.evidence = limpar(campos.evidence);
+    return update;
+}
+
+// #tasks-operacional: o agente define o estado operacional (critério de pronto /
+// prova / porquê parada). RLS scopa ao dono. Devolve a tarefa atualizada.
+export async function definirEstadoOperacionalCom(
+    db: SupabaseClient,
+    id: string,
+    campos: { acceptance?: string | null; blocker?: string | null; evidence?: string | null },
+): Promise<Tarefa> {
+    const update = montarUpdateOperacional(campos);
+    if (Object.keys(update).length === 0)
+        throw new Error('nada para definir no estado operacional');
+    const { data, error } = await db
+        .from('tarefas')
+        .update(update)
+        .eq('id', id)
+        .select(COLUNAS)
+        .single();
+    if (error || !data)
+        throw new Error(`definir estado operacional falhou: ${error?.message ?? '?'}`);
+    return toTarefa(data as unknown as TarefaRow);
 }
 
 // Vista kanban segue o relay: o orchestrator escreve semáforo, fase, PR e coluna
