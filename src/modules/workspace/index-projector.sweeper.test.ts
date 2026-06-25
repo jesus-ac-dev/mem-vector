@@ -27,6 +27,10 @@ describe('sweeper derived_index (auto-cura)', () => {
     let db: SupabaseClient;
     beforeAll(async () => {
         db = await userClient('derived-sweeper@test.local');
+        const {
+            data: { user },
+        } = await db.auth.getUser();
+        await getSupabaseAdmin().from('agent_jobs').delete().eq('owner_id', user!.id);
     });
 
     it('retoma um job failed (attempts<5) e deixa-o done', async () => {
@@ -56,5 +60,39 @@ describe('sweeper derived_index (auto-cura)', () => {
 
         const depois = await db.from('agent_jobs').select('status').eq('id', jobId).single();
         expect(depois.data!.status).toBe('done');
+    });
+
+    it('não retenta jobs cronicamente partidos (attempts>=5)', async () => {
+        const nota = await escreverNotaCom(db, {
+            title: 'Sweeper Limite',
+            content_md: '# Sweeper Limite\nconteúdo de teste',
+            links: [],
+            reason: 'teste do limite do sweeper',
+        });
+        const {
+            data: { user },
+        } = await db.auth.getUser();
+        const ins = await db
+            .from('agent_jobs')
+            .insert({
+                owner_id: user!.id,
+                type: 'derived_index_entity',
+                status: 'failed',
+                attempts: 5,
+                payload: { entityType: 'knowledge', entityId: nota.id },
+            })
+            .select('id')
+            .single();
+        const jobId = String(ins.data!.id);
+
+        const r = await varrerDerivedIndexPendentesCom(db);
+        expect(r.falhados).toBe(0);
+
+        const depois = await db
+            .from('agent_jobs')
+            .select('status, attempts')
+            .eq('id', jobId)
+            .single();
+        expect(depois.data).toMatchObject({ status: 'failed', attempts: 5 });
     });
 });
