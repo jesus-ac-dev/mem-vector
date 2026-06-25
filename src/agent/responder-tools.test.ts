@@ -127,4 +127,31 @@ describe('responderComToolsCom (#89)', () => {
             'Relay não disparado para jesus-ac-dev/mem-vector #164: Sem providers ativos',
         );
     });
+
+    it('com github ligado, instrui o agente a propor o relay proativamente', async () => {
+        generateAgenticMock.mockResolvedValue({ text: 'ok', costUsd: 0 });
+        await responderComToolsCom(
+            fakeDb() as never,
+            'pergunta',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { token: 'gh', repos: ['a/b'] },
+        );
+        const cfg = generateAgenticMock.mock.calls[0][1] as { systemPrompt?: string };
+        expect(cfg.systemPrompt).toContain('RELAY PROATIVO');
+        expect(cfg.systemPrompt).toContain('levanta a proposta de relay');
+        expect(cfg.systemPrompt).toContain('sem issue ainda, propõe promover_a_issue');
+        expect(cfg.systemPrompt).toContain('com issue já criada, propõe disparar_relay');
+        expect(cfg.systemPrompt).toContain('NÃO proponhas');
+        expect(cfg.systemPrompt).toContain('nunca disparas sem o OK do utilizador');
+    });
+
+    it('sem github, o prompt não fala de relay proativo', async () => {
+        generateAgenticMock.mockResolvedValue({ text: 'ok', costUsd: 0 });
+        await responderComToolsCom(fakeDb() as never, 'pergunta');
+        const cfg = generateAgenticMock.mock.calls[0][1] as { systemPrompt?: string };
+        expect(cfg.systemPrompt).not.toContain('RELAY PROATIVO');
+    });
 });
