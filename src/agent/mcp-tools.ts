@@ -24,9 +24,10 @@ import {
     criarTarefaCom,
     concluirTarefaCom,
     ligarIssueTarefaCom,
+    relayEstadoPorIssueCom,
 } from '../modules/tarefas/tarefas.service';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
-import { registarEscrita, registarWeb } from './resultado';
+import { registarEscrita, registarWeb, registarRelay } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
 import { envolverDados, envolverDadosOuFallback } from '../lib/datamark';
 import { criarIssue, lerIssues, comentarIssue, numeroDoUrl } from '../lib/github';
@@ -294,6 +295,32 @@ const GITHUB_TOOLS = [
                 projeto: { type: 'string', description: 'Nome do projeto (opcional)' },
             },
             required: ['repo', 'titulo', 'body'],
+        },
+    },
+    {
+        name: 'disparar_relay',
+        description:
+            'Dispara o pipeline de relay para uma issue de um repo LIGADO (os agentes trabalham-na: análise→dev→testes→docs→auditoria). PROPÕE primeiro e só corre depois de o utilizador confirmar. Corre em background; usa ler_estado_relay para acompanhar. O merge fica para o utilizador.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Repo "owner/nome" da lista ligada' },
+                issue: { type: 'number', description: 'Número da issue' },
+            },
+            required: ['repo', 'issue'],
+        },
+    },
+    {
+        name: 'ler_estado_relay',
+        description:
+            'Lê o estado do relay de uma issue de um repo LIGADO (estado, fase atual, URL do PR quando verde). Usa para acompanhar/relatar depois de disparar_relay.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: 'Repo "owner/nome" da lista ligada' },
+                issue: { type: 'number', description: 'Número da issue' },
+            },
+            required: ['repo', 'issue'],
         },
     },
 ];
@@ -570,6 +597,23 @@ async function executarTool(
                 });
             }
             return `Promovido: issue ${url} + cartão Backlog ligado. Arrasta o cartão para Análise para o relay correr.`;
+        }
+        case 'disparar_relay': {
+            const repo = repoLigado(args);
+            const issue = Number(args.issue);
+            if (!Number.isInteger(issue) || issue <= 0) return 'Indica um número de issue válido.';
+            // O subprocesso MCP não é contexto Next — regista a intenção; o
+            // responder-tools (Next) dispara o relay após o turno.
+            if (RESULT_FILE) registarRelay(RESULT_FILE, { tipo: 'relay', repo, issue });
+            return `Combinado — vou disparar o relay para ${repo} #${issue} (corre em background; pergunta-me o estado com ler_estado_relay).`;
+        }
+        case 'ler_estado_relay': {
+            const repo = repoLigado(args);
+            const issue = Number(args.issue);
+            const e = await relayEstadoPorIssueCom(db, repo, issue);
+            if (!e)
+                return `Sem estado para ${repo} #${issue} (ainda não disparado ou cartão não ligado).`;
+            return JSON.stringify(e);
         }
         default:
             throw new Error(`tool desconhecida: ${name}`);
