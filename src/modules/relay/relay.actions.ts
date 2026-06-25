@@ -16,10 +16,7 @@ import {
 
 import { LABELS_RELAY_REMOVER, orquestrar, relayFaseLabel } from './relay.orchestrator';
 import { providersAtivos } from './relay.resolver';
-
-// Lock de um-relay-por-repo (working copy partilhado): dois disparos no mesmo
-// path pisavam-se. Um Set em memória trava o segundo até o primeiro terminar.
-const relaysAtivos = new Set<string>();
+import { ocuparOuEnfileirar, proximaOuLibertar } from './relay.fila';
 
 type DefsValidadas =
     | { erro: string }
@@ -70,40 +67,61 @@ async function marcarFalhaRelay(opts: {
     });
 }
 
-// Trigger do relay: dispara o pipeline para uma (repo, issue). Valida cedo, trava
-// disparos concorrentes no mesmo repo, e corre o orchestrator em BACKGROUND
-// (after) — fire-and-forget. O estado/progresso vive na ISSUE (comentários
+// Trigger do relay: dispara o pipeline para uma (repo, issue). Valida cedo, ENFILEIRA
+// disparos concorrentes no mesmo repo (a fila drena-se sozinha), e corre o orchestrator
+// em BACKGROUND (after) — fire-and-forget. O estado/progresso vive na ISSUE (comentários
 // assinados + semáforos por label); acompanha-se no GitHub, não num spinner.
 export async function dispararRelay(
     repo: string,
     issue: number,
-): Promise<{ ok: boolean; detalhe: string }> {
+): Promise<{ ok: boolean; detalhe: string; enfileirado?: boolean }> {
     if (!repo || !Number.isInteger(issue) || issue <= 0) {
         return { ok: false, detalhe: 'Indica o repo e um número de issue válido.' };
     }
 
     const v = await defsValidadas(repo);
     if ('erro' in v) return { ok: false, detalhe: v.erro };
-    const { db, defs, path } = v;
+    const { defs, path } = v;
     if (providersAtivos(defs).length === 0) {
         return {
             ok: false,
             detalhe: 'Sem providers ativos (Definições > Agentes).',
         };
     }
-    if (relaysAtivos.has(path)) {
-        return { ok: false, detalhe: 'Já corre um relay neste repo — espera que termine.' };
+    const lugar = ocuparOuEnfileirar(path, issue);
+    if (!lugar.correr) {
+        return {
+            ok: true,
+            enfileirado: true,
+            detalhe: `Relay enfileirado para ${repo} #${issue} (posição ${lugar.posicao} na fila) — corre quando o atual terminar.`,
+        };
     }
 
-    relaysAtivos.add(path);
     after(async () => {
-        try {
-            await orquestrar({ db, defs, repo, issue });
-        } catch (e) {
-            console.error('[relay] orquestrar falhou:', e);
-            await marcarFalhaRelay({ db, token: defs.githubToken!, repo, issue, erro: e });
-        } finally {
-            relaysAtivos.delete(path);
+        // Drena a fila do repo: corre a issue atual e, ao terminar, a próxima
+        // enfileirada até a fila esvaziar e o repo libertar. Re-valida as defs por
+        // issue — numa fila longa o token Supabase do 1º disparo expirava (o mirror
+        // do kanban falhava). A chave da fila é sempre o `path` do 1º disparo.
+        let atual: number | null = issue;
+        while (atual !== null) {
+            const v2 = await defsValidadas(repo);
+            if ('erro' in v2) {
+                console.error(`[relay] fila: ${repo} #${atual} sem defs válidas: ${v2.erro}`);
+            } else {
+                try {
+                    await orquestrar({ db: v2.db, defs: v2.defs, repo, issue: atual });
+                } catch (e) {
+                    console.error('[relay] orquestrar falhou:', e);
+                    await marcarFalhaRelay({
+                        db: v2.db,
+                        token: v2.defs.githubToken!,
+                        repo,
+                        issue: atual,
+                        erro: e,
+                    });
+                }
+            }
+            atual = proximaOuLibertar(path);
         }
     });
 
