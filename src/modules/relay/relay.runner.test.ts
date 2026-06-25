@@ -64,14 +64,32 @@ describe('correrCruzamento (round-loop do circuito)', () => {
         expect(feedbacks).toEqual([null, 'falta X']); // a 2ª ronda recebeu a objeção
     });
 
-    it('nunca passa: esgota maxRondas e devolve NÃO validado (kill switch)', async () => {
+    it('nunca passa (outputs diferentes): esgota maxRondas e devolve NÃO validado (kill switch)', async () => {
+        let n = 0;
         const r = await correrCruzamento({
             maxRondas: 2,
-            produzir: async () => 'mau',
+            produzir: async () => `mau${++n}`,
             validar: async () => ({ ok: false, feedback: 'continua mau' }),
         });
         expect(r.rondas).toBe(2);
         expect(r.validado).toBe(false);
         expect(r.historico).toHaveLength(2);
+        expect(r.stall).toBeFalsy();
+    });
+
+    it('stall: repete o output apesar do feedback → pára cedo (poupa rondas)', async () => {
+        let chamadas = 0;
+        const r = await correrCruzamento({
+            maxRondas: 5,
+            produzir: async () => {
+                chamadas++;
+                return 'mesmo output';
+            },
+            validar: async () => ({ ok: false, feedback: 'melhora' }),
+        });
+        expect(r.validado).toBe(false);
+        expect(r.stall).toBe(true);
+        expect(r.rondas).toBe(2); // parou na 2ª (o repeat), não gastou as 5
+        expect(chamadas).toBe(2); // poupou 3 produções
     });
 });
