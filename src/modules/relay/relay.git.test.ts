@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+    arquivosAlterados,
     branchLocalWorktree,
     buildBranchArgs,
     buildCommitPushArgs,
@@ -18,6 +19,7 @@ import {
     comandoTestes,
     INTERN_EMAIL,
     INTERN_NOME,
+    limparAnsi,
     nomeBranch,
     prepararWorktree,
     removerWorktree,
@@ -68,11 +70,30 @@ describe('buildStatusArgs', () => {
 });
 
 describe('comandoTestes', () => {
-    it('default = npm test', () => {
-        expect(comandoTestes(undefined)).toBe('npm test');
+    it('default = vitest related só dos ficheiros AFETADOS (não a suite inteira)', () => {
+        expect(comandoTestes(['src/a.ts', 'src/b.tsx'], undefined)).toBe(
+            "npx vitest related --run --passWithNoTests 'src/a.ts' 'src/b.tsx'",
+        );
     });
-    it('respeita o RELAY_TEST_CMD', () => {
-        expect(comandoTestes('pnpm -s test')).toBe('pnpm -s test');
+    it('escapa paths para shell sem expandir $ ou partir espaços/aspas', () => {
+        expect(comandoTestes(['src/a $HOME.ts', "src/o'clock.ts"], undefined)).toBe(
+            "npx vitest related --run --passWithNoTests 'src/a $HOME.ts' 'src/o'\\''clock.ts'",
+        );
+    });
+    it('sem ficheiros alterados = comando vazio (nada a testar)', () => {
+        expect(comandoTestes([], undefined)).toBe('');
+    });
+    it('RELAY_TEST_CMD continua a ser o override total (suite inteira / outro runner)', () => {
+        expect(comandoTestes(['src/a.ts'], 'pnpm -s test')).toBe('pnpm -s test');
+    });
+});
+
+describe('limparAnsi', () => {
+    it('tira os escapes ANSI do output do vitest', () => {
+        expect(limparAnsi('\x1b[31mFAIL\x1b[39m teste')).toBe('FAIL teste');
+    });
+    it('deixa texto sem ANSI intacto', () => {
+        expect(limparAnsi('suite verde')).toBe('suite verde');
     });
 });
 
@@ -209,5 +230,15 @@ describe('prepararWorktree (integração git)', () => {
     it('removerWorktree apaga o dir', async () => {
         await removerWorktree(repo, dir);
         expect(existsSync(dir)).toBe(false);
+    });
+
+    it('arquivosAlterados lista ficheiros mexidos (unstaged, staged e untracked)', async () => {
+        writeFileSync(join(repo, 'README.md'), '# base\n\neditado\n');
+        writeFileSync(join(repo, 'staged.ts'), 'export const y = 2;\n');
+        git(repo, 'add', 'staged.ts');
+        writeFileSync(join(repo, 'novo.ts'), 'export const x = 1;\n');
+        expect(await arquivosAlterados(repo)).toEqual(
+            expect.arrayContaining(['README.md', 'staged.ts', 'novo.ts']),
+        );
     });
 });

@@ -26,6 +26,7 @@ import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.s
 
 import { construirHandoff } from './relay.handoff';
 import {
+    arquivosAlterados,
     commitPush,
     correrTestes,
     diffDoRepo,
@@ -659,7 +660,7 @@ export function construirIo(opts: {
         abrirBranch: (branch, retoma) =>
             prepararWorktree({ repoPath, dir: cwd, branch, base, token, retoma }).then(() => {}),
         diff: () => diffDoRepo(cwd),
-        testar: () => correrTestes(cwd),
+        testar: async () => correrTestes(cwd, await arquivosAlterados(cwd)),
         marcarRetoma: async (cruzamento) => {
             try {
                 if (db) await atualizarRelayPorIssueCom(db, repo, issue, { relayFase: cruzamento });
