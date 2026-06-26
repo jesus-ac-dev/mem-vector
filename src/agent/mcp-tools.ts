@@ -27,13 +27,13 @@ import {
     relayEstadoPorIssueCom,
     definirEstadoOperacionalCom,
 } from '../modules/tarefas/tarefas.service';
-import { motivoBloqueio } from '../modules/relay/relay.motivo';
 import { lerRunsRelayCom } from '../modules/relay/relay.runs';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb, registarRelay } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
 import { envolverDados, envolverDadosOuFallback } from '../lib/datamark';
 import { criarIssue, lerIssues, comentarIssue, numeroDoUrl, verIssue } from '../lib/github';
+import { montarEstadoRelayAgenteComTrace } from './relay-estado-trace';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
 // o kernel (procurar/ler/criar/continuar nota, daily). Lançado pelo claude CLI
@@ -334,7 +334,7 @@ const GITHUB_TOOLS = [
     {
         name: 'ler_estado_relay',
         description:
-            'Lê o estado do relay de uma issue de um repo LIGADO (estado, fase atual, URL do PR quando verde). Usa para acompanhar/relatar depois de disparar_relay.',
+            'Lê o estado do relay de uma issue de um repo LIGADO (estado, fase atual, URL do PR quando verde). Se estiver bloqueado, inclui motivo e trace real dos comentários da issue. Usa para acompanhar/diagnosticar depois de disparar_relay.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -676,22 +676,11 @@ async function executarTool(
             const e = await relayEstadoPorIssueCom(db, repo, issue);
             if (!e)
                 return `Sem estado para ${repo} #${issue} (ainda não disparado ou cartão não ligado).`;
-            // Bloqueado: junta o motivo derivado + o TRACE real (os comentários da issue,
-            // onde o relay publica as análises e o erro concreto). Sem isto o agente só vê
-            // o motivo genérico e fica cego ao que realmente aconteceu (#177). Só no estado
-            // bloqueado — não adiciona round-trip ao polling de um relay saudável.
-            if (e.relayEstado === 'bloqueado') {
-                const base = { ...e, motivo: motivoBloqueio(e.relayFase) };
-                try {
-                    const { comentarios } = await verIssue(GITHUB_TOKEN!, { repo, number: issue });
-                    return JSON.stringify({ ...base, trace: comentarios });
-                } catch {
-                    // Falhar a ler os comentários (ex. gh transitório) não pode tirar o
-                    // estado ao agente — diagnostica com o motivo derivado, sem trace.
-                    return JSON.stringify(base);
-                }
-            }
-            return JSON.stringify(e);
+            const estado = await montarEstadoRelayAgenteComTrace(e, async () => {
+                const { comentarios } = await verIssue(GITHUB_TOKEN!, { repo, number: issue });
+                return comentarios;
+            });
+            return envolverDados(JSON.stringify(estado, null, 2), 'github');
         }
         case 'ler_runs_relay': {
             const repo =
