@@ -1,10 +1,10 @@
 # tarefas
 
-Ultima atualizacao: 2026-06-22
+Ultima atualizacao: 2026-06-26
 
 ## Retoma rapida
 
-- Branch: `feat/issue-150`.
+- Branch: `fix/chat-modelo-efetivo`.
 - Objetivo ativo: **#19 FECHADO 2026-06-10 — M0 fechado.** Próxima frente: #21 (placement de tarefas na destilação). Branch `fix/smoke-tests-and-others` pronto para PR/merge (decisão Carlos).
 - App local: `http://localhost:2500`; Supabase local esperado em `npm run db:status` (`mem-vector`, portas 560xx).
 - Ultima validação 2026-06-22: `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run test:run` (81 files / 635 testes), `npm run build` e smoke dev tema+calendário verdes.
@@ -22,6 +22,7 @@ Sem pendentes de alta prioridade.
 ## Pendentes — Media
 
 - [ ] **Higienizar ambiente dos runners locais** — `next build` falha com falso negativo se a shell herdar `NODE_ENV=development` e variáveis internas `NEXT_PRIVATE_*`; validar scripts/relay com ambiente limpo antes de correr build. Ref: `package.json`.
+- [ ] **Estabilizar Vitest global das tags** — `src/tests/tags-union-guard.test.ts` passa isolado, mas em `npm run verify` pode exceder o timeout de 5s no caso "escrita por slug (colisão)" sob carga paralela; ajustar timeout/isolamento sem mascarar regressões SQL. Ref: `src/tests/tags-union-guard.test.ts`.
 
 ## Pendentes — Baixa
 
@@ -43,5 +44,5 @@ Fatias anteriores (jobs duráveis, transações/RPC, identidade por id, paths Ob
 
 ## Notas
 
-- Branch atual: `feat/issue-150` em `38d20df` (WIP de várias sessões por commitar — commit em blocos lógicos é o fecho do M0).
+- Branch atual: `fix/chat-modelo-efetivo` em `0bdde62` (WIP por commitar; preservar mudanças alheias e fechar em blocos lógicos).
 - Histórico de validações por fatia e relatório de audit 2026-06-07 (8 pontos, todos resolvidos): ver git history deste ficheiro.

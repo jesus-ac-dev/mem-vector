@@ -107,6 +107,7 @@ interface Provenance {
 - **Pruning de chat** — `chat.indexing.ts` mantém os 80 chunks de chat mais recentes por conversa. Isto limita crescimento infinito do RAG sem apagar as mensagens brutas em `messages`.
 - **Citações linkáveis por metadata** — o RPC devolve `chunks.id`; o `respond` resolve `chunks.metadata` numa query curta e a UI transforma `[1]`/`[2]` em links quando `entity_type` é `daily` ou `knowledge`. A futura UI de panes pode interceptar estes mesmos hrefs para abrir o ficheiro sem sair do chat.
 - **Prova de provider/modelo** — cada resposta persiste o provider que recebeu a chamada, o modelo pedido, o modelo efetivo reportado pelo provider e a latência. Divergência aparece como aviso no inspector, sem bloquear a resposta.
+- **Claude CLI com vários modelos** — quando `modelUsage` traz o modelo principal e modelos internos do modo agentic, o trace usa a entrada de maior `costUSD`; empate ou custo ausente preserva a primeira entrada do envelope.
 - Ver `decisions/log.md` no vault para o registo completo.
 
 ## Dependências
