@@ -44,7 +44,12 @@ O middleware `src/lib/supabase/middleware.ts` (`updateSession`) cobre:
 const PROTECTED = ['/chat', '/kanban', '/knowledge', '/daily', '/grupos'];
 ```
 
-- Utilizador **sem sessão** numa rota protegida → redirect para `/login`.
+- Utilizador **sem sessão e sem cookie Supabase de auth** numa rota protegida → redirect para
+  `/login`.
+- Utilizador sem `user`, mas ainda com cookie `sb-*-auth-token` numa rota protegida → não há kick
+  imediato; o middleware deixa passar e regista o erro de `getUser()` sem valores de cookie. Isto
+  evita logout agressivo quando pedidos concorrentes apanham uma rotação de refresh token. O layout
+  autenticado mostra um fallback de reload/login em vez de carregar dados com RLS sem sessão.
 - Utilizador **com sessão** em `/login` → redirect para `/chat`.
 - `/` e outras rotas públicas ficam abertas.
 

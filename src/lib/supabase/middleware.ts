@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const PROTECTED = ['/chat', '/kanban', '/knowledge', '/daily', '/grupos'];
 
+export function temCookieAuthSupabase(cookies: { name: string }[]): boolean {
+    return cookies.some((c) => c.name.startsWith('sb-') && c.name.includes('auth-token'));
+}
+
 export async function updateSession(request: NextRequest) {
     let response = NextResponse.next({ request });
 
@@ -27,10 +31,12 @@ export async function updateSession(request: NextRequest) {
 
     const {
         data: { user },
+        error: authError,
     } = await supabase.auth.getUser();
 
     const path = request.nextUrl.pathname;
     const isProtected = PROTECTED.some((p) => path.startsWith(p));
+    const temAuthCookie = temCookieAuthSupabase(request.cookies.getAll());
 
     // Um redirect novo não herda os cookies que o getUser() acima possa ter
     // refrescado no `response`. Sem os copiar, o browser fica com o refresh token
@@ -44,7 +50,19 @@ export async function updateSession(request: NextRequest) {
         return r;
     };
 
-    if (!user && isProtected) return redirecionar('/login');
+    if (!user && isProtected) {
+        // Se ainda há cookies de auth, não "kickar" para /login por uma falha
+        // isolada de getUser/refresh em pedidos concorrentes. A RLS continua a
+        // proteger dados; este log dá a causa sem expor valores de cookies.
+        if (temAuthCookie) {
+            console.warn('[auth/middleware] sem user em rota protegida com cookie auth', {
+                path,
+                getUserError: authError?.message ?? null,
+            });
+            return response;
+        }
+        return redirecionar('/login');
+    }
     if (user && path === '/login') return redirecionar('/chat');
 
     return response;
