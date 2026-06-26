@@ -15,6 +15,7 @@ import {
     promptPrincipal,
     promptValidador,
     relayFaseLabel,
+    textoProgresso,
     type IoOrquestrador,
     type RelayFase,
     type Semaforo,
@@ -28,9 +29,11 @@ function fakeIo(over: Partial<IoOrquestrador> = {}) {
     const comentarios: string[] = [];
     const semaforos: Semaforo[] = [];
     const progressos: { fase: RelayFase; semaforo: Semaforo; prUrl?: string | null }[] = [];
+    const progressoTextos: string[] = [];
     const corridas: { provider: Provider; escrever: boolean }[] = [];
     const io: IoOrquestrador = {
         comentar: vi.fn(async (b: string) => void comentarios.push(b)),
+        progresso: vi.fn(async (texto: string) => void progressoTextos.push(texto)),
         moverSemaforo: vi.fn(async (_de, para) => void semaforos.push(para)),
         atualizarProgresso: vi.fn(async (fase, semaforo, campos) => {
             progressos.push({ fase, semaforo, prUrl: campos?.prUrl });
@@ -45,7 +48,7 @@ function fakeIo(over: Partial<IoOrquestrador> = {}) {
         }),
         ...over,
     };
-    return { io, comentarios, semaforos, progressos, corridas };
+    return { io, comentarios, semaforos, progressos, progressoTextos, corridas };
 }
 
 const okCruzamento: ResultadoCruzamento = {
@@ -458,5 +461,47 @@ describe('promptValidador', () => {
         expect(dev).toContain('melhora'); // fase de escrita: faz o seu melhor por cima
         const aud = promptValidador('auditoria', 's', 'o output', mem);
         expect(aud).toContain('DERRUBAR'); // auditoria (read-only) continua adversarial
+    });
+});
+
+describe('textoProgresso (sub-passo live)', () => {
+    it('fase · ronda · provider · ação', () => {
+        expect(textoProgresso('dev', 3, 'codex', 'a validar')).toBe('dev · ronda 3 · codex a validar');
+    });
+    it('sem provider (test-gate)', () => {
+        expect(textoProgresso('testes', 2, null, 'a correr testes')).toBe(
+            'testes · ronda 2 · a correr testes',
+        );
+    });
+});
+
+describe('progresso live por substep (mata o blackout)', () => {
+    it('emite o sub-passo do principal e de cada validador', async () => {
+        const { io, progressoTextos } = fakeIo();
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'claude',
+            validadores: ['codex'],
+            maxRondas: 1,
+            io,
+        });
+        expect(progressoTextos).toContain('dev · ronda 1 · claude a trabalhar');
+        expect(progressoTextos).toContain('dev · ronda 1 · codex a validar');
+    });
+
+    it('emite o passo de testes quando há test-gate', async () => {
+        const { io, progressoTextos } = fakeIo({
+            testar: vi.fn(async () => ({ ok: true, output: '' })),
+        });
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'claude',
+            validadores: ['codex'],
+            maxRondas: 1,
+            io,
+        });
+        expect(progressoTextos).toContain('dev · ronda 1 · a correr testes');
     });
 });

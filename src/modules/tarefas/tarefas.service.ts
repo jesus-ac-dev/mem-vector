@@ -23,7 +23,7 @@ export interface PainelTarefas {
 
 // #47: o projeto é um FK real; o nome vem por join (display/serializar).
 const COLUNAS =
-    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado, relay_fase, relay_pr_url, acceptance, blocker, evidence';
+    'id, titulo, estado, prioridade, projeto_id, projetos ( nome ), descricao, depende_de, data_fim, created_at, concluida_em, repo_github, issue_github, relay_estado, relay_fase, relay_pr_url, relay_progresso, acceptance, blocker, evidence';
 
 interface TarefaRow {
     id: string;
@@ -42,6 +42,7 @@ interface TarefaRow {
     relay_estado: string | null;
     relay_fase: string | null;
     relay_pr_url: string | null;
+    relay_progresso: string | null;
     acceptance: string | null;
     blocker: string | null;
     evidence: string | null;
@@ -65,6 +66,7 @@ function toTarefa(r: TarefaRow): Tarefa {
         relayEstado: r.relay_estado,
         relayFase: r.relay_fase,
         relayPrUrl: r.relay_pr_url,
+        relayProgresso: r.relay_progresso,
         acceptance: r.acceptance,
         blocker: r.blocker,
         evidence: r.evidence,
@@ -121,6 +123,7 @@ export async function atualizarRelayPorIssueCom(
         relayEstado?: string;
         relayFase?: string | null;
         relayPrUrl?: string | null;
+        relayProgresso?: string | null;
         estado?: Exclude<EstadoTarefa, 'terminado'>;
     },
 ): Promise<void> {
@@ -128,6 +131,7 @@ export async function atualizarRelayPorIssueCom(
     if (campos.relayEstado !== undefined) update.relay_estado = campos.relayEstado;
     if (campos.relayFase !== undefined) update.relay_fase = campos.relayFase;
     if (campos.relayPrUrl !== undefined) update.relay_pr_url = campos.relayPrUrl;
+    if (campos.relayProgresso !== undefined) update.relay_progresso = campos.relayProgresso;
     if (campos.estado !== undefined) update.estado = campos.estado;
     if (Object.keys(update).length === 0) return;
     // #M7-D: cada progresso do relay bate o heartbeat — o sweeper deteta órfãos
