@@ -111,7 +111,8 @@ export function modeloPrincipal(modelUsage?: Record<string, unknown>): string | 
     const custo = (v: unknown): number =>
         typeof v === 'object' &&
         v !== null &&
-        typeof (v as { costUSD?: unknown }).costUSD === 'number'
+        typeof (v as { costUSD?: unknown }).costUSD === 'number' &&
+        Number.isFinite((v as { costUSD: number }).costUSD)
             ? (v as { costUSD: number }).costUSD
             : 0;
     return entradas.reduce((a, b) => (custo(b[1]) > custo(a[1]) ? b : a))[0];

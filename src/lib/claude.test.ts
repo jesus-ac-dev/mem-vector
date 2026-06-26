@@ -28,6 +28,22 @@ describe('modeloPrincipal (#183)', () => {
         expect(modeloPrincipal({ 'claude-opus-4-8': { costUSD: 0.14 } })).toBe('claude-opus-4-8');
     });
 
+    it('ignora custos não finitos e preserva a ordem em empate/sem custo', () => {
+        expect(
+            modeloPrincipal({
+                'claude-haiku-4-5-20251001': { costUSD: Number.NaN },
+                'claude-opus-4-8': { costUSD: 0.14 },
+            }),
+        ).toBe('claude-opus-4-8');
+
+        expect(
+            modeloPrincipal({
+                'claude-sonnet-4-5': { inputTokens: 10 },
+                'claude-haiku-4-5-20251001': { outputTokens: 5 },
+            }),
+        ).toBe('claude-sonnet-4-5');
+    });
+
     it('sem modelUsage devolve undefined', () => {
         expect(modeloPrincipal(undefined)).toBeUndefined();
         expect(modeloPrincipal({})).toBeUndefined();
