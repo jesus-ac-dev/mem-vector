@@ -72,7 +72,12 @@ describe('buildStatusArgs', () => {
 describe('comandoTestes', () => {
     it('default = vitest related só dos ficheiros AFETADOS (não a suite inteira)', () => {
         expect(comandoTestes(['src/a.ts', 'src/b.tsx'], undefined)).toBe(
-            'npx vitest related --run --passWithNoTests "src/a.ts" "src/b.tsx"',
+            "npx vitest related --run --passWithNoTests 'src/a.ts' 'src/b.tsx'",
+        );
+    });
+    it('escapa paths para shell sem expandir $ ou partir espaços/aspas', () => {
+        expect(comandoTestes(['src/a $HOME.ts', "src/o'clock.ts"], undefined)).toBe(
+            "npx vitest related --run --passWithNoTests 'src/a $HOME.ts' 'src/o'\\''clock.ts'",
         );
     });
     it('sem ficheiros alterados = comando vazio (nada a testar)', () => {
@@ -227,8 +232,13 @@ describe('prepararWorktree (integração git)', () => {
         expect(existsSync(dir)).toBe(false);
     });
 
-    it('arquivosAlterados lista os ficheiros mexidos (untracked incl.)', async () => {
+    it('arquivosAlterados lista ficheiros mexidos (unstaged, staged e untracked)', async () => {
+        writeFileSync(join(repo, 'README.md'), '# base\n\neditado\n');
+        writeFileSync(join(repo, 'staged.ts'), 'export const y = 2;\n');
+        git(repo, 'add', 'staged.ts');
         writeFileSync(join(repo, 'novo.ts'), 'export const x = 1;\n');
-        expect(await arquivosAlterados(repo)).toContain('novo.ts');
+        expect(await arquivosAlterados(repo)).toEqual(
+            expect.arrayContaining(['README.md', 'staged.ts', 'novo.ts']),
+        );
     });
 });

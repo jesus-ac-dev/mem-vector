@@ -240,16 +240,27 @@ export async function diffDoRepo(cwd: string): Promise<string> {
  *  Alimentam o gate AFETADO — só os testes ligados ao diff, não a suite inteira. */
 export async function arquivosAlterados(cwd: string): Promise<string[]> {
     await correrGit(cwd, ['add', '-N', '.']);
-    const r = await correrGit(cwd, ['--no-pager', 'diff', '--name-only']);
-    return r.stdout
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean);
+    const [worktree, staged] = await Promise.all([
+        correrGit(cwd, ['--no-pager', 'diff', '--name-only']),
+        correrGit(cwd, ['--no-pager', 'diff', '--cached', '--name-only']),
+    ]);
+    return Array.from(
+        new Set(
+            `${worktree.stdout}\n${staged.stdout}`
+                .split('\n')
+                .map((l) => l.trim())
+                .filter(Boolean),
+        ),
+    );
 }
 
 /** Tira os escapes ANSI (cores do vitest) — o output ia cru para o comentário. */
 export function limparAnsi(texto: string): string {
     return texto.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function shellQuote(valor: string): string {
+    return `'${valor.replace(/'/g, `'\\''`)}'`;
 }
 
 /** O comando do test-gate. Por default corre só os testes AFETADOS pelo diff
@@ -260,7 +271,7 @@ export function limparAnsi(texto: string): string {
 export function comandoTestes(arquivos: string[], envValue = process.env.RELAY_TEST_CMD): string {
     if (envValue?.trim()) return envValue.trim();
     if (arquivos.length === 0) return '';
-    const lista = arquivos.map((f) => JSON.stringify(f)).join(' ');
+    const lista = arquivos.map(shellQuote).join(' ');
     return `npx vitest related --run --passWithNoTests ${lista}`;
 }
 
