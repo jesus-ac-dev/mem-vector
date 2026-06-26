@@ -62,6 +62,9 @@ const PROTECTED = ['/chat', '/kanban', '/knowledge', '/daily', '/grupos'];
   **multi-tenant hostil**; numa app pessoal local de 1 utilizador não dá segurança, só
   cria a corrida. **Rever se/quando for SaaS multi-tenant.**
 - **`jwt_expiry = 86400`** (24h, era 1h). Menos refreshes = menos corridas.
+- **`site_url` / `additional_redirect_urls = http://127.0.0.1:2500`** (#179). Têm de bater
+  com a porta DEV deste projeto (`next dev -p 2500`, ver `package.json`). Estavam em `:3000`
+  (a default do Next, que aqui é o crmcredito) e com `https` — local não tem TLS.
 - Mudar estes valores exige `supabase stop && supabase start` (o gotrue lê o config no arranque).
 
 ## Ligações
