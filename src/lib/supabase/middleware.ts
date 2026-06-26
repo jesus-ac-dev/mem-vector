@@ -32,16 +32,20 @@ export async function updateSession(request: NextRequest) {
     const path = request.nextUrl.pathname;
     const isProtected = PROTECTED.some((p) => path.startsWith(p));
 
-    if (!user && isProtected) {
+    // Um redirect novo não herda os cookies que o getUser() acima possa ter
+    // refrescado no `response`. Sem os copiar, o browser fica com o refresh token
+    // já rodado → o pedido seguinte falha o getUser e a sessão "expira" (401).
+    // Padrão oficial do Supabase SSR (#174).
+    const redirecionar = (pathname: string) => {
         const url = request.nextUrl.clone();
-        url.pathname = '/login';
-        return NextResponse.redirect(url);
-    }
-    if (user && path === '/login') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/chat';
-        return NextResponse.redirect(url);
-    }
+        url.pathname = pathname;
+        const r = NextResponse.redirect(url);
+        response.cookies.getAll().forEach((c) => r.cookies.set(c));
+        return r;
+    };
+
+    if (!user && isProtected) return redirecionar('/login');
+    if (user && path === '/login') return redirecionar('/chat');
 
     return response;
 }
