@@ -28,7 +28,12 @@ function resp(text: string): RespostaRepo {
 function fakeIo(over: Partial<IoOrquestrador> = {}) {
     const comentarios: string[] = [];
     const semaforos: Semaforo[] = [];
-    const progressos: { fase: RelayFase; semaforo: Semaforo; prUrl?: string | null }[] = [];
+    const progressos: {
+        fase: RelayFase;
+        semaforo: Semaforo;
+        prUrl?: string | null;
+        relayProgresso?: string | null;
+    }[] = [];
     const progressoTextos: string[] = [];
     const corridas: { provider: Provider; escrever: boolean }[] = [];
     const io: IoOrquestrador = {
@@ -36,7 +41,12 @@ function fakeIo(over: Partial<IoOrquestrador> = {}) {
         progresso: vi.fn(async (texto: string) => void progressoTextos.push(texto)),
         moverSemaforo: vi.fn(async (_de, para) => void semaforos.push(para)),
         atualizarProgresso: vi.fn(async (fase, semaforo, campos) => {
-            progressos.push({ fase, semaforo, prUrl: campos?.prUrl });
+            progressos.push({
+                fase,
+                semaforo,
+                prUrl: campos?.prUrl,
+                relayProgresso: campos?.relayProgresso,
+            });
         }),
         abrirBranch: vi.fn(async () => {}),
         diff: vi.fn(async () => 'diff fake'),
@@ -78,9 +88,14 @@ describe('orquestrarCom — pipeline verde', () => {
         // Estrela: análise antes da execução.
         expect(ordem).toEqual(['analise', 'dev']);
         expect(progressos).toEqual([
-            { fase: 'analise', semaforo: 'processando', prUrl: undefined },
-            { fase: 'dev', semaforo: 'processando', prUrl: undefined },
-            { fase: 'pr', semaforo: 'pronto', prUrl: 'https://github.com/o/r/pull/9' },
+            { fase: 'analise', semaforo: 'processando', prUrl: undefined, relayProgresso: null },
+            { fase: 'dev', semaforo: 'processando', prUrl: undefined, relayProgresso: null },
+            {
+                fase: 'pr',
+                semaforo: 'pronto',
+                prUrl: 'https://github.com/o/r/pull/9',
+                relayProgresso: null,
+            },
         ]);
         expect(io.commitPush).toHaveBeenCalledTimes(1);
         expect(comentarios.some((c) => c.includes('🟢'))).toBe(true);
@@ -208,9 +223,9 @@ describe('orquestrarCom — kill-switch', () => {
         expect(io.criarPR).not.toHaveBeenCalled();
         expect(io.commitPush).not.toHaveBeenCalled();
         expect(progressos).toEqual([
-            { fase: 'analise', semaforo: 'processando', prUrl: undefined },
-            { fase: 'dev', semaforo: 'processando', prUrl: undefined },
-            { fase: 'dev', semaforo: 'bloqueado', prUrl: undefined },
+            { fase: 'analise', semaforo: 'processando', prUrl: undefined, relayProgresso: null },
+            { fase: 'dev', semaforo: 'processando', prUrl: undefined, relayProgresso: null },
+            { fase: 'dev', semaforo: 'bloqueado', prUrl: undefined, relayProgresso: null },
         ]);
         expect(comentarios.some((c) => c.includes('🔴') && c.includes('falta o teste'))).toBe(true);
     });
@@ -466,7 +481,9 @@ describe('promptValidador', () => {
 
 describe('textoProgresso (sub-passo live)', () => {
     it('fase · ronda · provider · ação', () => {
-        expect(textoProgresso('dev', 3, 'codex', 'a validar')).toBe('dev · ronda 3 · codex a validar');
+        expect(textoProgresso('dev', 3, 'codex', 'a validar')).toBe(
+            'dev · ronda 3 · codex a validar',
+        );
     });
     it('sem provider (test-gate)', () => {
         expect(textoProgresso('testes', 2, null, 'a correr testes')).toBe(

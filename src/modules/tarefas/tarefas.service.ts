@@ -196,6 +196,7 @@ export async function varrerRelaysOrfaosCom(db: SupabaseClient): Promise<number>
                 {
                     relay_estado: 'bloqueado',
                     relay_fase: 'órfão',
+                    relay_progresso: null,
                     relay_heartbeat: new Date().toISOString(),
                 },
                 { count: 'exact' },
