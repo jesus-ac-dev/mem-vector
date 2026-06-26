@@ -53,6 +53,21 @@ const PROTECTED = ['/chat', '/kanban', '/knowledge', '/daily', '/grupos'];
 - Utilizador **com sessão** em `/login` → redirect para `/chat`.
 - `/` e outras rotas públicas ficam abertas.
 
+## Tokens de sessão (`supabase/config.toml`)
+
+- **`enable_refresh_token_rotation = false`** (#179). A rotação torna o refresh token
+  single-use; como a app dispara vários pedidos concorrentes (abrir nota = layout +
+  barra-direita + ...), eles refrescam o mesmo token em corrida e invalidam-se uns aos
+  outros → a sessão cai ("sessão expirada"). A rotação é defesa anti-roubo de token para
+  **multi-tenant hostil**; numa app pessoal local de 1 utilizador não dá segurança, só
+  cria a corrida. **Rever se/quando for SaaS multi-tenant.**
+- **`jwt_expiry = 86400`** (24h, era 1h). Menos refreshes = menos corridas.
+- **`site_url = http://localhost:2500`** + `additional_redirect_urls` com `localhost:2500` e
+  `127.0.0.1:2500` (#179). Têm de bater com a porta DEV deste projeto (`next dev -p 2500`, ver
+  `package.json`) e aceitar os dois hosts locais usados em dev. Estavam em `:3000` (a default do
+  Next, que aqui é o crmcredito) e com `https` — local não tem TLS.
+- Mudar estes valores exige `supabase stop && supabase start` (o gotrue lê o config no arranque).
+
 ## Ligações
 
 - **É a fundação do produto:** sem sessão não existe `auth.uid()`, logo toda a RLS de `conversations`, `messages`, `chunks`, `tarefas`, `knowledge` e `grupos` depende deste módulo.
