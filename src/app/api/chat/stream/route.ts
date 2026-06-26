@@ -25,8 +25,25 @@ export async function POST(request: Request) {
     const db = await createClient();
     const {
         data: { user },
+        error: authError,
     } = await db.auth.getUser();
-    if (!user) return new Response(JSON.stringify({ error: 'sem sessão' }), { status: 401 });
+    if (!user) {
+        // Instrumentação #174: 401 intermitente. Regista se os cookies de auth
+        // chegaram e o erro do getUser, para a próxima ocorrência dizer a causa
+        // (sessão em falta vs token inválido/rodado) em vez de teoria. Só dispara
+        // no 401, por isso não polui o log normal.
+        const cookieHeader = request.headers.get('cookie') ?? '';
+        const sbCookies = cookieHeader
+            .split(';')
+            .map((c) => c.split('=')[0].trim())
+            .filter((n) => n.startsWith('sb-'));
+        console.warn('[auth/chat-stream] 401 sem sessão', {
+            temAuthCookie: sbCookies.some((n) => n.includes('auth-token')),
+            sbCookies,
+            getUserError: authError?.message ?? null,
+        });
+        return new Response(JSON.stringify({ error: 'sem sessão' }), { status: 401 });
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

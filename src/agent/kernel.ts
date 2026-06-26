@@ -21,18 +21,22 @@ const CAP_RELAY_TOTAL = 6000;
 const TITULOS_RELAY_RE =
     /regras?|m[ée]todo|modo|trabalho|craft|voz|prioridades?|qualidade|c[oó]digo|dev|desenvolvimento|relay/i;
 
-export async function lerKernelCom(db: SupabaseClient): Promise<NotaKernel[]> {
-    const {
-        data: { user },
-    } = await db.auth.getUser();
-    if (!user) return [];
+export async function lerKernelCom(db: SupabaseClient, userId?: string): Promise<NotaKernel[]> {
+    let uid = userId;
+    if (!uid) {
+        const {
+            data: { user },
+        } = await db.auth.getUser();
+        if (!user) return [];
+        uid = user.id;
+    }
 
     // O unique index de folders é por lower(name) ao nível — há no máximo uma
     // pasta "Kernel" na raiz, em qualquer capitalização.
     const { data: pastas, error } = await db
         .from('folders')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', uid)
         .is('parent_id', null)
         .eq('archived', false)
         .ilike('name', 'kernel');
@@ -42,7 +46,7 @@ export async function lerKernelCom(db: SupabaseClient): Promise<NotaKernel[]> {
     const { data: notas, error: e2 } = await db
         .from('knowledge')
         .select('title, content_md')
-        .eq('owner_id', user.id)
+        .eq('owner_id', uid)
         .eq('folder_id', pastas[0].id)
         .eq('archived', false)
         .order('title');
@@ -312,9 +316,9 @@ export async function pastaKernelIdCom(db: SupabaseClient): Promise<string | nul
 // não tem a nota pessoal "Sobre mim" é novo — falta preencher o pessoal pela
 // entrevista. O dono (seed:user) nasce com o pessoal e não cai aqui. Sem Kernel
 // (opt-out / antes do seed) não força. Não-fatal: nunca bloqueia o arranque.
-export async function precisaOnboardingCom(db: SupabaseClient): Promise<boolean> {
+export async function precisaOnboardingCom(db: SupabaseClient, userId?: string): Promise<boolean> {
     try {
-        const notas = await lerKernelCom(db);
+        const notas = await lerKernelCom(db, userId);
         if (!notas.length) return false;
         return !notas.some((n) => n.title === 'Sobre mim');
     } catch (e) {
