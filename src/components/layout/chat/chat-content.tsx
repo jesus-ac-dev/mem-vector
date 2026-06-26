@@ -29,7 +29,11 @@ import {
     type ChatTrace,
 } from '@/modules/chat/chat.trace';
 import { Button } from '@/components/ui/button';
-import { logClientError } from '@/lib/client-error-log';
+import {
+    logClientError,
+    isUnexpectedServerActionResponse,
+    STALE_APP_EVENT,
+} from '@/lib/client-error-log';
 import { Markdown } from '@/components/ui/markdown';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/components/layout/workspace/workspace-context';
@@ -836,12 +840,25 @@ export function ChatContent({ rodape = false }: { rodape?: boolean } = {}) {
                     }
                 })
                 .catch((e: unknown) => {
-                    // The job is durable in agent_jobs; this only reflects the current UI attempt.
                     logClientError({ area: 'chat', action: 'processarDestilacaoJob' }, e);
+                    // O job é durável (agent_jobs) e o sweeper server-side conclui-o à
+                    // mesma. Se a falha foi só o server action a ficar stale em dev (build
+                    // novo + tab velho), não é erro de destilação: avisa a app para
+                    // recarregar (mesmo canal do resto) e NÃO marca a bolha como falhada —
+                    // ao recarregar, o resultado já lá está. Erro genuíno mantém o estado.
+                    const stale =
+                        typeof window !== 'undefined' && isUnexpectedServerActionResponse(e);
+                    if (stale) {
+                        window.dispatchEvent(
+                            new CustomEvent(STALE_APP_EVENT, {
+                                detail: { area: 'chat', action: 'processarDestilacaoJob' },
+                            }),
+                        );
+                    }
                     setMessages((prev) =>
                         prev.map((m) =>
                             m.id === asstMsgId
-                                ? { ...m, destilando: false, destilacaoErro: true }
+                                ? { ...m, destilando: false, destilacaoErro: !stale }
                                 : m,
                         ),
                     );
