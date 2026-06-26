@@ -91,6 +91,11 @@ function caminhoDasPastas(pastas: Pasta[]): Map<string, string> {
     return memo;
 }
 
+/** Escapa os metacaracteres de LIKE/ILIKE (`\ % _`) para casar o path literal. */
+function escaparLike(texto: string): string {
+    return texto.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 async function reescreverWikilinksDePastaRenomeadaCom(
     db: SupabaseClient,
     ownerId: string,
@@ -99,13 +104,19 @@ async function reescreverWikilinksDePastaRenomeadaCom(
 ): Promise<void> {
     if (oldPath === newPath) return;
 
+    // Só as notas que REFERENCIAM o path (filtro server-side). Sem ele, o SELECT
+    // batia no teto de 1000 linhas do PostgREST: com >1000 notas não-arquivadas,
+    // notas recém-criadas (fora das 1000 arbitrárias) não eram reescritas — bug
+    // silencioso de links partidos, e a causa do teste flaky. O ILIKE é superset
+    // do que `reescreverWikilinkPaths` altera, por isso não falha nenhuma nota.
     // Arquivadas ficam de fora (#28): a escrita recusa-as e os links delas são
     // dormentes — o restore resolve edges pendentes por slug.
     const { data, error } = await db
         .from('knowledge')
         .select('id, content_md')
         .eq('owner_id', ownerId)
-        .eq('archived', false);
+        .eq('archived', false)
+        .ilike('content_md', `%${escaparLike(oldPath)}%`);
     if (error) throw new Error(`ler notas para rename de pasta: ${error.message}`);
 
     for (const nota of data ?? []) {
