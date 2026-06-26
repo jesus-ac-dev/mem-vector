@@ -244,10 +244,21 @@ function CartaoTarefa({
                                             : `issue #${tarefa.issueGithub}`}
                                     </span>
                                 </a>
-                                {tarefa.relayFase && (
-                                    <span className="shrink-0 text-muted-foreground">
-                                        {RELAY_FASE_LABEL[tarefa.relayFase] ?? tarefa.relayFase}
+                                {tarefa.relayEstado === 'processando' && tarefa.relayProgresso ? (
+                                    // Sub-passo LIVE (ronda/provider/ação) enquanto corre — mata o
+                                    // blackout entre fases e mostra o provider a trabalhar (#160).
+                                    <span
+                                        className="min-w-0 animate-pulse truncate capitalize text-muted-foreground"
+                                        title={tarefa.relayProgresso}
+                                    >
+                                        {tarefa.relayProgresso}
                                     </span>
+                                ) : (
+                                    tarefa.relayFase && (
+                                        <span className="shrink-0 text-muted-foreground">
+                                            {RELAY_FASE_LABEL[tarefa.relayFase] ?? tarefa.relayFase}
+                                        </span>
+                                    )
                                 )}
                             </span>
                             {!concluida && repoPath && (

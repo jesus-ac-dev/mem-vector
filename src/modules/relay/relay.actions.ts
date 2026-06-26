@@ -64,6 +64,7 @@ async function marcarFalhaRelay(opts: {
     await atualizarRelayPorIssueCom(opts.db, opts.repo, opts.issue, {
         relayEstado: 'bloqueado',
         relayFase: 'erro',
+        relayProgresso: null,
     });
 }
 

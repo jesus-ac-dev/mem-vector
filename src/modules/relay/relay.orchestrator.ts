@@ -193,11 +193,14 @@ export function promptValidador(
 // passa fakes e verifica a LÓGICA (handoff por substep, PR no verde, 🔴 no kill).
 export interface IoOrquestrador {
     comentar(body: string): Promise<void>;
+    // Sub-passo LIVE (ronda/provider/ação) para a vista do kanban não ficar no
+    // escuro entre transições de fase. Best-effort, efémero. Opcional (testes).
+    progresso?(texto: string): Promise<void>;
     moverSemaforo(de: Semaforo | null, para: Semaforo): Promise<void>;
     atualizarProgresso?(
         fase: RelayFase,
         semaforo: Semaforo,
-        campos?: { prUrl?: string | null },
+        campos?: { prUrl?: string | null; relayProgresso?: string | null },
     ): Promise<void>;
     // retoma=true continua o branch existente (não reseta — preserva o trabalho).
     abrirBranch(branch: string, retoma: boolean): Promise<void>;
@@ -233,10 +236,22 @@ async function atualizarProgressoRelay(
     campos: { prUrl?: string | null } = {},
 ): Promise<void> {
     if (io.atualizarProgresso) {
-        await io.atualizarProgresso(fase, semaforo, campos);
+        await io.atualizarProgresso(fase, semaforo, { ...campos, relayProgresso: null });
         return;
     }
     await io.moverSemaforo(null, semaforo);
+}
+
+// O texto do sub-passo live (kanban): fase · ronda · quem · ação. Curto, para o
+// cartão; o trace completo continua nos comentários da issue.
+export function textoProgresso(
+    cruzamento: Cruzamento,
+    ronda: number,
+    provider: Provider | null,
+    acao: string,
+): string {
+    const quem = provider ? `${provider} ` : '';
+    return `${cruzamento} · ronda ${ronda} · ${quem}${acao}`;
 }
 
 // Corre UM cruzamento com handoffs por substep. Reaproveita o round-loop puro do
@@ -262,6 +277,7 @@ export async function orquestrarCruzamentoCom(opts: {
         maxRondas,
         produzir: async (feedback) => {
             ronda += 1;
+            await io.progresso?.(textoProgresso(cruzamento, ronda, principal, 'a trabalhar'));
             const resp = await io.correr(
                 principal,
                 promptPrincipal(cruzamento, spec, feedback, memoria),
@@ -294,6 +310,7 @@ export async function orquestrarCruzamentoCom(opts: {
                           const referencia = escreve ? await io.diff() : output;
                           // Escreve a melhoria SE for repo-writer; senão revê read-only.
                           const escreverV = escreve && (escritores ? escritores.includes(v) : true);
+                          await io.progresso?.(textoProgresso(cruzamento, ronda, v, 'a validar'));
                           const resp = await io.correr(
                               v,
                               promptValidador(cruzamento, spec, referencia, memoria),
@@ -316,6 +333,9 @@ export async function orquestrarCruzamentoCom(opts: {
                       // trabalho ACUMULADO (principal + melhorias dos validadores). Vermelho
                       // = mais uma ronda com o output dos testes, não se finge verde.
                       if (escreve && io.testar) {
+                          await io.progresso?.(
+                              textoProgresso(cruzamento, ronda, null, 'a correr testes'),
+                          );
                           const t = await io.testar();
                           await io.comentar(
                               `— Testes · gate · ${cruzamento} · ronda ${ronda}\n\n` +
@@ -521,7 +541,7 @@ export async function orquestrarCom(opts: {
     const marcarProgresso = async (
         fase: RelayFase,
         semaforo: Semaforo,
-        campos: { prUrl?: string | null } = {},
+        campos: { prUrl?: string | null; relayProgresso?: string | null } = {},
     ) => {
         const chave = `${fase}:${semaforo}:${campos.prUrl ?? ''}`;
         if (chave === ultimoProgresso) return;
@@ -607,7 +627,7 @@ export function construirIo(opts: {
     const atualizarProgressoReal = async (
         fase: RelayFase,
         semaforo: Semaforo,
-        campos: { prUrl?: string | null } = {},
+        campos: { prUrl?: string | null; relayProgresso?: string | null } = {},
     ) => {
         const ativa = relayFaseLabel(fase, semaforo);
         await editarLabels(token, {
@@ -621,12 +641,19 @@ export function construirIo(opts: {
                 relayEstado: semaforo,
                 relayFase: fase,
                 relayPrUrl: campos.prUrl,
+                relayProgresso: campos.relayProgresso ?? null,
                 estado: estadoKanbanDaFase(fase) ?? undefined,
             });
         }
     };
     return {
         comentar: (body) => comentarIssue(token, { repo, number: issue, body }).then(() => {}),
+        // Sub-passo live → só o cartão (DB), sem tocar GitHub. Bate o heartbeat
+        // (atualizarRelayPorIssueCom) → o sweeper de órfãos não dá a fase longa
+        // como congelada. Efémero: a vista só o mostra enquanto processa.
+        progresso: async (texto) => {
+            if (db) await atualizarRelayPorIssueCom(db, repo, issue, { relayProgresso: texto });
+        },
         moverSemaforo: async (_de, para) => atualizarProgressoReal('erro', para),
         atualizarProgresso: atualizarProgressoReal,
         abrirBranch: (branch, retoma) =>

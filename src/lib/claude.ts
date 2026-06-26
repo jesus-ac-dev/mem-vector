@@ -100,6 +100,24 @@ export type EventoStream =
       }
     | { tipo: 'ignorar' };
 
+// O claude CLI pode reportar VÁRIOS modelos num turno (o principal + um modelo
+// barato para sub-passos internos do modo agentic). O que REALMENTE respondeu é o
+// que fez o trabalho pesado — o de maior custo. `Object.keys(modelUsage)[0]`
+// apanhava uma chave arbitrária (ex.: haiku) e mentia no trace (#183: "opus
+// selecionado mas o trace diz haiku"). Não muda o modelo que corre, só o reporte.
+export function modeloPrincipal(modelUsage?: Record<string, unknown>): string | undefined {
+    const entradas = Object.entries(modelUsage ?? {});
+    if (entradas.length === 0) return undefined;
+    const custo = (v: unknown): number =>
+        typeof v === 'object' &&
+        v !== null &&
+        typeof (v as { costUSD?: unknown }).costUSD === 'number' &&
+        Number.isFinite((v as { costUSD: number }).costUSD)
+            ? (v as { costUSD: number }).costUSD
+            : 0;
+    return entradas.reduce((a, b) => (custo(b[1]) > custo(a[1]) ? b : a))[0];
+}
+
 export function interpretarLinhaStream(linha: string): EventoStream {
     const t = linha.trim();
     if (!t) return { tipo: 'ignorar' };
@@ -140,7 +158,7 @@ export function interpretarLinhaStream(linha: string): EventoStream {
         return {
             tipo: 'final',
             costUsd: Number(d.total_cost_usd ?? 0),
-            model: Object.keys(d.modelUsage ?? {})[0],
+            model: modeloPrincipal(d.modelUsage),
             tokensIn: tokens.tokensIn,
             tokensCache: tokens.tokensCache,
             tokensOut: tokens.tokensOut,
@@ -420,8 +438,9 @@ function runClaudeCli(prompt: string, opts?: RunOptions): Promise<Generation> {
                     usage?: unknown;
                 };
                 // O modelo REAL vem do envelope (#60 r8): o auto-relato dos
-                // modelos é mentiroso — isto é a prova de qual respondeu.
-                const modelo = Object.keys(envelope.modelUsage ?? {})[0];
+                // modelos é mentiroso — isto é a prova de qual respondeu. O
+                // principal é o de maior custo, não a 1ª chave (#183).
+                const modelo = modeloPrincipal(envelope.modelUsage);
                 const tokens = tokensDoEnvelopeClaude(envelope.usage);
                 finish(() =>
                     resolve({

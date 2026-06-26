@@ -191,6 +191,7 @@ function tarefa(parcial: Partial<Tarefa> & { id: string }): Tarefa {
         relayEstado: null,
         relayFase: null,
         relayPrUrl: null,
+        relayProgresso: null,
         acceptance: null,
         blocker: null,
         evidence: null,
