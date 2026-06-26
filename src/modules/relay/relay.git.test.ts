@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+    arquivosAlterados,
     branchLocalWorktree,
     buildBranchArgs,
     buildCommitPushArgs,
@@ -18,6 +19,7 @@ import {
     comandoTestes,
     INTERN_EMAIL,
     INTERN_NOME,
+    limparAnsi,
     nomeBranch,
     prepararWorktree,
     removerWorktree,
@@ -68,11 +70,25 @@ describe('buildStatusArgs', () => {
 });
 
 describe('comandoTestes', () => {
-    it('default = npm test', () => {
-        expect(comandoTestes(undefined)).toBe('npm test');
+    it('default = vitest related só dos ficheiros AFETADOS (não a suite inteira)', () => {
+        expect(comandoTestes(['src/a.ts', 'src/b.tsx'], undefined)).toBe(
+            'npx vitest related --run --passWithNoTests "src/a.ts" "src/b.tsx"',
+        );
     });
-    it('respeita o RELAY_TEST_CMD', () => {
-        expect(comandoTestes('pnpm -s test')).toBe('pnpm -s test');
+    it('sem ficheiros alterados = comando vazio (nada a testar)', () => {
+        expect(comandoTestes([], undefined)).toBe('');
+    });
+    it('RELAY_TEST_CMD continua a ser o override total (suite inteira / outro runner)', () => {
+        expect(comandoTestes(['src/a.ts'], 'pnpm -s test')).toBe('pnpm -s test');
+    });
+});
+
+describe('limparAnsi', () => {
+    it('tira os escapes ANSI do output do vitest', () => {
+        expect(limparAnsi('\x1b[31mFAIL\x1b[39m teste')).toBe('FAIL teste');
+    });
+    it('deixa texto sem ANSI intacto', () => {
+        expect(limparAnsi('suite verde')).toBe('suite verde');
     });
 });
 
@@ -209,5 +225,10 @@ describe('prepararWorktree (integração git)', () => {
     it('removerWorktree apaga o dir', async () => {
         await removerWorktree(repo, dir);
         expect(existsSync(dir)).toBe(false);
+    });
+
+    it('arquivosAlterados lista os ficheiros mexidos (untracked incl.)', async () => {
+        writeFileSync(join(repo, 'novo.ts'), 'export const x = 1;\n');
+        expect(await arquivosAlterados(repo)).toContain('novo.ts');
     });
 });

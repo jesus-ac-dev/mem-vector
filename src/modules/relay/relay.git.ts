@@ -236,24 +236,56 @@ export async function diffDoRepo(cwd: string): Promise<string> {
     return r.stdout;
 }
 
-/** O comando de testes do repo (RELAY_TEST_CMD; default `npm test`). */
-export function comandoTestes(envValue = process.env.RELAY_TEST_CMD): string {
-    return envValue?.trim() || 'npm test';
+/** Os ficheiros que o agente mexeu nesta run (vs HEAD; untracked via add -N).
+ *  Alimentam o gate AFETADO — só os testes ligados ao diff, não a suite inteira. */
+export async function arquivosAlterados(cwd: string): Promise<string[]> {
+    await correrGit(cwd, ['add', '-N', '.']);
+    const r = await correrGit(cwd, ['--no-pager', 'diff', '--name-only']);
+    return r.stdout
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
 }
 
-/** Test-gate: corre a suite do repo no cwd. Vermelho aqui = devolver ao principal
- *  ANTES de gastar o validador (espelha o pytest-gate do POC). Via shell para
- *  aceitar comandos compostos (`npm test`, `pnpm -s test`, ...). */
-export function correrTestes(cwd: string): Promise<{ ok: boolean; output: string }> {
+/** Tira os escapes ANSI (cores do vitest) — o output ia cru para o comentário. */
+export function limparAnsi(texto: string): string {
+    return texto.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+/** O comando do test-gate. Por default corre só os testes AFETADOS pelo diff
+ *  (`vitest related`), não a suite inteira a cada ronda — corta o tempo e evita
+ *  bloquear num teste alheio (ex.: o #141 parava num RLS sem relação com o diff).
+ *  `RELAY_TEST_CMD` continua a ser o override total (suite inteira / outro runner).
+ *  Sem ficheiros alterados → '' (nada a testar). */
+export function comandoTestes(arquivos: string[], envValue = process.env.RELAY_TEST_CMD): string {
+    if (envValue?.trim()) return envValue.trim();
+    if (arquivos.length === 0) return '';
+    const lista = arquivos.map((f) => JSON.stringify(f)).join(' ');
+    return `npx vitest related --run --passWithNoTests ${lista}`;
+}
+
+/** Test-gate: corre os testes AFETADOS pelo diff no cwd. Vermelho aqui = devolver
+ *  ao principal ANTES de gastar o validador (espelha o pytest-gate do POC). Via
+ *  shell para comandos compostos; o ANSI do vitest é limpo do output. */
+export function correrTestes(
+    cwd: string,
+    arquivos: string[],
+): Promise<{ ok: boolean; output: string }> {
+    const cmd = comandoTestes(arquivos);
+    if (!cmd) {
+        return Promise.resolve({ ok: true, output: 'sem ficheiros alterados — nada a testar.' });
+    }
     return new Promise((resolve, reject) => {
-        const child = spawn(comandoTestes(), { cwd, env: process.env, shell: true });
+        const child = spawn(cmd, { cwd, env: process.env, shell: true });
         let out = '';
         child.stdout.on('data', (c: Buffer) => (out += c.toString()));
         child.stderr.on('data', (c: Buffer) => (out += c.toString()));
         child.on('error', (e: NodeJS.ErrnoException) =>
             reject(new Error(`testes não arrancaram: ${e.message}`)),
         );
-        // Cauda do output: o que interessa do fim (falhas) sem encher o comentário.
-        child.on('exit', (code) => resolve({ ok: code === 0, output: out.trim().slice(-2000) }));
+        // Cauda do output LIMPO (sem ANSI): o fim (falhas) sem encher o comentário.
+        child.on('exit', (code) =>
+            resolve({ ok: code === 0, output: limparAnsi(out).trim().slice(-2000) }),
+        );
     });
 }

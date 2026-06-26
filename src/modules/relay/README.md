@@ -92,8 +92,11 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
   na retoma); usa um branch local interno no worktree para não colidir com o branch que o humano possa
   ter aberto na working-copy, mas faz push para o branch público da PR (`feat/issue-N`); diff nesse cwd;
   ramo default REAL (não assume `main`); push com o `GH_TOKEN` do user. **`correrTestes`** =
-  test-gate (`RELAY_TEST_CMD`, default `npm test`):
-  a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
+  test-gate AFETADO: por default corre só os testes ligados ao diff (`vitest related` sobre
+  `arquivosAlterados`), não a suite inteira a cada ronda — corta o tempo e não bloqueia num teste
+  alheio. `RELAY_TEST_CMD` é o override total (suite/outro runner). O ANSI do vitest é limpo
+  (`limparAnsi`) antes de ir para o comentário. Juiz objetivo antes do validador-LLM (vermelho
+  devolve já ao principal).
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
 - **`relay.actions.ts`** — `dispararRelay` (trigger, com **fila** por-repo — FIFO/dedup; o 2º
   disparo enfileira) · `promoverTarefa` (cartão→issue).
@@ -162,9 +165,10 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
 partilhada — o relay deixou de roubar o branch do tree que o dev server serve / o humano edita
 (a colisão que se via). Em ficheiros, dois runs de issues diferentes já não conflituam.
 **Serialização por repo (fila FIFO):** mantida — mas a razão mudou: já não é o lock da working-copy
-(resolvido pelo worktree), é a **DB de testes partilhada** (o gate corre `npm test` contra o mesmo
-Supabase). Concorrência real entre issues fica para quando o gate for afinado (testes afetados, não a
-suite inteira).
+(resolvido pelo worktree), é a **DB de testes partilhada**. O gate já corre só os testes afetados
+(não a suite inteira), mas quando o diff toca um módulo com RLS esses testes batem no mesmo Supabase
+→ dois runs em paralelo poluir-se-iam. Concorrência real entre issues fica para quando o gate isolar
+também a DB (ou só correr os afetados não-integração).
 
 **Falta:** **skills por fase reais** (do [[agent-skills-compare]] — hoje prompts inline); o
 **smoke vivo** end-to-end.
