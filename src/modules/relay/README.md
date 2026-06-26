@@ -113,7 +113,9 @@ por-issue), e cada substep deixa rasto.
   de recuperação (tarefa, repo, issue, fase, PR, working copy) — fatia C (#M7). O agente diagnostica porque
   bloqueou + a ação mínima para retomar sem reiniciar; o humano decide e o agente re-dispara (retoma). Não
   auto-resolve a escalada — o humano é o juiz. O prompt e a tool `ler_estado_relay` expõem ainda um
-  `motivo` derivado de `relay_fase`: `erro`, `orfao` ou `sem-consenso` (sem coluna nova).
+  `motivo` derivado de `relay_fase`: `erro`, `orfao` ou `sem-consenso` (sem coluna nova). Quando o cartão
+  está bloqueado, `ler_estado_relay` também traz o trace real dos comentários da issue, porque é aí que o
+  relay publica análises, handoffs e erros concretos.
 - Disparo alternativo direto: página do módulo GitHub (Definições) — repo + nº da issue + **⚡ Disparar**.
 - O estado vive na issue (handoffs + label fase+cor); a **vista kanban segue** via
   `tarefas.relay_estado`/`relay_fase`/`relay_pr_url`, escritos pelo orchestrator. Enquanto houver

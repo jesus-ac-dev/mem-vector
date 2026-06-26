@@ -198,7 +198,8 @@ describe('responderComToolsCom (#89)', () => {
         const cfg = generateAgenticMock.mock.calls[0][1] as { systemPrompt?: string };
         expect(cfg.systemPrompt).toContain('KILL-SWITCH');
         expect(cfg.systemPrompt).toContain('ler_estado_relay');
-        expect(cfg.systemPrompt).toContain('ler_issues');
+        expect(cfg.systemPrompt).toContain('TRACE');
+        expect(cfg.systemPrompt).toContain('erro REAL');
         expect(cfg.systemPrompt).toContain('RETOMAR sem reiniciar');
         expect(cfg.systemPrompt).toContain('Não decides a escalada sozinho');
     });

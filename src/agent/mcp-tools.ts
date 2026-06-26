@@ -27,13 +27,13 @@ import {
     relayEstadoPorIssueCom,
     definirEstadoOperacionalCom,
 } from '../modules/tarefas/tarefas.service';
-import { motivoBloqueio } from '../modules/relay/relay.motivo';
 import { lerRunsRelayCom } from '../modules/relay/relay.runs';
 import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/daily.capture';
 import { registarEscrita, registarWeb, registarRelay } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
 import { envolverDados, envolverDadosOuFallback } from '../lib/datamark';
-import { criarIssue, lerIssues, comentarIssue, numeroDoUrl } from '../lib/github';
+import { criarIssue, lerIssues, comentarIssue, numeroDoUrl, verIssue } from '../lib/github';
+import { montarEstadoRelayAgenteComTrace } from './relay-estado-trace';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
 // o kernel (procurar/ler/criar/continuar nota, daily). Lançado pelo claude CLI
@@ -334,7 +334,7 @@ const GITHUB_TOOLS = [
     {
         name: 'ler_estado_relay',
         description:
-            'Lê o estado do relay de uma issue de um repo LIGADO (estado, fase atual, URL do PR quando verde). Usa para acompanhar/relatar depois de disparar_relay.',
+            'Lê o estado do relay de uma issue de um repo LIGADO (estado, fase atual, URL do PR quando verde). Se estiver bloqueado, inclui motivo e trace real dos comentários da issue. Usa para acompanhar/diagnosticar depois de disparar_relay.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -676,10 +676,11 @@ async function executarTool(
             const e = await relayEstadoPorIssueCom(db, repo, issue);
             if (!e)
                 return `Sem estado para ${repo} #${issue} (ainda não disparado ou cartão não ligado).`;
-            // Bloqueado: junta o motivo derivado (porque parou) para o agente diagnosticar.
-            const saida =
-                e.relayEstado === 'bloqueado' ? { ...e, motivo: motivoBloqueio(e.relayFase) } : e;
-            return JSON.stringify(saida);
+            const estado = await montarEstadoRelayAgenteComTrace(e, async () => {
+                const { comentarios } = await verIssue(GITHUB_TOKEN!, { repo, number: issue });
+                return comentarios;
+            });
+            return envolverDados(JSON.stringify(estado, null, 2), 'github');
         }
         case 'ler_runs_relay': {
             const repo =
