@@ -33,7 +33,7 @@ import { formatDailyTurnoEntry, type DailyTurnoNota } from '../modules/daily/dai
 import { registarEscrita, registarWeb, registarRelay } from './resultado';
 import { procurarWeb, lerUrl, LimiteWebError } from '../lib/web';
 import { envolverDados, envolverDadosOuFallback } from '../lib/datamark';
-import { criarIssue, lerIssues, comentarIssue, numeroDoUrl } from '../lib/github';
+import { criarIssue, lerIssues, comentarIssue, numeroDoUrl, verIssue } from '../lib/github';
 
 // MCP server stdio do agente-autor: as mãos e os olhos da sessão agentic sobre
 // o kernel (procurar/ler/criar/continuar nota, daily). Lançado pelo claude CLI
@@ -676,10 +676,22 @@ async function executarTool(
             const e = await relayEstadoPorIssueCom(db, repo, issue);
             if (!e)
                 return `Sem estado para ${repo} #${issue} (ainda não disparado ou cartão não ligado).`;
-            // Bloqueado: junta o motivo derivado (porque parou) para o agente diagnosticar.
-            const saida =
-                e.relayEstado === 'bloqueado' ? { ...e, motivo: motivoBloqueio(e.relayFase) } : e;
-            return JSON.stringify(saida);
+            // Bloqueado: junta o motivo derivado + o TRACE real (os comentários da issue,
+            // onde o relay publica as análises e o erro concreto). Sem isto o agente só vê
+            // o motivo genérico e fica cego ao que realmente aconteceu (#177). Só no estado
+            // bloqueado — não adiciona round-trip ao polling de um relay saudável.
+            if (e.relayEstado === 'bloqueado') {
+                const base = { ...e, motivo: motivoBloqueio(e.relayFase) };
+                try {
+                    const { comentarios } = await verIssue(GITHUB_TOKEN!, { repo, number: issue });
+                    return JSON.stringify({ ...base, trace: comentarios });
+                } catch {
+                    // Falhar a ler os comentários (ex. gh transitório) não pode tirar o
+                    // estado ao agente — diagnostica com o motivo derivado, sem trace.
+                    return JSON.stringify(base);
+                }
+            }
+            return JSON.stringify(e);
         }
         case 'ler_runs_relay': {
             const repo =

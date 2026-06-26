@@ -69,8 +69,10 @@ const CONVENCAO_GITHUB =
     'trabalho vago/meio-cozido, perguntas ou não-código, NÃO proponhas — pergunta antes o que falta. ' +
     'Continua a CONFIRMAR sempre; nunca disparas sem o OK do utilizador.' +
     '\n\nKILL-SWITCH (relay bloqueado): se um relay parou (estado bloqueado — erro, ex. provider sem ' +
-    'tokens, ou sem-consenso), usa ler_estado_relay (fase/estado) + ler_issues (o trace) para ' +
-    'diagnosticar; explica porque bloqueou, que info falta, e a próxima ação mínima para RETOMAR sem ' +
+    'tokens, ou sem-consenso), usa ler_estado_relay: quando bloqueado traz o motivo derivado E o ' +
+    'TRACE (os comentários da issue, onde está o ERRO REAL e as análises). Diagnostica a partir do ' +
+    'erro REAL no trace — nunca inventes o motivo nem afirmes que não há trace; ' +
+    'explica porque bloqueou, que info falta, e a próxima ação mínima para RETOMAR sem ' +
     'reiniciar o trabalho. Com o OK do utilizador, comenta a direção (comentar_issue) e re-dispara ' +
     '(disparar_relay retoma a fase pelas labels, preserva o branch). Não decides a escalada sozinho — ' +
     'o utilizador é o juiz.';
