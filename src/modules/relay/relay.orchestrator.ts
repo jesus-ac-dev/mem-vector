@@ -25,7 +25,15 @@ import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
 import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.service';
 
 import { construirHandoff } from './relay.handoff';
-import { abrirBranch, commitPush, correrTestes, diffDoRepo, nomeBranch } from './relay.git';
+import {
+    commitPush,
+    correrTestes,
+    diffDoRepo,
+    nomeBranch,
+    prepararWorktree,
+    removerWorktree,
+    worktreeDir,
+} from './relay.git';
 import { correrPipeline, type ResultadoPipeline } from './relay.pipeline';
 import { providersAtivos, resolverCruzamento } from './relay.resolver';
 import { correrCruzamento, parseVeredito, type ResultadoCruzamento } from './relay.runner';
@@ -589,12 +597,13 @@ export function construirIo(opts: {
     token: string;
     repo: string;
     issue: number;
-    cwd: string;
+    repoPath: string; // a working-copy real do user (partilha o .git com o worktree)
+    cwd: string; // o worktree isolado deste run (onde os agentes/git/testes correm)
     base: string;
     defs: DefinicoesServidor;
     db?: SupabaseClient; // p/ a vista kanban seguir o semáforo (best-effort)
 }): IoOrquestrador {
-    const { token, repo, issue, cwd, base, defs, db } = opts;
+    const { token, repo, issue, repoPath, cwd, base, defs, db } = opts;
     const atualizarProgressoReal = async (
         fase: RelayFase,
         semaforo: Semaforo,
@@ -620,7 +629,8 @@ export function construirIo(opts: {
         comentar: (body) => comentarIssue(token, { repo, number: issue, body }).then(() => {}),
         moverSemaforo: async (_de, para) => atualizarProgressoReal('erro', para),
         atualizarProgresso: atualizarProgressoReal,
-        abrirBranch: (branch, retoma) => abrirBranch(cwd, branch, base, token, retoma),
+        abrirBranch: (branch, retoma) =>
+            prepararWorktree({ repoPath, dir: cwd, branch, base, token, retoma }).then(() => {}),
         diff: () => diffDoRepo(cwd),
         testar: () => correrTestes(cwd),
         marcarRetoma: async (cruzamento) => {
@@ -675,7 +685,10 @@ export async function orquestrar(opts: {
             `Repo "${repo}" sem path local — define-o e corre o Testar nas Definições.`,
         );
     }
-    const cwd = expandirHome(ligado.path);
+    const repoPath = expandirHome(ligado.path);
+    // Cada run vive no SEU worktree (isolado da working-copy partilhada); o cwd de
+    // tudo (agentes, git, testes) é esse dir, não o repo do user.
+    const cwd = worktreeDir(repoPath, issue);
 
     // O ramo default REAL (não assumir "main": o próprio mem-vector está em "master").
     const base = await ramoPrincipal(token, repo);
@@ -699,7 +712,7 @@ export async function orquestrar(opts: {
     // as fases que o user JÁ configurou viajam como override real (fasesConfiguradas).
     const fasesConfiguradas = Object.keys(defs.cruzamentos) as Cruzamento[];
     const defsRelay = normalizarDefsRelay(defs);
-    const io = construirIo({ token, repo, issue, cwd, base, defs: defsRelay, db });
+    const io = construirIo({ token, repo, issue, repoPath, cwd, base, defs: defsRelay, db });
     const resultado = await orquestrarCom({
         issue,
         defs: defsRelay,
@@ -712,6 +725,10 @@ export async function orquestrar(opts: {
         analiseInicial: goal ?? undefined,
         fasesConfiguradas,
     });
+
+    // Verde (PR ou nada-a-mudar): o trabalho já foi commitado+pushed → remove o
+    // worktree. Bloqueado: MANTÉM-SE (a retoma reusa o dir e o trabalho não-commitado).
+    if (resultado.estado !== 'bloqueado') await removerWorktree(repoPath, cwd);
 
     // #observability: regista o run no ledger (histórico consultável na app) — best-effort.
     await registarRunRelayCom(db, { repo, issue, resultado, inicio });

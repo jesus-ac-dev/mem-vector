@@ -47,8 +47,8 @@ por comentário são os próximos passos.
 ## Orchestrator (2026-06-21) — o motor sobre o miolo
 
 O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao GitHub: a issue
-é trigger + estado, o agente escreve **código de verdade** no working copy preparado (sem clonar
-por-issue), e cada substep deixa rasto.
+é trigger + estado, o agente escreve **código de verdade** num **`git worktree` isolado por run**
+(partilha só o `.git`, nunca a working-copy do user), e cada substep deixa rasto.
 
 - **`relay.orchestrator.ts`** — corre o **pipeline completo** (Análise→Dev→Testes→Docs) via
   `correrPipeline` (estrela: a execução lê o goal da Análise; kill-switch no 1.º que não valida).
@@ -86,9 +86,12 @@ por-issue), e cada substep deixa rasto.
   `systemctl` destrutivo) e `sudo`. Limite honesto: isto protege invocações via `PATH`; builtins do
   shell e chamadas por caminho absoluto continuam fora desta guarda e devem ser tratadas por ambiente
   descartável/sandbox.
-- **`relay.git.ts`** — branch (Intern Rule)/commit/push/diff no cwd; ramo default REAL (não assume
-  `main`); push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default
-  `npm test`): a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
+- **`relay.git.ts`** — **worktree isolado por run** (`prepararWorktree`/`worktreeDir`/`removerWorktree`:
+  cada issue no seu dir sob `RELAY_WORKTREE_ROOT` — default irmão do repo —, a partilhar só o `.git`;
+  `node_modules`/`.env*` ligados por symlink; criado fresco do base remoto, removido no verde, reusado
+  na retoma); branch (Intern Rule)/commit/push/diff nesse cwd; ramo default REAL (não assume `main`);
+  push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default `npm test`):
+  a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
 - **`relay.actions.ts`** — `dispararRelay` (trigger, com **fila** por-repo — FIFO/dedup; o 2º
   disparo enfileira) · `promoverTarefa` (cartão→issue).
@@ -144,13 +147,16 @@ por-issue), e cada substep deixa rasto.
   re-disparo recomeça **nessa fase** (não na Análise), reusando o goal da Análise dos comentários
   (`faseDeRetoma`/`goalDaAnalise`/`correrPipeline({desde, analiseInicial})`). Sem goal guardado →
   recomeça do início.
-  Na retoma a `abrirBranch` **continua** o branch (`buildRetomaArgs`: não reseta de base) — o trabalho
-  não-commitado da fase anterior fica no working tree do disco (commit só no verde; o lock impede outro
-  relay no mesmo path). Resetar apagava-o (achado do Audit).
+  Na retoma o worktree da issue é **reusado** (não recriado) — o trabalho não-commitado da fase
+  anterior fica lá no disco (commit só no verde). Recriar de base apagava-o (achado do Audit).
 
-**Um relay de cada vez por repo:** o working copy é partilhado (`checkout -B` + `add -A`); uma
-fila FIFO em memória trava disparos concorrentes no mesmo path, deduplica a issue ativa/enfileirada
-e corre a próxima quando o relay atual termina.
+**Isolamento por run (worktree):** cada run vive no seu `git worktree`, não na working-copy
+partilhada — o relay deixou de roubar o branch do tree que o dev server serve / o humano edita
+(a colisão que se via). Em ficheiros, dois runs de issues diferentes já não conflituam.
+**Serialização por repo (fila FIFO):** mantida — mas a razão mudou: já não é o lock da working-copy
+(resolvido pelo worktree), é a **DB de testes partilhada** (o gate corre `npm test` contra o mesmo
+Supabase). Concorrência real entre issues fica para quando o gate for afinado (testes afetados, não a
+suite inteira).
 
 **Falta:** **skills por fase reais** (do [[agent-skills-compare]] — hoje prompts inline); o
 **smoke vivo** end-to-end.

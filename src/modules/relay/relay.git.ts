@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 import { buildGhEnv } from '@/lib/github';
 
@@ -105,6 +107,106 @@ export async function abrirBranch(
     if (!retoma) await garantirWorkingTreeLimpa(cwd);
     const seq = retoma ? buildRetomaArgs(branch) : buildBranchArgs(branch, base);
     await correrSequencia(cwd, seq, token);
+}
+
+// ── Worktree isolado por run ─────────────────────────────────────────────────
+// O relay deixou de operar na working-copy PARTILHADA (a mesma que o dev server
+// serve e o humano edita): aí roubava o branch e colidia com o trabalho local.
+// Agora cada run vive no SEU `git worktree` — isolado em ficheiros, a partilhar só
+// o .git. Também abre correr issues diferentes em paralelo (worktrees distintos).
+// Nota: a DB de testes continua PARTILHADA (o gate corre contra o mesmo Supabase).
+
+/** Raiz dos worktrees do relay (RELAY_WORKTREE_ROOT; default: irmã do repo, para
+ *  não sujar a working-copy nem precisar de entrada no .gitignore). */
+export function worktreeRoot(repoPath: string, envValue = process.env.RELAY_WORKTREE_ROOT): string {
+    return envValue?.trim() || join(repoPath, '..', '.relay-worktrees');
+}
+
+/** O dir isolado (determinístico) do worktree desta issue — a retoma reusa-o. */
+export function worktreeDir(repoPath: string, issue: number, envRoot?: string): string {
+    return join(worktreeRoot(repoPath, envRoot), `${basename(repoPath)}-issue-${issue}`);
+}
+
+/** Cria o worktree no branch da issue a partir do base remoto FRESCO — substitui o
+ *  `checkout base; pull; checkout -B` que o tree único fazia (e que roubava o ramo). */
+export function buildWorktreeAddArgs(dir: string, branch: string, base: string): string[] {
+    return ['worktree', 'add', '-B', branch, dir, `origin/${base}`];
+}
+
+/** Identidade do bot DENTRO do worktree (o relay nunca commita como o humano). */
+export function buildIdentidadeArgs(): string[][] {
+    return [
+        ['config', 'user.name', INTERN_NOME],
+        ['config', 'user.email', INTERN_EMAIL],
+    ];
+}
+
+export function buildWorktreeRemoveArgs(dir: string): string[] {
+    return ['worktree', 'remove', '--force', dir];
+}
+
+/** Liga os artefactos NÃO-versionados que os testes/Next precisam (node_modules,
+ *  .env*) ao worktree por symlink — partilham os do repo principal. Idempotente. */
+function ligarArtefactos(repoPath: string, dir: string): void {
+    for (const nome of ['node_modules', '.env', '.env.local']) {
+        const alvo = join(repoPath, nome);
+        const ligacao = join(dir, nome);
+        if (existsSync(alvo) && !existsSync(ligacao)) symlinkSync(alvo, ligacao);
+    }
+}
+
+async function worktreeRegistado(repoPath: string, dir: string): Promise<boolean> {
+    const r = await correrGit(repoPath, ['worktree', 'list', '--porcelain']);
+    return r.stdout.split('\n').some((l) => l === `worktree ${dir}`);
+}
+
+/** Garante que o caminho do worktree está livre antes de o (re)criar (best-effort). */
+async function limparWorktree(repoPath: string, dir: string): Promise<void> {
+    if (await worktreeRegistado(repoPath, dir)) {
+        await correrGit(repoPath, buildWorktreeRemoveArgs(dir));
+    }
+    rmSync(dir, { recursive: true, force: true });
+    await correrGit(repoPath, ['worktree', 'prune']);
+}
+
+/** Prepara o worktree isolado da issue e devolve o seu dir (o cwd do run). Fresh =
+ *  branch do base remoto fresco; retoma = reusa o dir no disco (preserva o trabalho
+ *  não-commitado da fase anterior). Sempre: identidade do bot + symlinks. */
+export async function prepararWorktree(opts: {
+    repoPath: string;
+    dir: string;
+    branch: string;
+    base: string;
+    token: string;
+    retoma: boolean;
+}): Promise<string> {
+    const { repoPath, dir, branch, base, token, retoma } = opts;
+    if (!(retoma && (await worktreeRegistado(repoPath, dir)))) {
+        await limparWorktree(repoPath, dir);
+        mkdirSync(dirname(dir), { recursive: true });
+        await correrSequencia(
+            repoPath,
+            [
+                ['fetch', 'origin', base],
+                buildWorktreeAddArgs(dir, branch, base),
+            ],
+            token,
+        );
+    }
+    await correrSequencia(dir, buildIdentidadeArgs(), token);
+    ligarArtefactos(repoPath, dir);
+    return dir;
+}
+
+/** Remove o worktree da issue (no verde: o trabalho já foi commitado+pushed). */
+export async function removerWorktree(repoPath: string, dir: string): Promise<void> {
+    try {
+        await correrGit(repoPath, buildWorktreeRemoveArgs(dir));
+        rmSync(dir, { recursive: true, force: true });
+        await correrGit(repoPath, ['worktree', 'prune']);
+    } catch (e) {
+        console.error('remover worktree falhou (segue):', e);
+    }
 }
 
 export async function commitPush(
