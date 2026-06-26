@@ -201,7 +201,7 @@ export interface IoOrquestrador {
     atualizarProgresso?(
         fase: RelayFase,
         semaforo: Semaforo,
-        campos?: { prUrl?: string | null },
+        campos?: { prUrl?: string | null; relayProgresso?: string | null },
     ): Promise<void>;
     // retoma=true continua o branch existente (não reseta — preserva o trabalho).
     abrirBranch(branch: string, retoma: boolean): Promise<void>;
@@ -237,7 +237,7 @@ async function atualizarProgressoRelay(
     campos: { prUrl?: string | null } = {},
 ): Promise<void> {
     if (io.atualizarProgresso) {
-        await io.atualizarProgresso(fase, semaforo, campos);
+        await io.atualizarProgresso(fase, semaforo, { ...campos, relayProgresso: null });
         return;
     }
     await io.moverSemaforo(null, semaforo);
@@ -334,7 +334,9 @@ export async function orquestrarCruzamentoCom(opts: {
                       // trabalho ACUMULADO (principal + melhorias dos validadores). Vermelho
                       // = mais uma ronda com o output dos testes, não se finge verde.
                       if (escreve && io.testar) {
-                          await io.progresso?.(textoProgresso(cruzamento, ronda, null, 'a correr testes'));
+                          await io.progresso?.(
+                              textoProgresso(cruzamento, ronda, null, 'a correr testes'),
+                          );
                           const t = await io.testar();
                           await io.comentar(
                               `— Testes · gate · ${cruzamento} · ronda ${ronda}\n\n` +
@@ -540,7 +542,7 @@ export async function orquestrarCom(opts: {
     const marcarProgresso = async (
         fase: RelayFase,
         semaforo: Semaforo,
-        campos: { prUrl?: string | null } = {},
+        campos: { prUrl?: string | null; relayProgresso?: string | null } = {},
     ) => {
         const chave = `${fase}:${semaforo}:${campos.prUrl ?? ''}`;
         if (chave === ultimoProgresso) return;
@@ -626,7 +628,7 @@ export function construirIo(opts: {
     const atualizarProgressoReal = async (
         fase: RelayFase,
         semaforo: Semaforo,
-        campos: { prUrl?: string | null } = {},
+        campos: { prUrl?: string | null; relayProgresso?: string | null } = {},
     ) => {
         const ativa = relayFaseLabel(fase, semaforo);
         await editarLabels(token, {
@@ -640,6 +642,7 @@ export function construirIo(opts: {
                 relayEstado: semaforo,
                 relayFase: fase,
                 relayPrUrl: campos.prUrl,
+                relayProgresso: campos.relayProgresso ?? null,
                 estado: estadoKanbanDaFase(fase) ?? undefined,
             });
         }

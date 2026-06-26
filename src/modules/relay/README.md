@@ -135,7 +135,7 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
 - **Sub-progresso LIVE** (`tarefas.relay_progresso`, via `io.progresso`/`textoProgresso`): a `relay_fase`
   só muda nas transições; ENTRE elas (vários spawns de CLI + a suite de testes) o cartão ficava 3-5 min
   no escuro. O orchestrator escreve o passo fino a cada substep — `<fase> · ronda N · <provider> a
-  trabalhar/validar` ou `... a correr testes` — e o cartão mostra-o (com o provider, #160) enquanto
+trabalhar/validar` ou `... a correr testes` — e o cartão mostra-o (com o provider, #160) enquanto
   `processando`. Efémero (sem histórico — o run-ledger trata disso) e bate o heartbeat (fases longas
   deixam de parecer congeladas ao sweeper de órfãos).
 

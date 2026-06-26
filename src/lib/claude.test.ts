@@ -9,8 +9,46 @@ import {
     claudeTimeoutMs,
     createAsyncSemaphore,
     interpretarLinhaStream,
+    modeloPrincipal,
     tokensDoEnvelopeClaude,
 } from './claude';
+
+describe('modeloPrincipal (#183)', () => {
+    it('escolhe o modelo de maior custo, não a 1ª chave (haiku interno no agentic)', () => {
+        // No agentic o CLI reporta o principal (opus, caro) + um interno (haiku,
+        // barato). A 1ª chave calhava ser o haiku — o de maior custo é o que respondeu.
+        const modelUsage = {
+            'claude-haiku-4-5-20251001': { costUSD: 0.02, outputTokens: 80 },
+            'claude-opus-4-8': { costUSD: 0.81, outputTokens: 5551 },
+        };
+        expect(modeloPrincipal(modelUsage)).toBe('claude-opus-4-8');
+    });
+
+    it('com um só modelo devolve esse', () => {
+        expect(modeloPrincipal({ 'claude-opus-4-8': { costUSD: 0.14 } })).toBe('claude-opus-4-8');
+    });
+
+    it('ignora custos não finitos e preserva a ordem em empate/sem custo', () => {
+        expect(
+            modeloPrincipal({
+                'claude-haiku-4-5-20251001': { costUSD: Number.NaN },
+                'claude-opus-4-8': { costUSD: 0.14 },
+            }),
+        ).toBe('claude-opus-4-8');
+
+        expect(
+            modeloPrincipal({
+                'claude-sonnet-4-5': { inputTokens: 10 },
+                'claude-haiku-4-5-20251001': { outputTokens: 5 },
+            }),
+        ).toBe('claude-sonnet-4-5');
+    });
+
+    it('sem modelUsage devolve undefined', () => {
+        expect(modeloPrincipal(undefined)).toBeUndefined();
+        expect(modeloPrincipal({})).toBeUndefined();
+    });
+});
 
 describe('claudeTimeoutMs', () => {
     it('usa valor positivo vindo do ambiente', () => {
