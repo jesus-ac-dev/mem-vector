@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+    branchLocalWorktree,
     buildBranchArgs,
     buildCommitPushArgs,
     buildIdentidadeArgs,
@@ -13,6 +14,7 @@ import {
     buildStatusArgs,
     buildWorktreeAddArgs,
     buildWorktreeRemoveArgs,
+    commitPush,
     comandoTestes,
     INTERN_EMAIL,
     INTERN_NOME,
@@ -51,11 +53,11 @@ describe('buildRetomaArgs', () => {
 });
 
 describe('buildCommitPushArgs', () => {
-    it('add -A → commit → push do branch', () => {
+    it('add -A → commit → push do HEAD para o branch público', () => {
         const seq = buildCommitPushArgs('feat/issue-1', 'feat: x');
         expect(seq[0]).toEqual(['add', '-A']);
         expect(seq[1]).toEqual(['commit', '-m', 'feat: x']);
-        expect(seq[2]).toEqual(['push', '-u', 'origin', 'feat/issue-1']);
+        expect(seq[2]).toEqual(['push', '-u', 'origin', 'HEAD:feat/issue-1']);
     });
 });
 
@@ -76,7 +78,9 @@ describe('comandoTestes', () => {
 
 describe('worktreeRoot', () => {
     it('default = irmã do repo (.relay-worktrees), sem sujar a working-copy', () => {
-        expect(worktreeRoot('/home/x/src/mem-vector', undefined)).toBe('/home/x/src/.relay-worktrees');
+        expect(worktreeRoot('/home/x/src/mem-vector', undefined)).toBe(
+            '/home/x/src/.relay-worktrees',
+        );
     });
     it('respeita o RELAY_WORKTREE_ROOT', () => {
         expect(worktreeRoot('/home/x/src/mem-vector', '/custom/wt')).toBe('/custom/wt');
@@ -89,13 +93,19 @@ describe('worktreeDir', () => {
     });
 });
 
+describe('branchLocalWorktree', () => {
+    it('usa um branch local interno para não colidir com o branch público do humano', () => {
+        expect(branchLocalWorktree('feat/issue-3')).toBe('relay-worktree/feat-issue-3');
+    });
+});
+
 describe('buildWorktreeAddArgs', () => {
     it('cria o branch a partir do base REMOTO fresco (origin/<base>)', () => {
-        expect(buildWorktreeAddArgs('/wt/d', 'feat/issue-3', 'main')).toEqual([
+        expect(buildWorktreeAddArgs('/wt/d', 'relay-worktree/feat-issue-3', 'main')).toEqual([
             'worktree',
             'add',
             '-B',
-            'feat/issue-3',
+            'relay-worktree/feat-issue-3',
             '/wt/d',
             'origin/main',
         ]);
@@ -113,7 +123,12 @@ describe('buildIdentidadeArgs', () => {
 
 describe('buildWorktreeRemoveArgs', () => {
     it('remove --force o dir do worktree', () => {
-        expect(buildWorktreeRemoveArgs('/wt/d')).toEqual(['worktree', 'remove', '--force', '/wt/d']);
+        expect(buildWorktreeRemoveArgs('/wt/d')).toEqual([
+            'worktree',
+            'remove',
+            '--force',
+            '/wt/d',
+        ]);
     });
 });
 
@@ -141,6 +156,10 @@ describe('prepararWorktree (integração git)', () => {
         mkdirSync(join(repo, 'node_modules'));
         writeFileSync(join(repo, 'node_modules', 'marker.txt'), 'dep');
         writeFileSync(join(repo, '.env.local'), 'SECRET=1\n');
+        writeFileSync(join(repo, '.env.test'), 'TEST=1\n');
+        // Simula o caso real que partia: o humano já tem o branch público aberto
+        // na working-copy principal. O worktree não pode tentar usar esse branch.
+        git(repo, 'checkout', '-b', 'feat/issue-1');
         dir = worktreeDir(repo, 1, join(tmpRoot, 'wt'));
     });
 
@@ -149,18 +168,42 @@ describe('prepararWorktree (integração git)', () => {
     });
 
     it('cria o worktree isolado no branch da issue, com os artefactos ligados', async () => {
-        await prepararWorktree({ repoPath: repo, dir, branch: 'feat/issue-1', base: 'main', token: '', retoma: false });
+        await prepararWorktree({
+            repoPath: repo,
+            dir,
+            branch: 'feat/issue-1',
+            base: 'main',
+            token: '',
+            retoma: false,
+        });
         expect(existsSync(dir)).toBe(true);
-        expect(git(dir, 'branch', '--show-current').trim()).toBe('feat/issue-1');
+        expect(git(repo, 'branch', '--show-current').trim()).toBe('feat/issue-1');
+        expect(git(dir, 'branch', '--show-current').trim()).toBe('relay-worktree/feat-issue-1');
         expect(existsSync(join(dir, 'README.md'))).toBe(true); // checkout do base
         expect(existsSync(join(dir, 'node_modules', 'marker.txt'))).toBe(true); // symlink resolve
         expect(existsSync(join(dir, '.env.local'))).toBe(true);
+        expect(existsSync(join(dir, '.env.test'))).toBe(true);
     });
 
     it('na retoma reusa o dir e preserva o trabalho NÃO-commitado', async () => {
         writeFileSync(join(dir, 'WIP.txt'), 'em progresso');
-        await prepararWorktree({ repoPath: repo, dir, branch: 'feat/issue-1', base: 'main', token: '', retoma: true });
+        await prepararWorktree({
+            repoPath: repo,
+            dir,
+            branch: 'feat/issue-1',
+            base: 'main',
+            token: '',
+            retoma: true,
+        });
         expect(existsSync(join(dir, 'WIP.txt'))).toBe(true); // não resetou de base
+    });
+
+    it('commitPush publica o HEAD do branch local interno no branch público', async () => {
+        writeFileSync(join(dir, 'PR.txt'), 'pronto');
+        await commitPush(dir, 'feat/issue-1', 'test: relay', '');
+        expect(git(repo, 'ls-remote', '--heads', 'origin', 'feat/issue-1')).toContain(
+            'refs/heads/feat/issue-1',
+        );
     });
 
     it('removerWorktree apaga o dir', async () => {

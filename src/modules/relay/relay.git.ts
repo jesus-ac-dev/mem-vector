@@ -1,13 +1,13 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { buildGhEnv } from '@/lib/github';
 
-// Git DENTRO do working copy preparado (cwd = path local do repo). Identidade do
-// bot (Intern Rule): o relay NUNCA commita como o Carlos. O push usa o GH_TOKEN
-// do user (o clone via gh já configurou o credential helper). Arg-builders puros;
-// o spawn é fino por cima.
+// Git DENTRO do cwd do relay: hoje é o worktree isolado da run, não a working-copy
+// que o humano/dev server usa. Identidade do bot (Intern Rule): o relay NUNCA
+// commita como o Carlos. O push usa o GH_TOKEN do user. Arg-builders puros; o
+// spawn é fino por cima.
 
 export const INTERN_NOME = process.env.RELAY_BOT_NAME ?? 'mem-vector-relay';
 export const INTERN_EMAIL = process.env.RELAY_BOT_EMAIL ?? 'relay@mem-vector.local';
@@ -40,7 +40,7 @@ export function buildCommitPushArgs(branch: string, mensagem: string): string[][
     return [
         ['add', '-A'],
         ['commit', '-m', mensagem],
-        ['push', '-u', 'origin', branch],
+        ['push', '-u', 'origin', `HEAD:${branch}`],
     ];
 }
 
@@ -127,10 +127,18 @@ export function worktreeDir(repoPath: string, issue: number, envRoot?: string): 
     return join(worktreeRoot(repoPath, envRoot), `${basename(repoPath)}-issue-${issue}`);
 }
 
+/** Branch LOCAL usado dentro do worktree. Não pode ser igual ao branch público
+ *  (`feat/issue-N`), porque o humano pode tê-lo checked out na working-copy
+ *  principal e o Git não permite o mesmo branch em dois worktrees. */
+export function branchLocalWorktree(branchPublico: string): string {
+    const seguro = branchPublico.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    return `relay-worktree/${seguro || 'run'}`;
+}
+
 /** Cria o worktree no branch da issue a partir do base remoto FRESCO — substitui o
  *  `checkout base; pull; checkout -B` que o tree único fazia (e que roubava o ramo). */
-export function buildWorktreeAddArgs(dir: string, branch: string, base: string): string[] {
-    return ['worktree', 'add', '-B', branch, dir, `origin/${base}`];
+export function buildWorktreeAddArgs(dir: string, branchLocal: string, base: string): string[] {
+    return ['worktree', 'add', '-B', branchLocal, dir, `origin/${base}`];
 }
 
 /** Identidade do bot DENTRO do worktree (o relay nunca commita como o humano). */
@@ -148,7 +156,10 @@ export function buildWorktreeRemoveArgs(dir: string): string[] {
 /** Liga os artefactos NÃO-versionados que os testes/Next precisam (node_modules,
  *  .env*) ao worktree por symlink — partilham os do repo principal. Idempotente. */
 function ligarArtefactos(repoPath: string, dir: string): void {
-    for (const nome of ['node_modules', '.env', '.env.local']) {
+    const envs = readdirSync(repoPath).filter(
+        (nome) => nome === '.env' || nome.startsWith('.env.'),
+    );
+    for (const nome of ['node_modules', ...envs]) {
         const alvo = join(repoPath, nome);
         const ligacao = join(dir, nome);
         if (existsSync(alvo) && !existsSync(ligacao)) symlinkSync(alvo, ligacao);
@@ -188,7 +199,7 @@ export async function prepararWorktree(opts: {
             repoPath,
             [
                 ['fetch', 'origin', base],
-                buildWorktreeAddArgs(dir, branch, base),
+                buildWorktreeAddArgs(dir, branchLocalWorktree(branch), base),
             ],
             token,
         );

@@ -89,8 +89,10 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
 - **`relay.git.ts`** — **worktree isolado por run** (`prepararWorktree`/`worktreeDir`/`removerWorktree`:
   cada issue no seu dir sob `RELAY_WORKTREE_ROOT` — default irmão do repo —, a partilhar só o `.git`;
   `node_modules`/`.env*` ligados por symlink; criado fresco do base remoto, removido no verde, reusado
-  na retoma); branch (Intern Rule)/commit/push/diff nesse cwd; ramo default REAL (não assume `main`);
-  push com o `GH_TOKEN` do user. **`correrTestes`** = test-gate (`RELAY_TEST_CMD`, default `npm test`):
+  na retoma); usa um branch local interno no worktree para não colidir com o branch que o humano possa
+  ter aberto na working-copy, mas faz push para o branch público da PR (`feat/issue-N`); diff nesse cwd;
+  ramo default REAL (não assume `main`); push com o `GH_TOKEN` do user. **`correrTestes`** =
+  test-gate (`RELAY_TEST_CMD`, default `npm test`):
   a suite do repo é o juiz objetivo antes do validador-LLM (vermelho devolve já ao principal).
 - **`relay.handoff.ts`** — comentário assinado (1ª linha = `— Provider · papel · fase · ronda`).
 - **`relay.actions.ts`** — `dispararRelay` (trigger, com **fila** por-repo — FIFO/dedup; o 2º
