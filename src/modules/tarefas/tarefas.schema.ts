@@ -92,6 +92,9 @@ export interface Tarefa {
     // Fase e PR do relay para o kanban seguir o progresso sem depender só do GitHub.
     relayFase: string | null;
     relayPrUrl: string | null;
+    // Sub-passo LIVE corrente (ronda + provider + ação), reescrito a cada substep —
+    // mata o blackout entre transições de fase. Efémero (não fica histórico).
+    relayProgresso: string | null;
     // #tasks-operacional (Fase 4): estado operacional — critério de pronto, prova, e
     // porquê está parada. O agente lê-os ao listar (re-injeção leve) e define-os.
     acceptance: string | null;
