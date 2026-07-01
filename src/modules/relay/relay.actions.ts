@@ -1,6 +1,7 @@
 'use server';
 
 import { after } from 'next/server';
+import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createClient } from '@/lib/supabase/server';
@@ -175,14 +176,21 @@ export async function promoverTarefa(
 // Steering a quente (#129): guarda uma orientação humana para a corrida em curso
 // (ou a próxima). O orchestrator consome-a no próximo passo de produção e deixa
 // comentário assinado na issue — daí não se comentar já aqui.
+const guiarRelaySchema = z.object({
+    repo: z.string().min(1),
+    issue: z.number().int().positive(),
+    texto: z.string().trim().min(1).max(4000),
+});
+
 export async function guiarRelay(
     repo: string,
     issue: number,
     texto: string,
 ): Promise<{ ok: boolean; detalhe: string }> {
-    if (!repo || !Number.isInteger(issue) || issue <= 0) {
-        return { ok: false, detalhe: 'Indica o repo e um número de issue válido.' };
+    const input = guiarRelaySchema.safeParse({ repo, issue, texto });
+    if (!input.success) {
+        return { ok: false, detalhe: 'Indica o repo, uma issue válida e o texto da orientação.' };
     }
     const db = await createClient();
-    return guardarSteeringCom(db, { repo, issue, texto });
+    return guardarSteeringCom(db, input.data);
 }

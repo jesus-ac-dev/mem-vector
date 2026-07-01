@@ -622,18 +622,22 @@ describe('event-stream da corrida (#129)', () => {
 });
 
 describe('steering a quente (#129)', () => {
-    it('consome as orientações pendentes no produzir: prompt, comentário assinado e evento', async () => {
+    it('lê as pendentes no produzir (prompt) e marca-as consumidas SÓ depois do provider correr', async () => {
         const eventos: EventoRelayBase[] = [];
         const prompts: string[] = [];
-        const consumirSteering = vi
+        const ordem: string[] = [];
+        const lerSteering = vi
             .fn()
-            .mockResolvedValueOnce(['usa a tabela nova'])
+            .mockResolvedValueOnce([{ id: 's1', texto: 'usa a tabela nova' }])
             .mockResolvedValue([]);
+        const marcarSteering = vi.fn(async () => void ordem.push('marcar'));
         const { io, comentarios } = fakeIo({
             evento: vi.fn(async (e: EventoRelayBase) => void eventos.push(e)),
-            consumirSteering,
+            lerSteering,
+            marcarSteering,
             correr: vi.fn(async (_p: Provider, prompt: string) => {
                 prompts.push(prompt);
+                ordem.push('correr');
                 return resp('APROVADO');
             }),
         });
@@ -645,10 +649,12 @@ describe('steering a quente (#129)', () => {
             maxRondas: 1,
             io,
         });
-        expect(consumirSteering).toHaveBeenCalledWith('dev', 1);
         // O principal recebe a orientação no prompt, com prioridade declarada.
         expect(prompts[0]).toContain('ORIENTAÇÃO HUMANA');
         expect(prompts[0]).toContain('usa a tabela nova');
+        // Marcada consumida DEPOIS de correr (se o passo falhar, não se perde).
+        expect(marcarSteering).toHaveBeenCalledWith(['s1'], 'dev', 1);
+        expect(ordem.indexOf('correr')).toBeLessThan(ordem.indexOf('marcar'));
         // Fica assinada na issue (auditável) e na timeline.
         expect(comentarios.some((c) => c.startsWith('— Humano · steering · Desenvolvimento'))).toBe(
             true,
@@ -656,12 +662,35 @@ describe('steering a quente (#129)', () => {
         expect(eventos.find((e) => e.tipo === 'steering')?.detalhe).toBe('usa a tabela nova');
     });
 
+    it('se o provider falha, a orientação NÃO é marcada consumida (o retry reaplica-a)', async () => {
+        const marcarSteering = vi.fn();
+        const { io } = fakeIo({
+            lerSteering: vi.fn(async () => [{ id: 's1', texto: 'não mexas no módulo Y' }]),
+            marcarSteering,
+            correr: vi.fn(async () => {
+                throw new Error('CLI rebentou');
+            }),
+        });
+        await expect(
+            orquestrarCruzamentoCom({
+                cruzamento: 'dev',
+                spec: 's',
+                principal: 'codex',
+                validadores: [],
+                maxRondas: 1,
+                io,
+            }),
+        ).rejects.toThrow('CLI rebentou');
+        expect(marcarSteering).not.toHaveBeenCalled();
+    });
+
     it('sem orientações pendentes, o prompt não muda e não há evento steering', async () => {
         const eventos: EventoRelayBase[] = [];
         const prompts: string[] = [];
         const { io } = fakeIo({
             evento: vi.fn(async (e: EventoRelayBase) => void eventos.push(e)),
-            consumirSteering: vi.fn(async () => []),
+            lerSteering: vi.fn(async () => []),
+            marcarSteering: vi.fn(),
             correr: vi.fn(async (_p: Provider, prompt: string) => {
                 prompts.push(prompt);
                 return resp('APROVADO');

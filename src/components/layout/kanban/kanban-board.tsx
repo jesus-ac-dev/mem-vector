@@ -135,7 +135,9 @@ function CartaoTarefa({
             draggable={!concluida}
             title={
                 temIssue
-                    ? 'Duplo clique para ver a corrida do relay (timeline, custo, steering)'
+                    ? tarefa.relayEstado === 'bloqueado'
+                        ? 'Duplo clique: corrida do relay + diagnóstico do bloqueio'
+                        : 'Duplo clique para ver a corrida do relay (timeline, custo, steering)'
                     : undefined
             }
             onDoubleClick={() => {
@@ -554,8 +556,10 @@ export function KanbanBoard() {
             </div>
 
             {/* Corrida do relay (#129): timeline + custo + steering a quente. O cartão
-                mostrado vem da lista viva (o refresh periódico mantém-no fresco). */}
+                mostrado vem da lista viva (o refresh periódico mantém-no fresco); a key
+                remonta o modal quando muda o cartão (estado limpo de graça). */}
             <KanbanCorridaModal
+                key={corrida?.id ?? 'fechado'}
                 tarefa={corrida ? (abertas.find((t) => t.id === corrida.id) ?? corrida) : null}
                 onFechar={() => setCorrida(null)}
                 onDiagnosticar={(t) => {

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { consumirSteeringCom, guardarSteeringCom, lerSteeringPendenteCom } from './relay.steering';
+import {
+    guardarSteeringCom,
+    lerSteeringParaConsumoCom,
+    lerSteeringPendenteCom,
+    marcarSteeringConsumidoCom,
+} from './relay.steering';
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -58,8 +63,8 @@ describe('guardarSteeringCom', () => {
     });
 });
 
-describe('consumirSteeringCom', () => {
-    it('devolve os textos pendentes por ordem e marca-os consumidos com fase/ronda', async () => {
+describe('lerSteeringParaConsumoCom', () => {
+    it('devolve id+texto das pendentes por ordem de chegada (NÃO marca — 2 tempos)', async () => {
         const pendentes = [
             { id: 'a', texto: 'primeiro' },
             { id: 'b', texto: 'segundo' },
@@ -68,24 +73,15 @@ describe('consumirSteeringCom', () => {
         const is = vi.fn(() => ({ order }));
         const eqSel2 = vi.fn(() => ({ is }));
         const eqSel1 = vi.fn(() => ({ eq: eqSel2 }));
-        const inFn = vi.fn().mockResolvedValue({ error: null });
-        const update = vi.fn(() => ({ in: inFn }));
+        const update = vi.fn();
         const db = {
             from: vi.fn(() => ({ select: vi.fn(() => ({ eq: eqSel1 })), update })),
         };
 
-        const textos = await consumirSteeringCom(db as never, {
-            repo: 'o/r',
-            issue: 2,
-            fase: 'dev',
-            ronda: 3,
-        });
+        const lidas = await lerSteeringParaConsumoCom(db as never, { repo: 'o/r', issue: 2 });
 
-        expect(textos).toEqual(['primeiro', 'segundo']);
-        expect(update).toHaveBeenCalledWith(
-            expect.objectContaining({ consumido_fase: 'dev', consumido_ronda: 3 }),
-        );
-        expect(inFn).toHaveBeenCalledWith('id', ['a', 'b']);
+        expect(lidas).toEqual(pendentes);
+        expect(update).not.toHaveBeenCalled();
     });
 
     it('é best-effort: erro devolve [] (o run nunca cai por causa do steering)', async () => {
@@ -98,29 +94,41 @@ describe('consumirSteeringCom', () => {
             })),
         };
         await expect(
-            consumirSteeringCom(db as never, { repo: 'o/r', issue: 2, fase: 'dev', ronda: 1 }),
+            lerSteeringParaConsumoCom(db as never, { repo: 'o/r', issue: 2 }),
         ).resolves.toEqual([]);
     });
+});
 
-    it('sem pendentes não faz update', async () => {
-        const order = vi.fn().mockResolvedValue({ data: [], error: null });
-        const is = vi.fn(() => ({ order }));
-        const eqSel2 = vi.fn(() => ({ is }));
-        const eqSel1 = vi.fn(() => ({ eq: eqSel2 }));
-        const update = vi.fn();
-        const db = {
-            from: vi.fn(() => ({ select: vi.fn(() => ({ eq: eqSel1 })), update })),
+describe('marcarSteeringConsumidoCom', () => {
+    it('marca os ids com consumido_em + fase/ronda', async () => {
+        const inFn = vi.fn().mockResolvedValue({ error: null });
+        const update = vi.fn(() => ({ in: inFn }));
+        const db = { from: vi.fn(() => ({ update })) };
+
+        await marcarSteeringConsumidoCom(db as never, { ids: ['a', 'b'], fase: 'dev', ronda: 3 });
+
+        expect(update).toHaveBeenCalledWith(
+            expect.objectContaining({ consumido_fase: 'dev', consumido_ronda: 3 }),
+        );
+        expect(inFn).toHaveBeenCalledWith('id', ['a', 'b']);
+    });
+
+    it('sem ids não toca a BD; erro não lança (best-effort)', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const from = vi.fn();
+        await marcarSteeringConsumidoCom({ from } as never, { ids: [], fase: 'dev', ronda: 1 });
+        expect(from).not.toHaveBeenCalled();
+
+        const dbErro = {
+            from: vi.fn(() => ({
+                update: vi.fn(() => ({
+                    in: vi.fn().mockResolvedValue({ error: { message: 'RLS' } }),
+                })),
+            })),
         };
-
-        const textos = await consumirSteeringCom(db as never, {
-            repo: 'o/r',
-            issue: 2,
-            fase: 'analise',
-            ronda: 1,
-        });
-
-        expect(textos).toEqual([]);
-        expect(update).not.toHaveBeenCalled();
+        await expect(
+            marcarSteeringConsumidoCom(dbErro as never, { ids: ['a'], fase: 'dev', ronda: 1 }),
+        ).resolves.toBeUndefined();
     });
 });
 

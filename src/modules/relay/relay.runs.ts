@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ResultadoOrquestracao } from './relay.orchestrator';
+import { ownerIdCom } from './relay.owner';
 
 export type EstadoRunRelay = 'pronto' | 'pr-aberto' | 'bloqueado';
 
@@ -39,10 +40,7 @@ export async function registarRunRelayCom(
         const { estado, fase, prUrl } = runDoResultado(opts.resultado);
         // owner_id EXPLÍCITO (como o agent_jobs), não a depender do default auth.uid():
         // se a sessão não estiver no contexto, salta com aviso em vez de falhar mudo.
-        const {
-            data: { session },
-        } = await db.auth.getSession();
-        const ownerId = session?.user?.id;
+        const ownerId = await ownerIdCom(db);
         if (!ownerId) {
             console.error('registar run do relay: sem sessão para o owner (saltado).');
             return;
@@ -111,7 +109,8 @@ export async function lerRunsRelayCom(
             fase: row.fase,
             prUrl: row.pr_url,
             terminadoEm: row.ended_em,
-            custoUsd: row.custo_usd,
+            // numeric pode vir como string do PostgREST — coagir (padrão da casa).
+            custoUsd: row.custo_usd == null ? null : Number(row.custo_usd),
             custoEstimado: row.custo_estimado,
         };
     });

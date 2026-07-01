@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ArrowRight,
     CheckCircle2,
@@ -30,10 +30,15 @@ import type { Tarefa } from '@/modules/tarefas/tarefas.schema';
 import {
     agruparEventosPorRun,
     custoDosEventos,
+    FASE_LABEL,
     formatarCusto,
     formatarDuracao,
     rotuloEvento,
 } from './kanban-relay-context';
+
+// Tem de bater com o default de lerEventosRelayCom (rota /api/relay-corrida):
+// é o cap honesto da timeline — quando o atingimos, dizemo-lo (sem cortes mudos).
+const LIMITE_EVENTOS = 200;
 
 // Modal da corrida (#129): o double-click no cartão deixa de ser só o kill-switch
 // e passa a mostrar a corrida COMPLETA — a timeline de eventos (quem correu, em
@@ -73,8 +78,9 @@ function IconeEvento({ e }: { e: EventoRelayLido }) {
 }
 
 function LinhaEvento({ e }: { e: EventoRelayLido }) {
+    const fase = e.fase ? (FASE_LABEL[e.fase] ?? e.fase) : null;
     const meta = [
-        e.fase && e.ronda ? `${e.fase} · ronda ${e.ronda}` : e.fase,
+        fase && e.ronda ? `${fase} · ronda ${e.ronda}` : fase,
         typeof e.custoUsd === 'number' && e.custoUsd > 0
             ? formatarCusto(e.custoUsd, e.custoEstimado ?? false)
             : null,
@@ -118,29 +124,23 @@ export function KanbanCorridaModal({
     const [orientacao, setOrientacao] = useState('');
     const [aGuiar, setAGuiar] = useState(false);
     const [aviso, setAviso] = useState<string | null>(null);
-    const [tarefaAberta, setTarefaAberta] = useState<string | null>(null);
+    // Sequência de load (padrão do kanban-board): uma resposta atrasada de um
+    // cartão anterior não pinta a timeline do cartão atual.
+    const loadSeqRef = useRef(0);
 
     const repo = tarefa?.repoGithub ?? null;
     const issue = tarefa?.issueGithub ?? null;
     const processando = tarefa?.relayEstado === 'processando';
 
-    // Mudou o cartão aberto → limpa o estado do anterior (reset derivado no
-    // render, não num effect — padrão React para estado dependente de props).
-    if ((tarefa?.id ?? null) !== tarefaAberta) {
-        setTarefaAberta(tarefa?.id ?? null);
-        setCorrida(null);
-        setOrientacao('');
-        setAviso(null);
-    }
-
     const carregar = useCallback(() => {
         if (!repo || !issue) return;
+        const seq = ++loadSeqRef.current;
         void runClientAction({ area: 'kanban', action: 'lerCorridaRelay', meta: { issue } }, () =>
             getJson<CorridaResposta>(
                 `/api/relay-corrida?repo=${encodeURIComponent(repo)}&issue=${issue}`,
             ),
         ).then((r) => {
-            if (r) setCorrida(r);
+            if (r && seq === loadSeqRef.current) setCorrida(r);
         });
     }, [repo, issue]);
 
@@ -148,12 +148,14 @@ export function KanbanCorridaModal({
         carregar();
     }, [carregar]);
 
-    // Enquanto a corrida processa, a timeline segue ao vivo (mesmo ritmo do kanban).
+    // Enquanto a corrida processa, a timeline segue ao vivo (mesmo ritmo do
+    // kanban). Deps por valores estáveis (carregar já depende de repo/issue) —
+    // depender do OBJETO tarefa rearmava o intervalo a cada refresh do board.
     useEffect(() => {
-        if (!processando || !tarefa) return;
+        if (!processando) return;
         const id = window.setInterval(carregar, 5000);
         return () => window.clearInterval(id);
-    }, [processando, tarefa, carregar]);
+    }, [processando, carregar]);
 
     async function guiar() {
         if (!repo || !issue || !orientacao.trim()) return;
@@ -171,6 +173,7 @@ export function KanbanCorridaModal({
     const ultimaRun = runs.at(-1) ?? null;
     const custo = ultimaRun ? custoDosEventos(ultimaRun.eventos) : null;
     const pendentes = corrida?.steeringPendente ?? [];
+    const truncada = (corrida?.eventos.length ?? 0) >= LIMITE_EVENTOS;
 
     return (
         <Dialog open={!!tarefa} onOpenChange={(o) => !o && onFechar()}>
@@ -218,25 +221,34 @@ export function KanbanCorridaModal({
                         </p>
                     ) : (
                         <div className="space-y-3">
-                            {runs.slice(0, -1).map((run, i) => (
-                                <details key={run.runId} className="rounded-md border px-2 py-1">
-                                    <summary className="cursor-pointer text-xs text-muted-foreground">
-                                        Corrida anterior {i + 1} ({run.eventos.length} eventos
-                                        {(() => {
-                                            const c = custoDosEventos(run.eventos);
-                                            return c.total > 0
-                                                ? ` · ${formatarCusto(c.total, c.estimado)}`
-                                                : '';
-                                        })()}
-                                        )
-                                    </summary>
-                                    <ul className="mt-2 space-y-1.5 pb-1">
-                                        {run.eventos.map((e, j) => (
-                                            <LinhaEvento key={`${run.runId}-${j}`} e={e} />
-                                        ))}
-                                    </ul>
-                                </details>
-                            ))}
+                            {truncada && (
+                                <p className="text-xs italic text-muted-foreground">
+                                    A mostrar os últimos {LIMITE_EVENTOS} eventos — a corrida mais
+                                    antiga pode estar incompleta (o histórico completo vive nos
+                                    comentários da issue).
+                                </p>
+                            )}
+                            {runs.slice(0, -1).map((run, i) => {
+                                const c = custoDosEventos(run.eventos);
+                                const custoRun =
+                                    c.total > 0 ? ` · ${formatarCusto(c.total, c.estimado)}` : '';
+                                return (
+                                    <details
+                                        key={run.runId}
+                                        className="rounded-md border px-2 py-1"
+                                    >
+                                        <summary className="cursor-pointer text-xs text-muted-foreground">
+                                            Corrida anterior {i + 1} ({run.eventos.length} eventos
+                                            {custoRun})
+                                        </summary>
+                                        <ul className="mt-2 space-y-1.5 pb-1">
+                                            {run.eventos.map((e, j) => (
+                                                <LinhaEvento key={`${run.runId}-${j}`} e={e} />
+                                            ))}
+                                        </ul>
+                                    </details>
+                                );
+                            })}
                             {ultimaRun && (
                                 <ul className="space-y-1.5">
                                     {ultimaRun.eventos.map((e, j) => (

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { ownerIdCom } from './relay.owner';
+
 // Steering a quente (#129): orientação humana escrita COM a corrida a meio. Fica
 // pendente em relay_steering; o orchestrator consome as pendentes no próximo passo
 // de produção (o principal integra-as com prioridade, como integra objeções) e
@@ -18,10 +20,7 @@ export async function guardarSteeringCom(
 ): Promise<{ ok: boolean; detalhe: string }> {
     const texto = opts.texto.trim();
     if (!texto) return { ok: false, detalhe: 'Escreve a orientação primeiro.' };
-    const {
-        data: { session },
-    } = await db.auth.getSession();
-    const ownerId = session?.user?.id;
+    const ownerId = await ownerIdCom(db);
     if (!ownerId) return { ok: false, detalhe: 'Sessão expirada — recarrega para continuar.' };
     const { error } = await db.from('relay_steering').insert({
         owner_id: ownerId,
@@ -55,13 +54,17 @@ export async function lerSteeringPendenteCom(
     });
 }
 
-// Consome as pendentes (marca consumido_em + fase/ronda onde entraram) e devolve
-// os textos por ordem de chegada. Best-effort: um erro aqui devolve [] — a corrida
-// NUNCA cai por causa do steering.
-export async function consumirSteeringCom(
+// Consumo em DOIS tempos (achado do Audit): ler as pendentes ANTES de produzir,
+// marcar consumidas só DEPOIS do provider correr com elas no prompt. Marcar à
+// cabeça perdia a orientação humana para sempre se o passo falhasse a seguir
+// (GitHub 500, CLI a rebentar) — o retry já não a encontrava pendente.
+
+// Lê as pendentes (id+texto) por ordem de chegada. Best-effort: erro devolve []
+// — a corrida NUNCA cai por causa do steering.
+export async function lerSteeringParaConsumoCom(
     db: SupabaseClient,
-    opts: { repo: string; issue: number; fase: string; ronda: number },
-): Promise<string[]> {
+    opts: { repo: string; issue: number },
+): Promise<{ id: string; texto: string }[]> {
     try {
         const { data, error } = await db
             .from('relay_steering')
@@ -71,32 +74,37 @@ export async function consumirSteeringCom(
             .is('consumido_em', null)
             .order('criado_em', { ascending: true });
         if (error) {
-            console.error('consumir steering falhou (segue):', error.message);
+            console.error('ler steering pendente falhou (segue):', error.message);
             return [];
         }
-        const pendentes = (data ?? []) as { id: string; texto: string }[];
-        if (pendentes.length === 0) return [];
-        const { error: erroUpdate } = await db
+        return (data ?? []) as { id: string; texto: string }[];
+    } catch (e) {
+        const detalhe = e instanceof Error ? e.message : String(e);
+        console.error('ler steering pendente falhou (segue):', detalhe);
+        return [];
+    }
+}
+
+// Marca as orientações aplicadas (consumido_em + fase/ronda onde entraram).
+// Best-effort: se falhar, ficam pendentes e a próxima ronda reaplica-as
+// (duplicar orientação é inócuo; perdê-la não).
+export async function marcarSteeringConsumidoCom(
+    db: SupabaseClient,
+    opts: { ids: string[]; fase: string; ronda: number },
+): Promise<void> {
+    if (opts.ids.length === 0) return;
+    try {
+        const { error } = await db
             .from('relay_steering')
             .update({
                 consumido_em: new Date().toISOString(),
                 consumido_fase: opts.fase,
                 consumido_ronda: opts.ronda,
             })
-            .in(
-                'id',
-                pendentes.map((p) => p.id),
-            );
-        if (erroUpdate) {
-            // Não conseguiu marcar: NÃO entrega os textos (senão repetiam-se em
-            // cada ronda até o update passar).
-            console.error('marcar steering consumido falhou (segue):', erroUpdate.message);
-            return [];
-        }
-        return pendentes.map((p) => p.texto);
+            .in('id', opts.ids);
+        if (error) console.error('marcar steering consumido falhou (segue):', error.message);
     } catch (e) {
         const detalhe = e instanceof Error ? e.message : String(e);
-        console.error('consumir steering falhou (segue):', detalhe);
-        return [];
+        console.error('marcar steering consumido falhou (segue):', detalhe);
     }
 }

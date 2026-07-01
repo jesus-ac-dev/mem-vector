@@ -26,7 +26,8 @@ import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.s
 
 import { construirHandoff, construirSteeringHandoff } from './relay.handoff';
 import { registarEventoRelayCom, resumoEvento, type EventoRelayBase } from './relay.eventos';
-import { consumirSteeringCom } from './relay.steering';
+import { ownerIdCom } from './relay.owner';
+import { lerSteeringParaConsumoCom, marcarSteeringConsumidoCom } from './relay.steering';
 import {
     arquivosAlterados,
     commitPush,
@@ -223,9 +224,11 @@ export interface IoOrquestrador {
     // Event-stream da corrida (#129): cada passo gravado no momento. Best-effort,
     // opcional (testes) — a corrida nunca cai por causa da observabilidade.
     evento?(e: EventoRelayBase): Promise<void>;
-    // Steering a quente (#129): devolve (e consome) as orientações humanas
-    // pendentes — o principal integra-as no próximo passo de produção.
-    consumirSteering?(fase: Cruzamento, ronda: number): Promise<string[]>;
+    // Steering a quente (#129) em DOIS tempos: lê as orientações pendentes antes
+    // de produzir; marca-as consumidas só DEPOIS do provider correr com elas
+    // (marcar à cabeça perdia a orientação se o passo falhasse a seguir).
+    lerSteering?(): Promise<{ id: string; texto: string }[]>;
+    marcarSteering?(ids: string[], fase: Cruzamento, ronda: number): Promise<void>;
     // Test-gate opcional: corre a suite do repo depois dos substeps de escrita.
     // Vermelho devolve o output ao principal na ronda seguinte.
     testar?(): Promise<{ ok: boolean; output: string }>;
@@ -294,19 +297,12 @@ export async function orquestrarCruzamentoCom(opts: {
         maxRondas,
         produzir: async (feedback) => {
             ronda += 1;
-            // Steering a quente (#129): consome as orientações humanas pendentes
-            // ANTES de produzir — o principal integra-as com prioridade. Cada uma
-            // fica assinada na issue (auditável) e na timeline de eventos.
-            const steering = (await io.consumirSteering?.(cruzamento, ronda)) ?? [];
-            for (const s of steering) {
-                await io.comentar(construirSteeringHandoff(cruzamento, ronda, s));
-                await io.evento?.({
-                    tipo: 'steering',
-                    fase: cruzamento,
-                    ronda,
-                    detalhe: resumoEvento(s),
-                });
-            }
+            // Steering a quente (#129): lê as orientações humanas pendentes e
+            // injeta-as no prompt — o principal integra-as com prioridade. Só se
+            // MARCAM consumidas depois do provider correr (se o passo falhar, a
+            // orientação fica pendente e o retry volta a aplicá-la — nunca se perde).
+            const pendentes = (await io.lerSteering?.()) ?? [];
+            const steering = pendentes.map((p) => p.texto);
             await io.progresso?.(textoProgresso(cruzamento, ronda, principal, 'a trabalhar'));
             const t0 = Date.now();
             const resp = await io.correr(
@@ -314,6 +310,23 @@ export async function orquestrarCruzamentoCom(opts: {
                 promptPrincipal(cruzamento, spec, feedback, memoria, steering),
                 escreve,
             );
+            if (pendentes.length > 0) {
+                await io.marcarSteering?.(
+                    pendentes.map((p) => p.id),
+                    cruzamento,
+                    ronda,
+                );
+                // Aplicada → fica assinada na issue (auditável) e na timeline.
+                for (const s of steering) {
+                    await io.evento?.({
+                        tipo: 'steering',
+                        fase: cruzamento,
+                        ronda,
+                        detalhe: resumoEvento(s),
+                    });
+                    await io.comentar(construirSteeringHandoff(cruzamento, ronda, s));
+                }
+            }
             await io.evento?.({
                 tipo: 'passo',
                 fase: cruzamento,
@@ -703,8 +716,19 @@ export function construirIo(opts: {
     defs: DefinicoesServidor;
     db?: SupabaseClient; // p/ a vista kanban seguir o semáforo (best-effort)
     runId?: string; // correlaciona os eventos desta corrida com o run-ledger (#129)
+    // Custo na FONTE (#129): chamado com cada resposta de provider — o billing
+    // não depende do canal de observabilidade (eventos) para se somar.
+    aoCusto?(resp: RespostaRepo): void;
 }): IoOrquestrador {
-    const { token, repo, issue, repoPath, cwd, base, defs, db, runId } = opts;
+    const { token, repo, issue, repoPath, cwd, base, defs, db, runId, aoCusto } = opts;
+    // O owner resolve-se UMA vez por corrida (dezenas de eventos por run — não se
+    // paga um getSession por cada; achado do Audit).
+    let ownerPromise: Promise<string | null> | null = null;
+    const owner = () => {
+        if (!db) return Promise.resolve(null);
+        ownerPromise ??= ownerIdCom(db);
+        return ownerPromise;
+    };
     const atualizarProgressoReal = async (
         fase: RelayFase,
         semaforo: Semaforo,
@@ -740,10 +764,15 @@ export function construirIo(opts: {
         // Event-stream (#129): best-effort para a BD; a verdade auditável continua
         // nos comentários da issue. Sem db/runId (testes/headless) não grava.
         evento: async (e) => {
-            if (db && runId) await registarEventoRelayCom(db, { ...e, runId, repo, issue });
+            if (!db || !runId) return;
+            const ownerId = await owner();
+            if (!ownerId) return;
+            await registarEventoRelayCom(db, { ...e, runId, repo, issue }, ownerId);
         },
-        consumirSteering: async (fase, ronda) =>
-            db ? consumirSteeringCom(db, { repo, issue, fase, ronda }) : [],
+        lerSteering: async () => (db ? lerSteeringParaConsumoCom(db, { repo, issue }) : []),
+        marcarSteering: async (ids, fase, ronda) => {
+            if (db) await marcarSteeringConsumidoCom(db, { ids, fase, ronda });
+        },
         abrirBranch: (branch, retoma) =>
             prepararWorktree({ repoPath, dir: cwd, branch, base, token, retoma }).then(() => {}),
         diff: () => diffDoRepo(cwd),
@@ -758,24 +787,39 @@ export function construirIo(opts: {
         commitPush: (branch, mensagem) => commitPush(cwd, branch, mensagem, token),
         criarPR: (p) => criarPR(token, { repo, base, head: p.head, title: p.title, body: p.body }),
         correr: async (provider, prompt, escrever) => {
-            const c = defs.agentes[provider];
-            if (!c) throw new Error(`provider "${provider}" sem config (Definições > Agentes).`);
-            if (escrever) return correrNoRepo(provider, c, prompt, cwd, { escrever });
-            try {
-                return await correrNoRepo(provider, c, prompt, cwd, { escrever });
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                if (!/modo cli|ainda não escreve/.test(msg)) throw e;
-                const r = await criarProvider(provider, c).gerar(prompt);
-                return {
-                    text: r.text,
-                    costUsd: r.costUsd ?? 0,
-                    costIsEstimate: r.costUsd === null,
-                    model: r.model,
-                };
-            }
+            const resp = await correrProviderNoRepo(defs, provider, prompt, cwd, escrever);
+            aoCusto?.(resp);
+            return resp;
         },
     };
+}
+
+// Corre um provider dentro do repo, com fallback read-only via factory quando o
+// modo não escreve (era o inline do construirIo.correr; separado para o custo se
+// medir num ponto único).
+async function correrProviderNoRepo(
+    defs: DefinicoesServidor,
+    provider: Provider,
+    prompt: string,
+    cwd: string,
+    escrever: boolean,
+): Promise<RespostaRepo> {
+    const c = defs.agentes[provider];
+    if (!c) throw new Error(`provider "${provider}" sem config (Definições > Agentes).`);
+    if (escrever) return correrNoRepo(provider, c, prompt, cwd, { escrever });
+    try {
+        return await correrNoRepo(provider, c, prompt, cwd, { escrever });
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!/modo cli|ainda não escreve/.test(msg)) throw e;
+        const r = await criarProvider(provider, c).gerar(prompt);
+        return {
+            text: r.text,
+            costUsd: r.costUsd ?? 0,
+            costIsEstimate: r.costUsd === null,
+            model: r.model,
+        };
+    }
 }
 
 // Entrypoint real (server): lê as definições, resolve o repo+path preparado, lê a
@@ -830,18 +874,27 @@ export async function orquestrar(opts: {
     // as fases que o user JÁ configurou viajam como override real (fasesConfiguradas).
     const fasesConfiguradas = Object.keys(defs.cruzamentos) as Cruzamento[];
     const defsRelay = normalizarDefsRelay(defs);
-    const io = construirIo({ token, repo, issue, repoPath, cwd, base, defs: defsRelay, db, runId });
-    // Custo agregado da corrida (#129): somado dos eventos 'passo' (cada io.correr
-    // já devolve o custo do CLI — até aqui deitava-se fora).
-    const custo = { total: 0, estimado: false };
-    const emitirEvento = io.evento;
-    io.evento = async (e) => {
-        if (e.tipo === 'passo' && typeof e.custoUsd === 'number') {
-            custo.total += e.custoUsd;
-            if (e.custoEstimado) custo.estimado = true;
-        }
-        await emitirEvento?.(e);
-    };
+    // Custo agregado da corrida (#129): somado na FONTE (cada resposta de provider,
+    // via aoCusto), não reconstruído do event-stream — billing e observabilidade
+    // não se acoplam (achado do Audit). `mediu` distingue "custou $0" de "não houve
+    // passo nenhum" (o ledger guarda null nesse caso, não um falso $0.00).
+    const custo = { total: 0, estimado: false, mediu: false };
+    const io = construirIo({
+        token,
+        repo,
+        issue,
+        repoPath,
+        cwd,
+        base,
+        defs: defsRelay,
+        db,
+        runId,
+        aoCusto: (resp) => {
+            custo.mediu = true;
+            custo.total += resp.costUsd;
+            if (resp.costIsEstimate) custo.estimado = true;
+        },
+    });
     const resultado = await orquestrarCom({
         issue,
         defs: defsRelay,
@@ -867,8 +920,8 @@ export async function orquestrar(opts: {
         resultado,
         inicio,
         id: runId,
-        custoUsd: custo.total,
-        custoEstimado: custo.estimado,
+        custoUsd: custo.mediu ? custo.total : undefined,
+        custoEstimado: custo.mediu ? custo.estimado : undefined,
     });
 
     // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no

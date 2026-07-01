@@ -2,7 +2,7 @@ import type { Tarefa } from '@/modules/tarefas/tarefas.schema';
 import type { EventoRelayLido } from '@/modules/relay/relay.eventos';
 import { motivoBloqueio } from '@/modules/relay/relay.motivo';
 
-const FASE_LABEL: Record<string, string> = {
+export const FASE_LABEL: Record<string, string> = {
     analise: 'Análise',
     dev: 'Desenvolvimento',
     testes: 'Testes',

@@ -152,9 +152,12 @@ custo+transcript e human-steering mid-run) fechados numa fatia:
   duração**), `testes` (gate), `transicao` (fase·semáforo), `steering`, `fim`. Correlacionados por
   `run_id` gerado no arranque de `orquestrar` (sem FK para `relay_runs` de propósito: se o processo
   morrer, os eventos sobrevivem e contam a história). Emissão via `io.evento` (best-effort — a
-  corrida nunca cai por causa da observabilidade). O `relay_runs` ganha `custo_usd`/`custo_estimado`
-  agregados e o `id` passa a ser o `run_id` (correlação eventos ↔ ledger) — o custo que o
-  `io.correr` sempre devolveu deixou de se deitar fora.
+  corrida nunca cai por causa da observabilidade; o owner resolve-se 1× por corrida). O `relay_runs`
+  ganha `custo_usd`/`custo_estimado` agregados e o `id` passa a ser o `run_id` (correlação eventos
+  ↔ ledger). O custo soma-se na **fonte** (`aoCusto` por resposta de provider, em `construirIo`),
+  não reconstruído do event-stream — billing e observabilidade não se acoplam; `null` no ledger =
+  corrida sem passos medidos (≠ $0.00). A timeline da UI mostra no máx. 200 eventos e diz quando
+  trunca (sem cortes mudos; o histórico completo vive na issue).
 - **Modal da corrida** (`kanban-corrida-modal.tsx`, GET `/api/relay-corrida`): duplo clique em
   qualquer cartão com issue → timeline (corridas anteriores colapsadas, última aberta, refresh 5s
   enquanto processa), total gasto, links issue/PR, e o diagnóstico do kill-switch como botão quando
@@ -163,10 +166,14 @@ custo+transcript e human-steering mid-run) fechados numa fatia:
 - **Steering a quente** (`relay.steering.ts` → tabela `relay_steering` + action `guiarRelay`):
   escreve-se orientação COM a corrida a meio; o orchestrator **consome as pendentes no próximo
   passo de produção** (o principal integra-as com prioridade, como integra objeções), deixa
-  comentário assinado `— Humano · steering · <fase> · ronda N` na issue e regista o evento. Uma
-  orientação escrita entre corridas fica pendente e entra na próxima. O kill-switch deixa de ser a
-  única alavanca humana. (O comentário começa por `—` de propósito: o `montarSpec` da retoma não o
-  re-injeta — já foi integrado quando foi consumido.)
+  comentário assinado `— Humano · steering · <fase> · ronda N` na issue e regista o evento. O
+  consumo é em **dois tempos** (achado do Audit): lê pendentes antes de produzir, **marca
+  consumidas só depois do provider correr** — se o passo falhar (GitHub 500, CLI a rebentar), a
+  orientação fica pendente e o retry reaplica-a, nunca se perde. Uma orientação escrita entre
+  corridas fica pendente e entra na próxima; para guiar uma fase futura, escreve-a quando a fase
+  chegar (a orientação aplicada na Análise propaga às fases seguintes pela estrela). O kill-switch
+  deixa de ser a única alavanca humana. (O comentário começa por `—` de propósito: o `montarSpec`
+  da retoma não o re-injeta — já foi integrado quando foi consumido.)
 - Prova headless: `npx tsx scripts/probes/relay-corrida.ts` (steering guarda→pendente→consumido +
   eventos em ordem com custo, sob a sessão RLS do dev user).
 - Fora da fatia: o thinking token-a-token dos CLIs (o envelope `-p` não o traz de forma fiável) e

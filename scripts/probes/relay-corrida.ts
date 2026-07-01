@@ -1,13 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
+import { lerEventosRelayCom, registarEventoRelayCom } from '../../src/modules/relay/relay.eventos';
 import {
-    lerEventosRelayCom,
-    registarEventoRelayCom,
-} from '../../src/modules/relay/relay.eventos';
-import {
-    consumirSteeringCom,
     guardarSteeringCom,
+    lerSteeringParaConsumoCom,
     lerSteeringPendenteCom,
+    marcarSteeringConsumidoCom,
 } from '../../src/modules/relay/relay.steering';
 
 process.loadEnvFile('.env.local');
@@ -51,14 +49,19 @@ async function main(): Promise<void> {
     const pendentes = await lerSteeringPendenteCom(db, { repo: REPO, issue: ISSUE });
     tudo = ok(pendentes.length >= 1, `steering pendente visível (${pendentes.length})`) && tudo;
 
-    // Eixo 2: consumir devolve o texto e esvazia as pendentes (fase/ronda gravadas).
-    const consumidos = await consumirSteeringCom(db, {
-        repo: REPO,
-        issue: ISSUE,
+    // Eixo 2: consumo em 2 tempos — ler devolve id+texto (sem marcar), marcar
+    // esvazia as pendentes (fase/ronda gravadas).
+    const paraConsumo = await lerSteeringParaConsumoCom(db, { repo: REPO, issue: ISSUE });
+    tudo =
+        ok(
+            paraConsumo.some((p) => p.texto.includes('tabela nova')),
+            'steering lido para consumo',
+        ) && tudo;
+    await marcarSteeringConsumidoCom(db, {
+        ids: paraConsumo.map((p) => p.id),
         fase: 'dev',
         ronda: 1,
     });
-    tudo = ok(consumidos.some((t) => t.includes('tabela nova')), 'steering consumido') && tudo;
     const aposConsumo = await lerSteeringPendenteCom(db, { repo: REPO, issue: ISSUE });
     tudo = ok(aposConsumo.length === 0, 'pendentes esvaziadas após consumo') && tudo;
 

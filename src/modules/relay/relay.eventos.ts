@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { ownerIdCom } from './relay.owner';
+
 // Event-stream por corrida do relay (#129): cada passo gravado NO MOMENTO em que
 // acontece — não um resumo no fim. É o "ver o CLI" do double-click: quem correu,
 // em que fase/ronda, com que veredito, quanto custou e quanto demorou. O texto
@@ -44,16 +46,16 @@ export function resumoEvento(texto: string, max = 400): string {
 }
 
 // Persiste um evento. Best-effort como o run-ledger: a corrida NUNCA cai por
-// causa da observabilidade. owner_id explícito (padrão do agent_jobs/relay_runs).
+// causa da observabilidade. owner_id explícito (padrão do agent_jobs/relay_runs);
+// o chamador pode passá-lo já resolvido (uma corrida emite dezenas de eventos —
+// não se paga um getSession por cada um, achado do Audit).
 export async function registarEventoRelayCom(
     db: SupabaseClient,
     evento: EventoRelay,
+    ownerIdResolvido?: string,
 ): Promise<void> {
     try {
-        const {
-            data: { session },
-        } = await db.auth.getSession();
-        const ownerId = session?.user?.id;
+        const ownerId = ownerIdResolvido ?? (await ownerIdCom(db));
         if (!ownerId) {
             console.error('registar evento do relay: sem sessão para o owner (saltado).');
             return;
@@ -126,7 +128,9 @@ export async function lerEventosRelayCom(
                 veredito: row.veredito,
                 detalhe: row.detalhe,
                 modelo: row.modelo,
-                custoUsd: row.custo_usd,
+                // numeric pode vir como string do PostgREST — coagir como a casa
+                // faz com cost_usd (chat.conversas).
+                custoUsd: row.custo_usd == null ? null : Number(row.custo_usd),
                 custoEstimado: row.custo_estimado,
                 duracaoMs: row.duracao_ms,
                 criadoEm: row.criado_em,

@@ -1,5 +1,10 @@
 -- #129 corrida transparente: event-stream por corrida do relay + steering a quente.
 --
+-- PK uuid (desvio deliberado da regra BIGINT do CLAUDE.md, ratificado): o run_id
+-- é gerado no lado da app ao arrancar a corrida (correlação eventos ↔ relay_runs
+-- sem FK) e relay_runs (20260625210000) já usa uuid — o módulo relay mantém-se
+-- coerente consigo próprio.
+--
 -- relay_eventos: append-only, cada passo da corrida gravado NO MOMENTO (não no fim).
 -- Sem FK para relay_runs de propósito: se o processo morrer a meio, o run-ledger
 -- pode nunca fechar mas os eventos sobrevivem e contam a história. run_id (gerado
