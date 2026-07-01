@@ -6,6 +6,7 @@ import type { EventoRelayLido } from '@/modules/relay/relay.eventos';
 
 import {
     agruparEventosPorRun,
+    custoDoPasso,
     custoDosEventos,
     formatarCusto,
     formatarDuracao,
@@ -126,5 +127,10 @@ describe('formatação (#129)', () => {
         expect(rotuloEvento(evento())).toBe('claude · principal');
         expect(rotuloEvento(evento({ tipo: 'testes' }))).toBe('test-gate');
         expect(rotuloEvento(evento({ tipo: 'steering' }))).toBe('humano · steering');
+    });
+    it('custo do passo: real com $, não-reportado = "custo n/d" (nunca célula vazia)', () => {
+        expect(custoDoPasso(evento({ custoUsd: 0.25, custoEstimado: false }))).toBe('$0.25');
+        expect(custoDoPasso(evento({ custoUsd: 0, custoEstimado: true }))).toBe('custo n/d');
+        expect(custoDoPasso(evento({ tipo: 'transicao', custoUsd: 0.5 }))).toBeNull();
     });
 });

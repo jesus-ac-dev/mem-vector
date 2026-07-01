@@ -522,6 +522,35 @@ describe('progresso live por substep (mata o blackout)', () => {
         });
         expect(progressoTextos).toContain('dev · ronda 1 · a correr testes');
     });
+
+    it('narração DENTRO do spawn (#129 ronda 2): o onPasso do CLI vira sub-progresso fino', async () => {
+        const { io, progressoTextos } = fakeIo({
+            correr: vi.fn(
+                async (
+                    _p: Provider,
+                    _prompt: string,
+                    _escrever: boolean,
+                    onPasso?: (acao: string) => void,
+                ) => {
+                    onPasso?.('a ler o código');
+                    onPasso?.('a escrever código');
+                    return resp('APROVADO');
+                },
+            ),
+        });
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'claude',
+            validadores: ['codex'],
+            maxRondas: 1,
+            io,
+        });
+        expect(progressoTextos).toContain('dev · ronda 1 · claude a ler o código');
+        expect(progressoTextos).toContain('dev · ronda 1 · claude a escrever código');
+        // O validador também narra o seu passo.
+        expect(progressoTextos).toContain('dev · ronda 1 · codex a ler o código');
+    });
 });
 
 describe('event-stream da corrida (#129)', () => {

@@ -95,6 +95,17 @@ export function formatarDuracao(ms: number): string {
     return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
 }
 
+// Custo de um passo para a timeline. Assimetria proibida (#129 ronda 2): quando
+// o provider não reporta custo (codex exec devolve 0 estimado), mostra-se
+// "custo n/d" explícito — nunca uma célula vazia ao lado do $ do claude.
+export function custoDoPasso(e: EventoRelayLido): string | null {
+    if (e.tipo !== 'passo') return null;
+    if (typeof e.custoUsd === 'number' && e.custoUsd > 0) {
+        return formatarCusto(e.custoUsd, e.custoEstimado ?? false);
+    }
+    return e.custoEstimado ? 'custo n/d' : null;
+}
+
 // O rótulo "quem/o quê" de cada evento na timeline.
 export function rotuloEvento(e: EventoRelayLido): string {
     if (e.tipo === 'passo') return `${e.provider ?? '?'} · ${e.papel ?? 'passo'}`;

@@ -29,6 +29,7 @@ import type { SteeringPendente } from '@/modules/relay/relay.steering';
 import type { Tarefa } from '@/modules/tarefas/tarefas.schema';
 import {
     agruparEventosPorRun,
+    custoDoPasso,
     custoDosEventos,
     FASE_LABEL,
     formatarCusto,
@@ -81,9 +82,7 @@ function LinhaEvento({ e }: { e: EventoRelayLido }) {
     const fase = e.fase ? (FASE_LABEL[e.fase] ?? e.fase) : null;
     const meta = [
         fase && e.ronda ? `${fase} · ronda ${e.ronda}` : fase,
-        typeof e.custoUsd === 'number' && e.custoUsd > 0
-            ? formatarCusto(e.custoUsd, e.custoEstimado ?? false)
-            : null,
+        custoDoPasso(e),
         typeof e.duracaoMs === 'number' ? formatarDuracao(e.duracaoMs) : null,
     ]
         .filter(Boolean)

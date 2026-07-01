@@ -5,6 +5,10 @@ import {
     buildCodexRepoArgs,
     comandoRelayBloqueado,
     correrNoRepo,
+    finalDoStdoutClaude,
+    interpretarLinhaRepoClaude,
+    interpretarLinhaRepoCodex,
+    labelPassoRepo,
 } from './escrita-no-repo';
 
 describe('buildClaudeRepoArgs', () => {
@@ -28,6 +32,107 @@ describe('buildClaudeRepoArgs', () => {
     it('passa o modelo quando há', () => {
         const a = buildClaudeRepoArgs({ escrever: true, modelo: 'opus' });
         expect(a[a.indexOf('--model') + 1]).toBe('opus');
+    });
+});
+
+// #129 ronda 2: o blackout — o passo do CLI passa a narrar-se ao vivo. O claude
+// corre em stream-json; cada linha vira uma ação humana ("a ler o código",
+// "a escrever código") ou o envelope final.
+describe('interpretarLinhaRepoClaude', () => {
+    it('init → a ler a issue e o repo', () => {
+        const r = interpretarLinhaRepoClaude(JSON.stringify({ type: 'system', subtype: 'init' }));
+        expect(r).toEqual({ tipo: 'passo', acao: 'a ler a issue e o repo' });
+    });
+    it('thinking_tokens → thinking (verificado no stream real)', () => {
+        const linha = JSON.stringify({ type: 'system', subtype: 'thinking_tokens' });
+        expect(interpretarLinhaRepoClaude(linha)).toEqual({ tipo: 'passo', acao: 'thinking' });
+    });
+    it('assistant com tool_use → ação humana da ferramenta', () => {
+        const linha = JSON.stringify({
+            type: 'assistant',
+            message: { content: [{ type: 'tool_use', name: 'Edit' }] },
+        });
+        expect(interpretarLinhaRepoClaude(linha)).toEqual({
+            tipo: 'passo',
+            acao: 'a escrever código',
+        });
+    });
+    it('assistant com texto → a escrever o relatório (thinking→texto do turno)', () => {
+        const linha = JSON.stringify({
+            type: 'assistant',
+            message: { content: [{ type: 'text', text: 'vou fazer X' }] },
+        });
+        expect(interpretarLinhaRepoClaude(linha)).toEqual({
+            tipo: 'passo',
+            acao: 'a escrever o relatório',
+        });
+    });
+    it('result → envelope final com texto, custo e modelo principal', () => {
+        const linha = JSON.stringify({
+            type: 'result',
+            result: 'feito',
+            total_cost_usd: 0.42,
+            modelUsage: { 'claude-x': { costUSD: 0.4 }, 'claude-mini': { costUSD: 0.02 } },
+        });
+        expect(interpretarLinhaRepoClaude(linha)).toEqual({
+            tipo: 'final',
+            text: 'feito',
+            costUsd: 0.42,
+            model: 'claude-x',
+        });
+    });
+    it('linha não-JSON ou irrelevante → ignorar', () => {
+        expect(interpretarLinhaRepoClaude('lixo')).toEqual({ tipo: 'ignorar' });
+        expect(interpretarLinhaRepoClaude(JSON.stringify({ type: 'user' }))).toEqual({
+            tipo: 'ignorar',
+        });
+    });
+});
+
+describe('finalDoStdoutClaude (rede de segurança do fallback)', () => {
+    it('encontra o envelope result num stdout NDJSON completo', () => {
+        const stdout = [
+            JSON.stringify({ type: 'system', subtype: 'init' }),
+            JSON.stringify({ type: 'result', result: 'ok', total_cost_usd: 0.1 }),
+        ].join('\n');
+        expect(finalDoStdoutClaude(stdout)).toMatchObject({ text: 'ok', costUsd: 0.1 });
+    });
+    it('sem result → null (aí sim, o cru é o honesto)', () => {
+        expect(finalDoStdoutClaude('texto solto\nsem json')).toBeNull();
+    });
+});
+
+describe('interpretarLinhaRepoCodex', () => {
+    it('thinking → thinking; exec → a correr comandos', () => {
+        expect(interpretarLinhaRepoCodex('thinking')).toEqual({ tipo: 'passo', acao: 'thinking' });
+        expect(interpretarLinhaRepoCodex('exec bash -c "npm test"')).toEqual({
+            tipo: 'passo',
+            acao: 'a correr comandos',
+        });
+    });
+    it('linha comum → ignorar (o texto final vem do stdout inteiro)', () => {
+        expect(interpretarLinhaRepoCodex('qualquer output')).toEqual({ tipo: 'ignorar' });
+    });
+});
+
+describe('labelPassoRepo', () => {
+    it('traduz as ferramentas comuns para ações humanas', () => {
+        expect(labelPassoRepo('Read')).toBe('a ler o código');
+        expect(labelPassoRepo('Grep')).toBe('a ler o código');
+        expect(labelPassoRepo('Write')).toBe('a escrever código');
+        expect(labelPassoRepo('Bash')).toBe('a correr comandos');
+        expect(labelPassoRepo('TodoWrite')).toBe('a planear');
+    });
+    it('ferramenta desconhecida fica legível na mesma', () => {
+        expect(labelPassoRepo('FooTool')).toBe('a usar FooTool');
+    });
+});
+
+describe('buildClaudeRepoArgs — stream', () => {
+    it('corre em stream-json (com --verbose, exigido pelo -p) para narrar o passo ao vivo', () => {
+        const a = buildClaudeRepoArgs({ escrever: true });
+        expect(a[a.indexOf('--output-format') + 1]).toBe('stream-json');
+        expect(a).toContain('--verbose');
     });
 });
 

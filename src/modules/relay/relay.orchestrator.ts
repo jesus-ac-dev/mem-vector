@@ -219,8 +219,15 @@ export interface IoOrquestrador {
     diff(): Promise<string>;
     commitPush(branch: string, mensagem: string): Promise<void>;
     criarPR(p: { head: string; title: string; body: string }): Promise<string>;
-    // Corre o provider DENTRO do repo; escrever=true permite editar, false revê read-only.
-    correr(provider: Provider, prompt: string, escrever: boolean): Promise<RespostaRepo>;
+    // Corre o provider DENTRO do repo; escrever=true permite editar, false revê
+    // read-only. onPasso narra o que o CLI faz DENTRO do spawn ("a ler o código",
+    // "a escrever código"…) — mata o blackout de minutos por passo (#129 ronda 2).
+    correr(
+        provider: Provider,
+        prompt: string,
+        escrever: boolean,
+        onPasso?: (acao: string) => void,
+    ): Promise<RespostaRepo>;
     // Event-stream da corrida (#129): cada passo gravado no momento. Best-effort,
     // opcional (testes) — a corrida nunca cai por causa da observabilidade.
     evento?(e: EventoRelayBase): Promise<void>;
@@ -309,6 +316,13 @@ export async function orquestrarCruzamentoCom(opts: {
                 principal,
                 promptPrincipal(cruzamento, spec, feedback, memoria, steering),
                 escreve,
+                // fire-and-forget COM catch: um soluço do Supabase a meio do spawn
+                // não pode virar unhandled rejection (achado do Audit da ronda 2).
+                (acao) => {
+                    void io
+                        .progresso?.(textoProgresso(cruzamento, ronda, principal, acao))
+                        .catch(() => {});
+                },
             );
             if (pendentes.length > 0) {
                 await io.marcarSteering?.(
@@ -372,6 +386,11 @@ export async function orquestrarCruzamentoCom(opts: {
                               v,
                               promptValidador(cruzamento, spec, referencia, memoria),
                               escreverV,
+                              (acao) => {
+                                  void io
+                                      .progresso?.(textoProgresso(cruzamento, ronda, v, acao))
+                                      .catch(() => {});
+                              },
                           );
                           const veredito = parseVeredito(resp.text);
                           await io.evento?.({
@@ -786,8 +805,8 @@ export function construirIo(opts: {
         },
         commitPush: (branch, mensagem) => commitPush(cwd, branch, mensagem, token),
         criarPR: (p) => criarPR(token, { repo, base, head: p.head, title: p.title, body: p.body }),
-        correr: async (provider, prompt, escrever) => {
-            const resp = await correrProviderNoRepo(defs, provider, prompt, cwd, escrever);
+        correr: async (provider, prompt, escrever, onPasso) => {
+            const resp = await correrProviderNoRepo(defs, provider, prompt, cwd, escrever, onPasso);
             aoCusto?.(resp);
             return resp;
         },
@@ -803,12 +822,13 @@ async function correrProviderNoRepo(
     prompt: string,
     cwd: string,
     escrever: boolean,
+    onPasso?: (acao: string) => void,
 ): Promise<RespostaRepo> {
     const c = defs.agentes[provider];
     if (!c) throw new Error(`provider "${provider}" sem config (Definições > Agentes).`);
-    if (escrever) return correrNoRepo(provider, c, prompt, cwd, { escrever });
+    if (escrever) return correrNoRepo(provider, c, prompt, cwd, { escrever, onPasso });
     try {
-        return await correrNoRepo(provider, c, prompt, cwd, { escrever });
+        return await correrNoRepo(provider, c, prompt, cwd, { escrever, onPasso });
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (!/modo cli|ainda não escreve/.test(msg)) throw e;

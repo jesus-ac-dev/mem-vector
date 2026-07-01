@@ -176,8 +176,26 @@ custo+transcript e human-steering mid-run) fechados numa fatia:
   da retoma não o re-injeta — já foi integrado quando foi consumido.)
 - Prova headless: `npx tsx scripts/probes/relay-corrida.ts` (steering guarda→pendente→consumido +
   eventos em ordem com custo, sob a sessão RLS do dev user).
-- Fora da fatia: o thinking token-a-token dos CLIs (o envelope `-p` não o traz de forma fiável) e
-  alimentar `ler_estado_relay` com os eventos (follow-up natural).
+- Fora da fatia: alimentar `ler_estado_relay` com os eventos (follow-up natural).
+
+### Ronda 2 do smoke (2026-07-01, noite) — matar o blackout
+
+O smoke do Carlos expôs o buraco: um passo de Análise é UM spawn de CLI de 3-4 min e nada mexia
+durante esse tempo (o "live" era live entre passos, cego dentro deles). Fix:
+
+- **Narração DENTRO do spawn**: o claude passou a correr `--output-format stream-json --verbose`
+  em vez do envelope único; `interpretarLinhaRepoClaude` traduz cada linha em ação humana —
+  `a ler a issue e o repo` (init), `thinking` (system/thinking_tokens, verificado no stream real),
+  `a ler o código`/`a escrever código`/`a correr comandos` (tool_use → `labelPassoRepo`),
+  `a escrever o relatório` (texto). O codex narra por padrões de linha (`thinking`, `exec` →
+  comandos). O `onPasso` (dedupe de ações consecutivas) sobe por `io.correr` até
+  `tarefas.relay_progresso` → o cartão e o modal mostram `<fase> · ronda N · <provider> <ação>`
+  ao vivo, e cada update bate o heartbeat.
+- **Custo sem assimetria**: o `codex exec` não reporta custo (`costUsd 0` estimado) — a timeline
+  mostra **`custo n/d`** explícito (`custoDoPasso`), nunca célula vazia ao lado do $ do claude.
+- Por fazer (decisões de design do Carlos em aberto): a observability mudar do modal para o **chat
+  do rodapé** (feed de mensagens da corrida + animação das proporções verticais kanban↔chat com
+  toggle no canto direito).
 
 ## Fidelidade ao desenho (2026-06-21)
 

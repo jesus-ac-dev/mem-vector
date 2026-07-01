@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
 import type { AgenteServidor, Provider } from '@/modules/definicoes/definicoes.schema';
+import { modeloPrincipal } from '@/lib/claude';
 
 // Escrita agêntica NO REPO: ao contrário do `gerar` (texto, sandbox em tmpdir),
 // aqui o provider corre o seu CLI agêntico DENTRO do working copy preparado
@@ -29,6 +30,9 @@ export interface OpcoesRepo {
     escrever: boolean;
     modelo?: string;
     esforco?: string;
+    /** #129 ronda 2: narração ao vivo DENTRO do spawn ("a ler o código", "a
+     *  escrever código"…) — mata o blackout de minutos por passo. Best-effort. */
+    onPasso?: (acao: string) => void;
 }
 
 export interface RespostaRepo {
@@ -196,8 +200,12 @@ async function prepararRelayCommandGuard(
 export function buildClaudeRepoArgs(opts: OpcoesRepo): string[] {
     return [
         '-p',
+        // stream-json (exige --verbose em -p): cada mensagem sai por linha e o
+        // passo narra-se AO VIVO (#129 ronda 2) — antes era um envelope único
+        // no fim e o humano ficava minutos no escuro.
         '--output-format',
-        'json',
+        'stream-json',
+        '--verbose',
         '--setting-sources',
         '',
         '--permission-mode',
@@ -206,6 +214,91 @@ export function buildClaudeRepoArgs(opts: OpcoesRepo): string[] {
         RELAY_SEM_RESET_SUPABASE,
         ...(opts.modelo ? ['--model', opts.modelo] : []),
     ];
+}
+
+// Ferramenta do CLI → ação humana para a narração do passo. Desconhecidas ficam
+// legíveis na mesma ("a usar X") — nunca se esconde o que o agente faz.
+const LABEL_PASSO: Record<string, string> = {
+    Read: 'a ler o código',
+    Glob: 'a ler o código',
+    Grep: 'a ler o código',
+    LS: 'a ler o código',
+    NotebookRead: 'a ler o código',
+    Edit: 'a escrever código',
+    MultiEdit: 'a escrever código',
+    Write: 'a escrever código',
+    NotebookEdit: 'a escrever código',
+    Bash: 'a correr comandos',
+    BashOutput: 'a correr comandos',
+    TodoWrite: 'a planear',
+    Task: 'a delegar num subagente',
+    WebSearch: 'a consultar a web',
+    WebFetch: 'a consultar a web',
+};
+
+export function labelPassoRepo(tool: string): string {
+    return LABEL_PASSO[tool] ?? `a usar ${tool}`;
+}
+
+export type LinhaRepo =
+    | { tipo: 'passo'; acao: string }
+    | { tipo: 'final'; text: string; costUsd: number; model?: string }
+    | { tipo: 'ignorar' };
+
+// Uma linha do stream-json do claude → passo narrável ou envelope final. Sem
+// --include-partial-messages as mensagens vêm inteiras (não precisamos de
+// text-deltas aqui, só do ritmo humano dos passos).
+export function interpretarLinhaRepoClaude(linha: string): LinhaRepo {
+    const t = linha.trim();
+    if (!t) return { tipo: 'ignorar' };
+    let d: {
+        type?: string;
+        subtype?: string;
+        message?: { content?: { type?: string; name?: string; text?: string }[] };
+        result?: string;
+        total_cost_usd?: number;
+        modelUsage?: Record<string, unknown>;
+    };
+    try {
+        d = JSON.parse(t);
+    } catch {
+        return { tipo: 'ignorar' };
+    }
+    if (d.type === 'system' && d.subtype === 'init') {
+        return { tipo: 'passo', acao: 'a ler a issue e o repo' };
+    }
+    // Verificado ao vivo (2026-07-01): o -p emite system/thinking_tokens enquanto
+    // o modelo pensa — é o "thinking" pedido pelo humano no smoke.
+    if (d.type === 'system' && d.subtype === 'thinking_tokens') {
+        return { tipo: 'passo', acao: 'thinking' };
+    }
+    if (d.type === 'assistant') {
+        const blocos = d.message?.content ?? [];
+        const tool = blocos.find((b) => b.type === 'tool_use' && typeof b.name === 'string');
+        if (tool?.name) return { tipo: 'passo', acao: labelPassoRepo(tool.name) };
+        if (blocos.some((b) => b.type === 'text' && b.text?.trim())) {
+            return { tipo: 'passo', acao: 'a escrever o relatório' };
+        }
+        return { tipo: 'ignorar' };
+    }
+    if (d.type === 'result') {
+        return {
+            tipo: 'final',
+            text: d.result ?? '',
+            costUsd: Number(d.total_cost_usd ?? 0),
+            model: modeloPrincipal(d.modelUsage),
+        };
+    }
+    return { tipo: 'ignorar' };
+}
+
+// O codex exec não fala JSON — narra por padrões de linha (defensivo: linha que
+// não bate em nada é ignorada, nunca se inventa estado).
+export function interpretarLinhaRepoCodex(linha: string): LinhaRepo {
+    const t = linha.trim();
+    if (/^thinking\b/i.test(t)) return { tipo: 'passo', acao: 'thinking' };
+    if (/^exec\b/.test(t)) return { tipo: 'passo', acao: 'a correr comandos' };
+    return { tipo: 'ignorar' };
 }
 
 /** Args do `codex exec` no repo. workspace-write edita o cwd; read-only valida.
@@ -239,18 +332,42 @@ async function spawnNoRepo(
     cwd: string,
     prompt: string,
     timeoutMs: number,
+    onLinha?: (linha: string) => void,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
     const guard = await prepararRelayCommandGuard({ ...process.env });
     return new Promise((resolve, reject) => {
         const child = spawn(bin, args, { cwd, env: guard.env });
         let stdout = '';
         let stderr = '';
+        // Narração ao vivo (#129 ronda 2): entrega linha COMPLETA a linha ao
+        // parser do provider, sem deixar de acumular o stdout inteiro.
+        let porEmitir = '';
+        const emitirLinhas = (chunk: string) => {
+            if (!onLinha) return;
+            porEmitir += chunk;
+            let quebra = porEmitir.indexOf('\n');
+            while (quebra >= 0) {
+                onLinha(porEmitir.slice(0, quebra));
+                porEmitir = porEmitir.slice(quebra + 1);
+                quebra = porEmitir.indexOf('\n');
+            }
+        };
+        // A última linha pode chegar sem \n — sem flush no exit perdia-se (e com
+        // ela o envelope `result` do claude; achado do Audit da ronda 2).
+        const flushLinhas = () => {
+            if (onLinha && porEmitir.trim()) onLinha(porEmitir);
+            porEmitir = '';
+        };
         const timer = setTimeout(() => {
             child.kill('SIGKILL');
             void guard.cleanup();
             reject(new Error(`${bin} excedeu ${Math.round(timeoutMs / 1000)}s`));
         }, timeoutMs);
-        child.stdout.on('data', (c: Buffer) => (stdout += c.toString()));
+        child.stdout.on('data', (c: Buffer) => {
+            const texto = c.toString();
+            stdout += texto;
+            emitirLinhas(texto);
+        });
         child.stderr.on('data', (c: Buffer) => (stderr += c.toString()));
         child.on('error', (e: NodeJS.ErrnoException) => {
             clearTimeout(timer);
@@ -259,6 +376,7 @@ async function spawnNoRepo(
         });
         child.on('exit', (code) => {
             clearTimeout(timer);
+            flushLinhas();
             void guard.cleanup();
             resolve({ code, stdout, stderr });
         });
@@ -279,29 +397,48 @@ async function correrClaudeNoRepo(
     cwd: string,
     opts: OpcoesRepo,
 ): Promise<RespostaRepo> {
+    // O envelope final vem numa linha `result` do stream; os passos narram-se
+    // pelo caminho (onPasso). Dedupe de ações consecutivas iguais — o cartão
+    // não precisa de 30 updates "a ler o código" seguidos.
+    let final: Extract<LinhaRepo, { tipo: 'final' }> | null = null;
+    let ultimaAcao = '';
     const { code, stdout, stderr } = await spawnNoRepo(
         CLAUDE_BIN,
         buildClaudeRepoArgs(opts),
         cwd,
         prompt,
         timeoutRepoMs(),
+        (linha) => {
+            const ev = interpretarLinhaRepoClaude(linha);
+            if (ev.tipo === 'final') final = ev;
+            if (ev.tipo === 'passo' && ev.acao !== ultimaAcao) {
+                ultimaAcao = ev.acao;
+                opts.onPasso?.(ev.acao);
+            }
+        },
     );
     if (code !== 0) {
         const msg = `${stdout}\n${stderr}`.trim();
         if (QUOTA_RE.test(msg)) throw new Error(`claude: quota/limite — ${msg.slice(0, 200)}`);
         throw new Error(`claude saiu ${code}: ${msg.slice(-300)}`);
     }
-    let env: { result?: string; total_cost_usd?: number; subtype?: string };
-    try {
-        env = JSON.parse(stdout);
-    } catch {
-        return { text: stdout.trim(), costUsd: 0, costIsEstimate: true };
+    // Rede de segurança (achado do Audit): se o `result` escapou ao streaming,
+    // re-varre o stdout inteiro antes de cair no cru — devolver o blob NDJSON
+    // como texto poluía handoffs e vereditos.
+    const f = final ?? finalDoStdoutClaude(stdout);
+    if (f) return { text: f.text, costUsd: f.costUsd, costIsEstimate: false, model: f.model };
+    // Sem linha `result` em lado nenhum (formato inesperado): stdout cru, honesto.
+    return { text: stdout.trim(), costUsd: 0, costIsEstimate: true };
+}
+
+// Procura o envelope final numa saída stream-json completa (fallback do parse
+// em streaming). Exportada para teste.
+export function finalDoStdoutClaude(stdout: string): Extract<LinhaRepo, { tipo: 'final' }> | null {
+    for (const linha of stdout.split('\n')) {
+        const ev = interpretarLinhaRepoClaude(linha);
+        if (ev.tipo === 'final') return ev;
     }
-    return {
-        text: env.result ?? '',
-        costUsd: Number(env.total_cost_usd ?? 0),
-        costIsEstimate: false,
-    };
+    return null;
 }
 
 async function correrCodexNoRepo(
@@ -309,12 +446,20 @@ async function correrCodexNoRepo(
     cwd: string,
     opts: OpcoesRepo,
 ): Promise<RespostaRepo> {
+    let ultimaAcao = '';
     const { code, stdout, stderr } = await spawnNoRepo(
         CODEX_BIN,
         buildCodexRepoArgs(opts, cwd),
         cwd,
         prompt,
         timeoutRepoMs(),
+        (linha) => {
+            const ev = interpretarLinhaRepoCodex(linha);
+            if (ev.tipo === 'passo' && ev.acao !== ultimaAcao) {
+                ultimaAcao = ev.acao;
+                opts.onPasso?.(ev.acao);
+            }
+        },
     );
     if (code !== 0) {
         const msg = `${stdout}\n${stderr}`.trim();
