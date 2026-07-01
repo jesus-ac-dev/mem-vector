@@ -32,6 +32,7 @@ import { emitirPrefillChat } from '@/modules/chat/chat.events';
 import type { DefinicoesVista } from '@/modules/definicoes/definicoes.schema';
 import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
 import { promptKillSwitchRelay } from '@/components/layout/kanban/kanban-relay-context';
+import { KanbanCorridaModal } from '@/components/layout/kanban/kanban-corrida-modal';
 import {
     agruparPorEstado,
     ESTADOS_TAREFA,
@@ -114,7 +115,7 @@ function CartaoTarefa({
     repoPaths,
     onHoverBloqueio,
     onPromover,
-    onAbrirKillSwitch,
+    onAbrirCorrida,
 }: {
     tarefa: Tarefa;
     mae: Tarefa | null; // a tarefa que bloqueia esta (dependência em aberto)
@@ -122,22 +123,25 @@ function CartaoTarefa({
     repoPaths: Record<string, string>;
     onHoverBloqueio: (maeId: string | null) => void;
     onPromover: (t: Tarefa) => void; // backlog sem issue → cria + liga
-    onAbrirKillSwitch: (t: Tarefa) => void;
+    onAbrirCorrida: (t: Tarefa) => void; // duplo clique → corrida do relay (#129)
 }) {
     const concluida = tarefa.estado === 'terminado';
     const repoPath = tarefa.repoGithub ? repoPaths[tarefa.repoGithub] : null;
     const hrefCodigo = concluida ? tarefa.relayPrUrl : (tarefa.relayPrUrl ?? issueUrl(tarefa));
     const mostrarLinksCodigo = Boolean(hrefCodigo) || (!concluida && tarefa.estado === 'backlog');
+    const temIssue = Boolean(tarefa.repoGithub && tarefa.issueGithub);
     return (
         <div
             draggable={!concluida}
             title={
-                tarefa.relayEstado === 'bloqueado'
-                    ? 'Duplo clique para abrir o contexto do bloqueio no chat'
+                temIssue
+                    ? 'Duplo clique para ver a corrida do relay (timeline, custo, steering)'
                     : undefined
             }
             onDoubleClick={() => {
-                if (tarefa.relayEstado === 'bloqueado') onAbrirKillSwitch(tarefa);
+                // #129: o duplo clique abre a corrida completa (não só o kill-switch);
+                // o diagnóstico do bloqueio vive lá dentro como botão.
+                if (temIssue) onAbrirCorrida(tarefa);
             }}
             onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_TAREFA_ID, tarefa.id);
@@ -308,6 +312,8 @@ export function KanbanBoard() {
     const [reposLigados, setReposLigados] = useState<string[]>([]);
     const [repoPaths, setRepoPaths] = useState<Record<string, string>>({});
     const [promover, setPromover] = useState<Tarefa | null>(null);
+    // #129: cartão da corrida aberta no modal do double-click (null = fechado).
+    const [corrida, setCorrida] = useState<Tarefa | null>(null);
     const [repoEscolhido, setRepoEscolhido] = useState('');
     const [relayInfo, setRelayInfo] = useState<string | null>(null);
     const [relayBusy, setRelayBusy] = useState(false);
@@ -539,13 +545,24 @@ export function KanbanBoard() {
                                     repoPaths={repoPaths}
                                     onHoverBloqueio={setMaeDestacada}
                                     onPromover={abrirPromover}
-                                    onAbrirKillSwitch={abrirKillSwitch}
+                                    onAbrirCorrida={setCorrida}
                                 />
                             ))}
                         </div>
                     </div>
                 ))}
             </div>
+
+            {/* Corrida do relay (#129): timeline + custo + steering a quente. O cartão
+                mostrado vem da lista viva (o refresh periódico mantém-no fresco). */}
+            <KanbanCorridaModal
+                tarefa={corrida ? (abertas.find((t) => t.id === corrida.id) ?? corrida) : null}
+                onFechar={() => setCorrida(null)}
+                onDiagnosticar={(t) => {
+                    setCorrida(null);
+                    abrirKillSwitch(t);
+                }}
+            />
 
             {/* Confirmação de concluir/apagar — par do painel (#55). */}
             <AlertDialog open={!!confirmar} onOpenChange={(open) => !open && setConfirmar(null)}>

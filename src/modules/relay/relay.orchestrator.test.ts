@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Cruzamento, Provider } from '@/modules/definicoes/definicoes.schema';
 import type { RespostaRepo } from '@/lib/providers/escrita-no-repo';
+import type { EventoRelayBase } from './relay.eventos';
 import type { ResultadoCruzamento } from './relay.runner';
 
 import {
@@ -520,5 +521,170 @@ describe('progresso live por substep (mata o blackout)', () => {
             io,
         });
         expect(progressoTextos).toContain('dev · ronda 1 · a correr testes');
+    });
+});
+
+describe('event-stream da corrida (#129)', () => {
+    function fakeIoComEventos(over: Partial<IoOrquestrador> = {}) {
+        const eventos: EventoRelayBase[] = [];
+        const base = fakeIo({
+            evento: vi.fn(async (e: EventoRelayBase) => void eventos.push(e)),
+            correr: vi.fn(async () => ({
+                text: 'APROVADO',
+                costUsd: 0.25,
+                costIsEstimate: false,
+                model: 'modelo-x',
+            })),
+            ...over,
+        });
+        return { ...base, eventos };
+    }
+
+    it('cada substep emite um evento "passo" com papel, veredito, custo, modelo e duração', async () => {
+        const { io, eventos } = fakeIoComEventos();
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: ['claude'],
+            maxRondas: 1,
+            io,
+        });
+        const passos = eventos.filter((e) => e.tipo === 'passo');
+        expect(passos).toHaveLength(2);
+        expect(passos[0]).toMatchObject({
+            fase: 'dev',
+            ronda: 1,
+            provider: 'codex',
+            papel: 'principal',
+            custoUsd: 0.25,
+            custoEstimado: false,
+            modelo: 'modelo-x',
+        });
+        expect(passos[0].duracaoMs).toBeGreaterThanOrEqual(0);
+        expect(passos[1]).toMatchObject({
+            provider: 'claude',
+            papel: 'validador',
+            veredito: 'ok',
+        });
+    });
+
+    it('o test-gate emite evento "testes" com o veredito da suite', async () => {
+        const { io, eventos } = fakeIoComEventos({
+            testar: vi.fn(async () => ({ ok: false, output: 'FAIL y.test' })),
+        });
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: ['claude'],
+            maxRondas: 1,
+            io,
+        });
+        const teste = eventos.find((e) => e.tipo === 'testes');
+        expect(teste).toMatchObject({ fase: 'dev', ronda: 1, veredito: 'rejeitado' });
+        expect(teste?.detalhe).toContain('FAIL y.test');
+    });
+
+    it('o pipeline emite transições por fase e um evento "fim" com o PR', async () => {
+        const { io, eventos } = fakeIoComEventos();
+        await orquestrarCom({
+            issue: 42,
+            spec: 's',
+            defs: { cruzamentos: { analise: {}, dev: {} } } as never,
+            io,
+            executarCruzamento: async () => okCruzamento,
+        });
+        const transicoes = eventos.filter((e) => e.tipo === 'transicao').map((e) => e.detalhe);
+        expect(transicoes).toContain('analise · processando');
+        expect(transicoes).toContain('pr · pronto');
+        const fim = eventos.find((e) => e.tipo === 'fim');
+        expect(fim?.detalhe).toContain('https://github.com/o/r/pull/9');
+    });
+
+    it('kill-switch emite "fim" bloqueado com o motivo', async () => {
+        const { io, eventos } = fakeIoComEventos();
+        await orquestrarCom({
+            issue: 7,
+            spec: 's',
+            defs: { cruzamentos: { analise: {} } } as never,
+            io,
+            executarCruzamento: async () => ({
+                output: 'x',
+                rondas: 2,
+                validado: false,
+                historico: [{ ronda: 2, output: 'x' }],
+            }),
+        });
+        const fim = eventos.find((e) => e.tipo === 'fim');
+        expect(fim?.detalhe).toContain('bloqueado em analise');
+    });
+});
+
+describe('steering a quente (#129)', () => {
+    it('consome as orientações pendentes no produzir: prompt, comentário assinado e evento', async () => {
+        const eventos: EventoRelayBase[] = [];
+        const prompts: string[] = [];
+        const consumirSteering = vi
+            .fn()
+            .mockResolvedValueOnce(['usa a tabela nova'])
+            .mockResolvedValue([]);
+        const { io, comentarios } = fakeIo({
+            evento: vi.fn(async (e: EventoRelayBase) => void eventos.push(e)),
+            consumirSteering,
+            correr: vi.fn(async (_p: Provider, prompt: string) => {
+                prompts.push(prompt);
+                return resp('APROVADO');
+            }),
+        });
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: ['claude'],
+            maxRondas: 1,
+            io,
+        });
+        expect(consumirSteering).toHaveBeenCalledWith('dev', 1);
+        // O principal recebe a orientação no prompt, com prioridade declarada.
+        expect(prompts[0]).toContain('ORIENTAÇÃO HUMANA');
+        expect(prompts[0]).toContain('usa a tabela nova');
+        // Fica assinada na issue (auditável) e na timeline.
+        expect(comentarios.some((c) => c.startsWith('— Humano · steering · Desenvolvimento'))).toBe(
+            true,
+        );
+        expect(eventos.find((e) => e.tipo === 'steering')?.detalhe).toBe('usa a tabela nova');
+    });
+
+    it('sem orientações pendentes, o prompt não muda e não há evento steering', async () => {
+        const eventos: EventoRelayBase[] = [];
+        const prompts: string[] = [];
+        const { io } = fakeIo({
+            evento: vi.fn(async (e: EventoRelayBase) => void eventos.push(e)),
+            consumirSteering: vi.fn(async () => []),
+            correr: vi.fn(async (_p: Provider, prompt: string) => {
+                prompts.push(prompt);
+                return resp('APROVADO');
+            }),
+        });
+        await orquestrarCruzamentoCom({
+            cruzamento: 'dev',
+            spec: 's',
+            principal: 'codex',
+            validadores: [],
+            maxRondas: 1,
+            io,
+        });
+        expect(prompts[0]).not.toContain('ORIENTAÇÃO HUMANA');
+        expect(eventos.some((e) => e.tipo === 'steering')).toBe(false);
+    });
+});
+
+describe('promptPrincipal — steering', () => {
+    it('a orientação humana entra com prioridade declarada, antes do feedback', () => {
+        const p = promptPrincipal('dev', 's', 'corrige X', '', ['vai por Y']);
+        expect(p).toContain('ORIENTAÇÃO HUMANA');
+        expect(p).toContain('- vai por Y');
+        expect(p.indexOf('vai por Y')).toBeLessThan(p.indexOf('corrige X'));
     });
 });

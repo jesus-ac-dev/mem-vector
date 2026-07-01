@@ -24,7 +24,9 @@ import { encontrarPorNomeCom } from '@/modules/projetos/projetos.service';
 import { escreverNotaEmPastaCom } from '@/modules/knowledge/knowledge.service';
 import { nomeCurtoDoRepo } from '@/modules/projeto-importado/projeto-importado.service';
 
-import { construirHandoff } from './relay.handoff';
+import { construirHandoff, construirSteeringHandoff } from './relay.handoff';
+import { registarEventoRelayCom, resumoEvento, type EventoRelayBase } from './relay.eventos';
+import { consumirSteeringCom } from './relay.steering';
 import {
     arquivosAlterados,
     commitPush,
@@ -135,6 +137,7 @@ export function promptPrincipal(
     spec: string,
     feedback: string | null,
     memoria = '',
+    steering: string[] = [],
 ): string {
     // O Kernel do workspace (identidade, prioridades e REGRAS/método da casa) entra
     // em TODAS as fases — não só a Análise destila com contexto. O programador, o de
@@ -142,7 +145,14 @@ export function promptPrincipal(
     // antes de código, verificar). É o que faz o relay trabalhar "como nós", não
     // coders genéricos — o vault é o protótipo, o relay produtiza-o (recursive-construction).
     const mem = memoria.trim() ? `${memoria.trim()}\n\n` : '';
-    const base = `${mem}${INTRO[cruzamento]}\nTrabalhas em português de Portugal.\n\nSpec/goal:\n${spec}`;
+    let base = `${mem}${INTRO[cruzamento]}\nTrabalhas em português de Portugal.\n\nSpec/goal:\n${spec}`;
+    // Steering a quente (#129): o humano guiou a corrida A MEIO — a orientação dele
+    // manda (é a adjudicação humana sem esperar pelo kill-switch).
+    if (steering.length > 0) {
+        base +=
+            `\n\nORIENTAÇÃO HUMANA recebida a meio da corrida — segue-a com prioridade sobre o resto:\n` +
+            steering.map((s) => `- ${s}`).join('\n');
+    }
     if (!feedback) return base;
     return `${base}\n\nA ronda anterior recebeu esta objeção/sugestão — integra-a:\n${feedback}`;
 }
@@ -210,6 +220,12 @@ export interface IoOrquestrador {
     criarPR(p: { head: string; title: string; body: string }): Promise<string>;
     // Corre o provider DENTRO do repo; escrever=true permite editar, false revê read-only.
     correr(provider: Provider, prompt: string, escrever: boolean): Promise<RespostaRepo>;
+    // Event-stream da corrida (#129): cada passo gravado no momento. Best-effort,
+    // opcional (testes) — a corrida nunca cai por causa da observabilidade.
+    evento?(e: EventoRelayBase): Promise<void>;
+    // Steering a quente (#129): devolve (e consome) as orientações humanas
+    // pendentes — o principal integra-as no próximo passo de produção.
+    consumirSteering?(fase: Cruzamento, ronda: number): Promise<string[]>;
     // Test-gate opcional: corre a suite do repo depois dos substeps de escrita.
     // Vermelho devolve o output ao principal na ronda seguinte.
     testar?(): Promise<{ ok: boolean; output: string }>;
@@ -278,12 +294,38 @@ export async function orquestrarCruzamentoCom(opts: {
         maxRondas,
         produzir: async (feedback) => {
             ronda += 1;
+            // Steering a quente (#129): consome as orientações humanas pendentes
+            // ANTES de produzir — o principal integra-as com prioridade. Cada uma
+            // fica assinada na issue (auditável) e na timeline de eventos.
+            const steering = (await io.consumirSteering?.(cruzamento, ronda)) ?? [];
+            for (const s of steering) {
+                await io.comentar(construirSteeringHandoff(cruzamento, ronda, s));
+                await io.evento?.({
+                    tipo: 'steering',
+                    fase: cruzamento,
+                    ronda,
+                    detalhe: resumoEvento(s),
+                });
+            }
             await io.progresso?.(textoProgresso(cruzamento, ronda, principal, 'a trabalhar'));
+            const t0 = Date.now();
             const resp = await io.correr(
                 principal,
-                promptPrincipal(cruzamento, spec, feedback, memoria),
+                promptPrincipal(cruzamento, spec, feedback, memoria, steering),
                 escreve,
             );
+            await io.evento?.({
+                tipo: 'passo',
+                fase: cruzamento,
+                ronda,
+                provider: principal,
+                papel: 'principal',
+                detalhe: resumoEvento(resp.text || '(sem texto; ver o diff)'),
+                modelo: resp.model ?? null,
+                custoUsd: resp.costUsd,
+                custoEstimado: resp.costIsEstimate,
+                duracaoMs: Date.now() - t0,
+            });
             await io.comentar(
                 construirHandoff({
                     fase: cruzamento,
@@ -312,12 +354,26 @@ export async function orquestrarCruzamentoCom(opts: {
                           // Escreve a melhoria SE for repo-writer; senão revê read-only.
                           const escreverV = escreve && (escritores ? escritores.includes(v) : true);
                           await io.progresso?.(textoProgresso(cruzamento, ronda, v, 'a validar'));
+                          const t0 = Date.now();
                           const resp = await io.correr(
                               v,
                               promptValidador(cruzamento, spec, referencia, memoria),
                               escreverV,
                           );
                           const veredito = parseVeredito(resp.text);
+                          await io.evento?.({
+                              tipo: 'passo',
+                              fase: cruzamento,
+                              ronda,
+                              provider: v,
+                              papel: 'validador',
+                              veredito: veredito.ok ? 'ok' : 'rejeitado',
+                              detalhe: resumoEvento(resp.text),
+                              modelo: resp.model ?? null,
+                              custoUsd: resp.costUsd,
+                              custoEstimado: resp.costIsEstimate,
+                              duracaoMs: Date.now() - t0,
+                          });
                           await io.comentar(
                               construirHandoff({
                                   fase: cruzamento,
@@ -337,7 +393,18 @@ export async function orquestrarCruzamentoCom(opts: {
                           await io.progresso?.(
                               textoProgresso(cruzamento, ronda, null, 'a correr testes'),
                           );
+                          const t0 = Date.now();
                           const t = await io.testar();
+                          await io.evento?.({
+                              tipo: 'testes',
+                              fase: cruzamento,
+                              ronda,
+                              veredito: t.ok ? 'ok' : 'rejeitado',
+                              detalhe: t.ok
+                                  ? 'suite verde'
+                                  : resumoEvento(`suite vermelha: ${t.output}`),
+                              duracaoMs: Date.now() - t0,
+                          });
                           await io.comentar(
                               `— Testes · gate · ${cruzamento} · ronda ${ronda}\n\n` +
                                   (t.ok
@@ -548,6 +615,7 @@ export async function orquestrarCom(opts: {
         if (chave === ultimoProgresso) return;
         ultimoProgresso = chave;
         await atualizarProgressoRelay(io, fase, semaforo, campos);
+        await io.evento?.({ tipo: 'transicao', fase, detalhe: `${fase} · ${semaforo}` });
     };
     const executar = async (cruzamento: Cruzamento, specCruzamento: string) => {
         await marcarProgresso(cruzamento, 'processando');
@@ -582,6 +650,11 @@ export async function orquestrarCom(opts: {
                 `Última objeção:\n${ultimo?.historico.at(-1)?.veredito?.feedback ?? '—'}\n\n` +
                 'Comenta a correção na issue e re-arrasta para o relay retomar nesta fase.',
         );
+        await io.evento?.({
+            tipo: 'fim',
+            fase: cruzamento,
+            detalhe: `bloqueado em ${cruzamento} — ${motivoParagem}`,
+        });
         return { estado: 'bloqueado', cruzamento };
     }
 
@@ -604,11 +677,17 @@ export async function orquestrarCom(opts: {
             `🟢 Pronto para smoke — PR: ${prUrl}\n\n` +
                 'v1 sem auto-merge: revê, faz o smoke e fazes tu o merge.',
         );
+        await io.evento?.({ tipo: 'fim', fase: 'pr', detalhe: `PR aberto: ${prUrl}` });
         return { estado: 'pr-aberto', prUrl };
     }
 
     await marcarProgresso((pipeline.ordem.at(-1) ?? 'analise') as RelayFase, 'pronto');
     await io.comentar('🟢 Pipeline concluído sem alterações de código (nada para PR).');
+    await io.evento?.({
+        tipo: 'fim',
+        fase: pipeline.ordem.at(-1) ?? 'analise',
+        detalhe: 'pipeline concluído sem alterações de código',
+    });
     return { estado: 'pronto' };
 }
 
@@ -623,8 +702,9 @@ export function construirIo(opts: {
     base: string;
     defs: DefinicoesServidor;
     db?: SupabaseClient; // p/ a vista kanban seguir o semáforo (best-effort)
+    runId?: string; // correlaciona os eventos desta corrida com o run-ledger (#129)
 }): IoOrquestrador {
-    const { token, repo, issue, repoPath, cwd, base, defs, db } = opts;
+    const { token, repo, issue, repoPath, cwd, base, defs, db, runId } = opts;
     const atualizarProgressoReal = async (
         fase: RelayFase,
         semaforo: Semaforo,
@@ -657,6 +737,13 @@ export function construirIo(opts: {
         },
         moverSemaforo: async (_de, para) => atualizarProgressoReal('erro', para),
         atualizarProgresso: atualizarProgressoReal,
+        // Event-stream (#129): best-effort para a BD; a verdade auditável continua
+        // nos comentários da issue. Sem db/runId (testes/headless) não grava.
+        evento: async (e) => {
+            if (db && runId) await registarEventoRelayCom(db, { ...e, runId, repo, issue });
+        },
+        consumirSteering: async (fase, ronda) =>
+            db ? consumirSteeringCom(db, { repo, issue, fase, ronda }) : [],
         abrirBranch: (branch, retoma) =>
             prepararWorktree({ repoPath, dir: cwd, branch, base, token, retoma }).then(() => {}),
         diff: () => diffDoRepo(cwd),
@@ -704,6 +791,9 @@ export async function orquestrar(opts: {
 }): Promise<ResultadoOrquestracao> {
     const { db, defs, repo, issue } = opts;
     const inicio = new Date();
+    // #129: o run_id nasce AQUI (não no fim) — os eventos da corrida penduram-se
+    // nele; se o processo morrer, os eventos sobrevivem e contam a história.
+    const runId = crypto.randomUUID();
     const token = defs.githubToken;
     if (!token) throw new Error('Sem token GitHub (Definições > módulo GitHub).');
 
@@ -740,7 +830,18 @@ export async function orquestrar(opts: {
     // as fases que o user JÁ configurou viajam como override real (fasesConfiguradas).
     const fasesConfiguradas = Object.keys(defs.cruzamentos) as Cruzamento[];
     const defsRelay = normalizarDefsRelay(defs);
-    const io = construirIo({ token, repo, issue, repoPath, cwd, base, defs: defsRelay, db });
+    const io = construirIo({ token, repo, issue, repoPath, cwd, base, defs: defsRelay, db, runId });
+    // Custo agregado da corrida (#129): somado dos eventos 'passo' (cada io.correr
+    // já devolve o custo do CLI — até aqui deitava-se fora).
+    const custo = { total: 0, estimado: false };
+    const emitirEvento = io.evento;
+    io.evento = async (e) => {
+        if (e.tipo === 'passo' && typeof e.custoUsd === 'number') {
+            custo.total += e.custoUsd;
+            if (e.custoEstimado) custo.estimado = true;
+        }
+        await emitirEvento?.(e);
+    };
     const resultado = await orquestrarCom({
         issue,
         defs: defsRelay,
@@ -759,7 +860,16 @@ export async function orquestrar(opts: {
     if (resultado.estado !== 'bloqueado') await removerWorktree(repoPath, cwd);
 
     // #observability: regista o run no ledger (histórico consultável na app) — best-effort.
-    await registarRunRelayCom(db, { repo, issue, resultado, inicio });
+    // O id é o runId dos eventos (correlação) e leva o custo agregado da corrida.
+    await registarRunRelayCom(db, {
+        repo,
+        issue,
+        resultado,
+        inicio,
+        id: runId,
+        custoUsd: custo.total,
+        custoEstimado: custo.estimado,
+    });
 
     // Fecha o loop de volta no SaaS (passo 5): regista o que o relay produziu no
     // projeto (nota vectorizada), não só nos docs/ do repo. Best-effort.
