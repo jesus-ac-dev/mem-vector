@@ -193,9 +193,26 @@ durante esse tempo (o "live" era live entre passos, cego dentro deles). Fix:
   ao vivo, e cada update bate o heartbeat.
 - **Custo sem assimetria**: o `codex exec` não reporta custo (`costUsd 0` estimado) — a timeline
   mostra **`custo n/d`** explícito (`custoDoPasso`), nunca célula vazia ao lado do $ do claude.
-- Por fazer (decisões de design do Carlos em aberto): a observability mudar do modal para o **chat
-  do rodapé** (feed de mensagens da corrida + animação das proporções verticais kanban↔chat com
-  toggle no canto direito).
+
+### Ronda 3 (2026-07-02) — a conversa do objeto (decisões do Carlos)
+
+O modal morreu. O **double-click num cartão com issue** (erro OU observability — a mesma ação)
+abre a **conversa do objeto no rodapé do kanban** (`corrida-do-objeto.tsx` dentro de
+`kanban-com-chat.tsx`):
+
+- O feed lê-se como um chat: passos dos providers em bolhas à esquerda (assinados, com veredito
+  ✅/❌, custo, duração), steering humano à direita, transições/test-gate como linhas de sistema
+  centrais; corridas anteriores colapsadas; linha viva `relay_progresso` (animate-pulse) enquanto
+  processa; auto-scroll para o fundo.
+- **O composer É o steering** (Enter envia): escrever com a corrida ativa = guiar o relay. Quando
+  bloqueado, o botão _Diagnosticar no chat_ auto-envia o prompt de recuperação ao chat NORMAL do
+  agente e a vista troca para lá (o ChatContent fica montado escondido — a conversa não se perde).
+- **Proporções verticais invertíveis**: abrir a conversa do objeto cresce o rodapé (kanban encolhe)
+  com animação de `grid-template-rows`; um toggle no canto direito inverte à mão a qualquer momento.
+- A rota `/api/relay-corrida` devolve também o **cartão vivo** (`getTarefaPorIssueCom`) — o feed
+  segue relay_estado/fase/progresso frescos, nunca um snapshot stale do board.
+- Fix do smoke ("tive de fazer F5"): o browser estrangula `setInterval` em tabs de fundo — o fim da
+  corrida não pintava a bola de vermelho. O board e o feed recarregam em `visibilitychange`/`focus`.
 
 ## Fidelidade ao desenho (2026-06-21)
 

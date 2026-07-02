@@ -3,9 +3,11 @@ import { sessaoOu401 } from '@/lib/api-auth';
 import { createClient } from '@/lib/supabase/server';
 import { lerEventosRelayCom } from '@/modules/relay/relay.eventos';
 import { lerSteeringPendenteCom } from '@/modules/relay/relay.steering';
+import { getTarefaPorIssueCom } from '@/modules/tarefas/tarefas.service';
 
-// Rota GET (#73): a corrida do relay para o modal do double-click (#129) —
-// timeline de eventos + orientações de steering ainda pendentes.
+// Rota GET (#73): a corrida do relay para a conversa do objeto (#129) —
+// timeline de eventos + steering pendente + o CARTÃO vivo (relay_estado/fase/
+// progresso frescos: o feed nunca fica preso a um snapshot stale do board).
 export async function GET(req: Request) {
     const erro = await sessaoOu401();
     if (erro) return erro;
@@ -18,9 +20,10 @@ export async function GET(req: Request) {
     }
 
     const db = await createClient();
-    const [eventos, steeringPendente] = await Promise.all([
+    const [eventos, steeringPendente, tarefa] = await Promise.all([
         lerEventosRelayCom(db, { repo, issue }),
         lerSteeringPendenteCom(db, { repo, issue }),
+        getTarefaPorIssueCom(db, repo, issue),
     ]);
-    return NextResponse.json({ eventos, steeringPendente });
+    return NextResponse.json({ eventos, steeringPendente, tarefa });
 }

@@ -28,11 +28,8 @@ import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { apagarTarefa, concluirTarefa, mudarEstadoTarefa } from '@/modules/tarefas/tarefas.actions';
 import { dispararRelay, promoverTarefa } from '@/modules/relay/relay.actions';
 import { getJson } from '@/lib/api-get';
-import { emitirPrefillChat } from '@/modules/chat/chat.events';
 import type { DefinicoesVista } from '@/modules/definicoes/definicoes.schema';
 import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
-import { promptKillSwitchRelay } from '@/components/layout/kanban/kanban-relay-context';
-import { KanbanCorridaModal } from '@/components/layout/kanban/kanban-corrida-modal';
 import {
     agruparPorEstado,
     ESTADOS_TAREFA,
@@ -294,7 +291,7 @@ function CartaoTarefa({
     );
 }
 
-export function KanbanBoard() {
+export function KanbanBoard({ onAbrirCorrida }: { onAbrirCorrida: (t: Tarefa) => void }) {
     const { workspaceVersion, notificarWorkspaceMudou } = useWorkspace();
     const [abertas, setAbertas] = useState<Tarefa[]>([]);
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
@@ -314,8 +311,6 @@ export function KanbanBoard() {
     const [reposLigados, setReposLigados] = useState<string[]>([]);
     const [repoPaths, setRepoPaths] = useState<Record<string, string>>({});
     const [promover, setPromover] = useState<Tarefa | null>(null);
-    // #129: cartão da corrida aberta no modal do double-click (null = fechado).
-    const [corrida, setCorrida] = useState<Tarefa | null>(null);
     const [repoEscolhido, setRepoEscolhido] = useState('');
     const [relayInfo, setRelayInfo] = useState<string | null>(null);
     const [relayBusy, setRelayBusy] = useState(false);
@@ -346,6 +341,21 @@ export function KanbanBoard() {
         return () => window.clearInterval(id);
     }, [relayEmCurso, carregarTarefas]);
 
+    // Smoke 2026-07-01 ("tive de fazer F5"): o browser estrangula o setInterval
+    // com a tab em fundo — o fim da corrida (bola vermelha) só aparecia ao F5.
+    // Ao voltar à tab/janela, recarrega já.
+    useEffect(() => {
+        const aoVoltar = () => {
+            if (document.visibilityState === 'visible') carregarTarefas();
+        };
+        document.addEventListener('visibilitychange', aoVoltar);
+        window.addEventListener('focus', aoVoltar);
+        return () => {
+            document.removeEventListener('visibilitychange', aoVoltar);
+            window.removeEventListener('focus', aoVoltar);
+        };
+    }, [carregarTarefas]);
+
     // Repos ligados para o picker da promoção (a key nunca vem; só os nomes).
     useEffect(() => {
         void runClientAction({ area: 'kanban', action: 'lerReposLigados', meta: {} }, () =>
@@ -364,15 +374,6 @@ export function KanbanBoard() {
     function abrirPromover(t: Tarefa) {
         setPromover(t);
         setRepoEscolhido(reposLigados[0] ?? '');
-    }
-
-    function abrirKillSwitch(t: Tarefa) {
-        const repoPath = t.repoGithub ? (repoPaths[t.repoGithub] ?? null) : null;
-        // #M7-C: auto-send — o agente engata logo o diagnóstico do kill-switch (salta o send manual).
-        emitirPrefillChat(promptKillSwitchRelay(t, repoPath), true);
-        setRelayInfo(
-            `Recuperação do kill-switch enviada ao chat: ${t.repoGithub ?? ''} #${t.issueGithub ?? ''}`,
-        );
     }
 
     async function confirmarPromover() {
@@ -547,26 +548,13 @@ export function KanbanBoard() {
                                     repoPaths={repoPaths}
                                     onHoverBloqueio={setMaeDestacada}
                                     onPromover={abrirPromover}
-                                    onAbrirCorrida={setCorrida}
+                                    onAbrirCorrida={onAbrirCorrida}
                                 />
                             ))}
                         </div>
                     </div>
                 ))}
             </div>
-
-            {/* Corrida do relay (#129): timeline + custo + steering a quente. O cartão
-                mostrado vem da lista viva (o refresh periódico mantém-no fresco); a key
-                remonta o modal quando muda o cartão (estado limpo de graça). */}
-            <KanbanCorridaModal
-                key={corrida?.id ?? 'fechado'}
-                tarefa={corrida ? (abertas.find((t) => t.id === corrida.id) ?? corrida) : null}
-                onFechar={() => setCorrida(null)}
-                onDiagnosticar={(t) => {
-                    setCorrida(null);
-                    abrirKillSwitch(t);
-                }}
-            />
 
             {/* Confirmação de concluir/apagar — par do painel (#55). */}
             <AlertDialog open={!!confirmar} onOpenChange={(open) => !open && setConfirmar(null)}>
