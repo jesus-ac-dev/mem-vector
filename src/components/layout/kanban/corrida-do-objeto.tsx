@@ -8,7 +8,7 @@ import { runClientAction } from '@/lib/client-error-log';
 import { getJson } from '@/lib/api-get';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { guiarRelay } from '@/modules/relay/relay.actions';
+import { dispararRelay, guiarRelay } from '@/modules/relay/relay.actions';
 import type { EventoRelayLido } from '@/modules/relay/relay.eventos';
 import type { SteeringPendente } from '@/modules/relay/relay.steering';
 import type { Tarefa } from '@/modules/tarefas/tarefas.schema';
@@ -121,6 +121,7 @@ export function CorridaDoObjeto({
     const [corrida, setCorrida] = useState<CorridaResposta | null>(null);
     const [orientacao, setOrientacao] = useState('');
     const [aGuiar, setAGuiar] = useState(false);
+    const [aDisparar, setADisparar] = useState(false);
     const [aviso, setAviso] = useState<string | null>(null);
     const loadSeqRef = useRef(0);
     const fundoRef = useRef<HTMLDivElement>(null);
@@ -194,6 +195,19 @@ export function CorridaDoObjeto({
         }
     }
 
+    // Fecho da malha do kill-switch (smoke 2026-07-02: "estou a 0 de conhecimento
+    // de volta"): a decisão humana e a retoma vivem na MESMA superfície — escreve
+    // o steering no composer e re-dispara daqui. A retoma relê a issue, o steering
+    // pendente entra no primeiro passo de produção, e o feed volta a ficar vivo.
+    async function redisparar() {
+        if (aDisparar || !repo || !issue) return;
+        setADisparar(true);
+        const r = await dispararRelay(repo, issue);
+        setADisparar(false);
+        setAviso(r.detalhe);
+        carregar();
+    }
+
     // Kill-switch (#M7-C): o diagnóstico corre no chat NORMAL do agente —
     // auto-envia o prompt de recuperação e o pai troca o feed pelo chat.
     async function diagnosticar() {
@@ -248,15 +262,27 @@ export function CorridaDoObjeto({
                 )}
                 <span className="ml-auto flex shrink-0 items-center gap-1">
                     {viva.relayEstado === 'bloqueado' && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-[0.65rem]"
-                            onClick={() => void diagnosticar()}
-                        >
-                            Diagnosticar no chat
-                        </Button>
+                        <>
+                            <Button
+                                type="button"
+                                size="sm"
+                                className="h-6 px-2 text-[0.65rem]"
+                                disabled={aDisparar}
+                                title="Retoma na fase bloqueada — o steering escrito em baixo entra no primeiro passo"
+                                onClick={() => void redisparar()}
+                            >
+                                {aDisparar ? 'A disparar…' : '⚡ Re-disparar'}
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-[0.65rem]"
+                                onClick={() => void diagnosticar()}
+                            >
+                                Diagnosticar no chat
+                            </Button>
+                        </>
                     )}
                     <Button
                         type="button"
@@ -332,7 +358,11 @@ export function CorridaDoObjeto({
                                 void guiar();
                             }
                         }}
-                        placeholder="Guiar a corrida (Enter envia): ex. usa a tabela X, não mexas no módulo Y…"
+                        placeholder={
+                            viva.relayEstado === 'bloqueado'
+                                ? 'Escreve a tua decisão/orientação (Enter envia) e clica ⚡ Re-disparar — entra na retoma'
+                                : 'Guiar a corrida (Enter envia): ex. usa a tabela X, não mexas no módulo Y…'
+                        }
                         className="min-h-[2.5rem] flex-1 text-xs"
                         rows={1}
                     />

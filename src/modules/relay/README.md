@@ -207,6 +207,10 @@ abre a **conversa do objeto no rodapé do kanban** (`corrida-do-objeto.tsx` dent
 - **O composer É o steering** (Enter envia): escrever com a corrida ativa = guiar o relay. Quando
   bloqueado, o botão _Diagnosticar no chat_ auto-envia o prompt de recuperação ao chat NORMAL do
   agente e a vista troca para lá (o ChatContent fica montado escondido — a conversa não se perde).
+- **A malha do kill-switch fecha na mesma superfície**: com o cartão bloqueado, escreves a decisão
+  no composer e clicas **⚡ Re-disparar** — a retoma recomeça na fase bloqueada e o steering
+  pendente entra no primeiro passo de produção (e fica assinado na issue ao ser consumido). Acabou
+  o "decidi no chat e o cartão continua vermelho sem eu saber o que fazer" (smoke 2026-07-02).
 - **Proporções verticais invertíveis**: abrir a conversa do objeto cresce o rodapé (kanban encolhe)
   com animação de `grid-template-rows`; um toggle no canto direito inverte à mão a qualquer momento.
 - A rota `/api/relay-corrida` devolve também o **cartão vivo** (`getTarefaPorIssueCom`) — o feed
