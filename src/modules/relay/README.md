@@ -117,13 +117,16 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
   só mudam de coluna).
 - Cartão ligado mostra link para issue/PR e, se o repo tiver path local nas Definições, link **VS Code**
   para abrir o working copy.
-- Cartão bloqueado (`<fase>:vermelho`) aceita **duplo clique**: **auto-envia** ao chat do rodapé um prompt
-  de recuperação (tarefa, repo, issue, fase, PR, working copy) — fatia C (#M7). O agente diagnostica porque
-  bloqueou + a ação mínima para retomar sem reiniciar; o humano decide e o agente re-dispara (retoma). Não
-  auto-resolve a escalada — o humano é o juiz. O prompt e a tool `ler_estado_relay` expõem ainda um
-  `motivo` derivado de `relay_fase`: `erro`, `orfao` ou `sem-consenso` (sem coluna nova). Quando o cartão
-  está bloqueado, `ler_estado_relay` também traz o trace real dos comentários da issue, porque é aí que o
-  relay publica análises, handoffs e erros concretos.
+- **Duplo clique num cartão ligado a issue** (qualquer, não só bloqueado) abre o **modal da corrida**
+  (#129): timeline de eventos + custo + steering (ver §Corrida transparente). Num cartão **bloqueado**
+  (`<fase>:vermelho`), o modal traz o botão **Diagnosticar no chat** — auto-envia ao chat do rodapé o
+  prompt de recuperação (tarefa, repo, issue, fase, PR, working copy) — fatia C (#M7). O agente
+  diagnostica porque bloqueou + a ação mínima para retomar sem reiniciar; o humano decide e o agente
+  re-dispara (retoma). Não auto-resolve a escalada — o humano é o juiz. O prompt e a tool
+  `ler_estado_relay` expõem ainda um `motivo` derivado de `relay_fase`: `erro`, `orfao` ou
+  `sem-consenso` (sem coluna nova). Quando o cartão está bloqueado, `ler_estado_relay` também traz o
+  trace real dos comentários da issue, porque é aí que o relay publica análises, handoffs e erros
+  concretos.
 - Disparo alternativo direto: página do módulo GitHub (Definições) — repo + nº da issue + **⚡ Disparar**.
 - O estado vive na issue (handoffs + label fase+cor); a **vista kanban segue** via
   `tarefas.relay_estado`/`relay_fase`/`relay_pr_url`, escritos pelo orchestrator. Enquanto houver
@@ -138,6 +141,82 @@ O miolo (#127) é a lógica do circuito, in-memory. O **orchestrator** liga-a ao
 trabalhar/validar` ou `... a correr testes` — e o cartão mostra-o (com o provider, #160) enquanto
   `processando`. Efémero (sem histórico — o run-ledger trata disso) e bate o heartbeat (fases longas
   deixam de parecer congeladas ao sweeper de órfãos).
+
+## Corrida transparente (2026-07-01) — #129
+
+Ver e guiar uma corrida em curso — os dois partials do Battle-Plan_v1 (observability
+custo+transcript e human-steering mid-run) fechados numa fatia:
+
+- **Event-stream por corrida** (`relay.eventos.ts` → tabela `relay_eventos`, append-only, RLS por
+  dono): cada passo gravado NO MOMENTO — `passo` (provider, papel, veredito, **custo USD, modelo,
+  duração**), `testes` (gate), `transicao` (fase·semáforo), `steering`, `fim`. Correlacionados por
+  `run_id` gerado no arranque de `orquestrar` (sem FK para `relay_runs` de propósito: se o processo
+  morrer, os eventos sobrevivem e contam a história). Emissão via `io.evento` (best-effort — a
+  corrida nunca cai por causa da observabilidade; o owner resolve-se 1× por corrida). O `relay_runs`
+  ganha `custo_usd`/`custo_estimado` agregados e o `id` passa a ser o `run_id` (correlação eventos
+  ↔ ledger). O custo soma-se na **fonte** (`aoCusto` por resposta de provider, em `construirIo`),
+  não reconstruído do event-stream — billing e observabilidade não se acoplam; `null` no ledger =
+  corrida sem passos medidos (≠ $0.00). A timeline da UI mostra no máx. 200 eventos e diz quando
+  trunca (sem cortes mudos; o histórico completo vive na issue).
+- **Modal da corrida** (`kanban-corrida-modal.tsx`, GET `/api/relay-corrida`): duplo clique em
+  qualquer cartão com issue → timeline (corridas anteriores colapsadas, última aberta, refresh 5s
+  enquanto processa), total gasto, links issue/PR, e o diagnóstico do kill-switch como botão quando
+  bloqueado. É o "ver o CLI" pedido no #129 — cada spawn de provider e cada test-gate com duração e
+  resultado; o texto completo continua nos comentários da issue (o GitHub é a verdade auditável).
+- **Steering a quente** (`relay.steering.ts` → tabela `relay_steering` + action `guiarRelay`):
+  escreve-se orientação COM a corrida a meio; o orchestrator **consome as pendentes no próximo
+  passo de produção** (o principal integra-as com prioridade, como integra objeções), deixa
+  comentário assinado `— Humano · steering · <fase> · ronda N` na issue e regista o evento. O
+  consumo é em **dois tempos** (achado do Audit): lê pendentes antes de produzir, **marca
+  consumidas só depois do provider correr** — se o passo falhar (GitHub 500, CLI a rebentar), a
+  orientação fica pendente e o retry reaplica-a, nunca se perde. Uma orientação escrita entre
+  corridas fica pendente e entra na próxima; para guiar uma fase futura, escreve-a quando a fase
+  chegar (a orientação aplicada na Análise propaga às fases seguintes pela estrela). O kill-switch
+  deixa de ser a única alavanca humana. (O comentário começa por `—` de propósito: o `montarSpec`
+  da retoma não o re-injeta — já foi integrado quando foi consumido.)
+- Prova headless: `npx tsx scripts/probes/relay-corrida.ts` (steering guarda→pendente→consumido +
+  eventos em ordem com custo, sob a sessão RLS do dev user).
+- Fora da fatia: alimentar `ler_estado_relay` com os eventos (follow-up natural).
+
+### Ronda 2 do smoke (2026-07-01, noite) — matar o blackout
+
+O smoke do Carlos expôs o buraco: um passo de Análise é UM spawn de CLI de 3-4 min e nada mexia
+durante esse tempo (o "live" era live entre passos, cego dentro deles). Fix:
+
+- **Narração DENTRO do spawn**: o claude passou a correr `--output-format stream-json --verbose`
+  em vez do envelope único; `interpretarLinhaRepoClaude` traduz cada linha em ação humana —
+  `a ler a issue e o repo` (init), `thinking` (system/thinking_tokens, verificado no stream real),
+  `a ler o código`/`a escrever código`/`a correr comandos` (tool_use → `labelPassoRepo`),
+  `a escrever o relatório` (texto). O codex narra por padrões de linha (`thinking`, `exec` →
+  comandos). O `onPasso` (dedupe de ações consecutivas) sobe por `io.correr` até
+  `tarefas.relay_progresso` → o cartão e o modal mostram `<fase> · ronda N · <provider> <ação>`
+  ao vivo, e cada update bate o heartbeat.
+- **Custo sem assimetria**: o `codex exec` não reporta custo (`costUsd 0` estimado) — a timeline
+  mostra **`custo n/d`** explícito (`custoDoPasso`), nunca célula vazia ao lado do $ do claude.
+
+### Ronda 3 (2026-07-02) — a conversa do objeto (decisões do Carlos)
+
+O modal morreu. O **double-click num cartão com issue** (erro OU observability — a mesma ação)
+abre a **conversa do objeto no rodapé do kanban** (`corrida-do-objeto.tsx` dentro de
+`kanban-com-chat.tsx`):
+
+- O feed lê-se como um chat: passos dos providers em bolhas à esquerda (assinados, com veredito
+  ✅/❌, custo, duração), steering humano à direita, transições/test-gate como linhas de sistema
+  centrais; corridas anteriores colapsadas; linha viva `relay_progresso` (animate-pulse) enquanto
+  processa; auto-scroll para o fundo.
+- **O composer É o steering** (Enter envia): escrever com a corrida ativa = guiar o relay. Quando
+  bloqueado, o botão _Diagnosticar no chat_ auto-envia o prompt de recuperação ao chat NORMAL do
+  agente e a vista troca para lá (o ChatContent fica montado escondido — a conversa não se perde).
+- **A malha do kill-switch fecha na mesma superfície**: com o cartão bloqueado, escreves a decisão
+  no composer e clicas **⚡ Re-disparar** — a retoma recomeça na fase bloqueada e o steering
+  pendente entra no primeiro passo de produção (e fica assinado na issue ao ser consumido). Acabou
+  o "decidi no chat e o cartão continua vermelho sem eu saber o que fazer" (smoke 2026-07-02).
+- **Proporções verticais invertíveis**: abrir a conversa do objeto cresce o rodapé (kanban encolhe)
+  com animação de `grid-template-rows`; um toggle no canto direito inverte à mão a qualquer momento.
+- A rota `/api/relay-corrida` devolve também o **cartão vivo** (`getTarefaPorIssueCom`) — o feed
+  segue relay_estado/fase/progresso frescos, nunca um snapshot stale do board.
+- Fix do smoke ("tive de fazer F5"): o browser estrangula `setInterval` em tabs de fundo — o fim da
+  corrida não pintava a bola de vermelho. O board e o feed recarregam em `visibilitychange`/`focus`.
 
 ## Fidelidade ao desenho (2026-06-21)
 

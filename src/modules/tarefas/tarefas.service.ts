@@ -115,6 +115,24 @@ export async function definirEstadoOperacionalCom(
 
 // Vista kanban segue o relay: o orchestrator escreve semáforo, fase, PR e coluna
 // no cartão ligado à issue. Best-effort (a verdade é a issue) — não lança.
+// #129 ronda 3: a conversa do objeto (rodapé do kanban) segue o cartão AO VIVO
+// pela mesma rota que traz os eventos — o estado nunca fica stale no cliente.
+export async function getTarefaPorIssueCom(
+    db: SupabaseClient,
+    repo: string,
+    issue: number,
+): Promise<Tarefa | null> {
+    const { data, error } = await db
+        .from('tarefas')
+        .select(COLUNAS)
+        .eq('repo_github', repo)
+        .eq('issue_github', issue)
+        .limit(1)
+        .maybeSingle();
+    if (error) throw new Error(`ler tarefa por issue falhou: ${error.message}`);
+    return data ? toTarefa(data as unknown as TarefaRow) : null;
+}
+
 export async function atualizarRelayPorIssueCom(
     db: SupabaseClient,
     repo: string,

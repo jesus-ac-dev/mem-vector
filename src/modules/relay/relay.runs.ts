@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ResultadoOrquestracao } from './relay.orchestrator';
+import { ownerIdCom } from './relay.owner';
 
 export type EstadoRunRelay = 'pronto' | 'pr-aberto' | 'bloqueado';
 
@@ -24,21 +25,28 @@ export function runDoResultado(resultado: ResultadoOrquestracao): {
 // scopa ao dono.
 export async function registarRunRelayCom(
     db: SupabaseClient,
-    opts: { repo: string; issue: number; resultado: ResultadoOrquestracao; inicio: Date },
+    opts: {
+        repo: string;
+        issue: number;
+        resultado: ResultadoOrquestracao;
+        inicio: Date;
+        // #129: id = runId dos eventos (correlação eventos ↔ ledger) + custo agregado.
+        id?: string;
+        custoUsd?: number;
+        custoEstimado?: boolean;
+    },
 ): Promise<void> {
     try {
         const { estado, fase, prUrl } = runDoResultado(opts.resultado);
         // owner_id EXPLÍCITO (como o agent_jobs), não a depender do default auth.uid():
         // se a sessão não estiver no contexto, salta com aviso em vez de falhar mudo.
-        const {
-            data: { session },
-        } = await db.auth.getSession();
-        const ownerId = session?.user?.id;
+        const ownerId = await ownerIdCom(db);
         if (!ownerId) {
             console.error('registar run do relay: sem sessão para o owner (saltado).');
             return;
         }
         const { error } = await db.from('relay_runs').insert({
+            ...(opts.id ? { id: opts.id } : {}),
             owner_id: ownerId,
             repo_github: opts.repo,
             issue_github: opts.issue,
@@ -46,6 +54,8 @@ export async function registarRunRelayCom(
             fase,
             pr_url: prUrl,
             started_em: opts.inicio.toISOString(),
+            custo_usd: opts.custoUsd ?? null,
+            custo_estimado: opts.custoEstimado ?? null,
         });
         if (error) console.error('registar run do relay falhou (segue):', error.message);
     } catch (e) {
@@ -61,6 +71,8 @@ export interface RunRelay {
     fase: string | null;
     prUrl: string | null;
     terminadoEm: string;
+    custoUsd: number | null;
+    custoEstimado: boolean | null;
 }
 
 // Lê os runs recentes (todos os repos, ou de um). RLS scopa ao dono.
@@ -71,7 +83,9 @@ export async function lerRunsRelayCom(
     const limite = Math.min(Math.max(Math.trunc(opts.limite ?? 10), 1), 50);
     let q = db
         .from('relay_runs')
-        .select('repo_github, issue_github, estado, fase, pr_url, ended_em')
+        .select(
+            'repo_github, issue_github, estado, fase, pr_url, ended_em, custo_usd, custo_estimado',
+        )
         .order('ended_em', { ascending: false })
         .limit(limite);
     if (opts.repo) q = q.eq('repo_github', opts.repo);
@@ -85,6 +99,8 @@ export async function lerRunsRelayCom(
             fase: string | null;
             pr_url: string | null;
             ended_em: string;
+            custo_usd: number | null;
+            custo_estimado: boolean | null;
         };
         return {
             repo: row.repo_github,
@@ -93,6 +109,9 @@ export async function lerRunsRelayCom(
             fase: row.fase,
             prUrl: row.pr_url,
             terminadoEm: row.ended_em,
+            // numeric pode vir como string do PostgREST — coagir (padrão da casa).
+            custoUsd: row.custo_usd == null ? null : Number(row.custo_usd),
+            custoEstimado: row.custo_estimado,
         };
     });
 }

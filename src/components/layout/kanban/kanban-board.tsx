@@ -28,10 +28,8 @@ import { useWorkspace } from '@/components/layout/workspace/workspace-context';
 import { apagarTarefa, concluirTarefa, mudarEstadoTarefa } from '@/modules/tarefas/tarefas.actions';
 import { dispararRelay, promoverTarefa } from '@/modules/relay/relay.actions';
 import { getJson } from '@/lib/api-get';
-import { emitirPrefillChat } from '@/modules/chat/chat.events';
 import type { DefinicoesVista } from '@/modules/definicoes/definicoes.schema';
 import type { PainelTarefas } from '@/modules/tarefas/tarefas.service';
-import { promptKillSwitchRelay } from '@/components/layout/kanban/kanban-relay-context';
 import {
     agruparPorEstado,
     ESTADOS_TAREFA,
@@ -114,7 +112,7 @@ function CartaoTarefa({
     repoPaths,
     onHoverBloqueio,
     onPromover,
-    onAbrirKillSwitch,
+    onAbrirCorrida,
 }: {
     tarefa: Tarefa;
     mae: Tarefa | null; // a tarefa que bloqueia esta (dependência em aberto)
@@ -122,22 +120,27 @@ function CartaoTarefa({
     repoPaths: Record<string, string>;
     onHoverBloqueio: (maeId: string | null) => void;
     onPromover: (t: Tarefa) => void; // backlog sem issue → cria + liga
-    onAbrirKillSwitch: (t: Tarefa) => void;
+    onAbrirCorrida: (t: Tarefa) => void; // duplo clique → corrida do relay (#129)
 }) {
     const concluida = tarefa.estado === 'terminado';
     const repoPath = tarefa.repoGithub ? repoPaths[tarefa.repoGithub] : null;
     const hrefCodigo = concluida ? tarefa.relayPrUrl : (tarefa.relayPrUrl ?? issueUrl(tarefa));
     const mostrarLinksCodigo = Boolean(hrefCodigo) || (!concluida && tarefa.estado === 'backlog');
+    const temIssue = Boolean(tarefa.repoGithub && tarefa.issueGithub);
     return (
         <div
             draggable={!concluida}
             title={
-                tarefa.relayEstado === 'bloqueado'
-                    ? 'Duplo clique para abrir o contexto do bloqueio no chat'
+                temIssue
+                    ? tarefa.relayEstado === 'bloqueado'
+                        ? 'Duplo clique: corrida do relay + diagnóstico do bloqueio'
+                        : 'Duplo clique para ver a corrida do relay (timeline, custo, steering)'
                     : undefined
             }
             onDoubleClick={() => {
-                if (tarefa.relayEstado === 'bloqueado') onAbrirKillSwitch(tarefa);
+                // #129: o duplo clique abre a corrida completa (não só o kill-switch);
+                // o diagnóstico do bloqueio vive lá dentro como botão.
+                if (temIssue) onAbrirCorrida(tarefa);
             }}
             onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_TAREFA_ID, tarefa.id);
@@ -288,7 +291,7 @@ function CartaoTarefa({
     );
 }
 
-export function KanbanBoard() {
+export function KanbanBoard({ onAbrirCorrida }: { onAbrirCorrida: (t: Tarefa) => void }) {
     const { workspaceVersion, notificarWorkspaceMudou } = useWorkspace();
     const [abertas, setAbertas] = useState<Tarefa[]>([]);
     const [concluidas, setConcluidas] = useState<Tarefa[]>([]);
@@ -338,6 +341,21 @@ export function KanbanBoard() {
         return () => window.clearInterval(id);
     }, [relayEmCurso, carregarTarefas]);
 
+    // Smoke 2026-07-01 ("tive de fazer F5"): o browser estrangula o setInterval
+    // com a tab em fundo — o fim da corrida (bola vermelha) só aparecia ao F5.
+    // Ao voltar à tab/janela, recarrega já.
+    useEffect(() => {
+        const aoVoltar = () => {
+            if (document.visibilityState === 'visible') carregarTarefas();
+        };
+        document.addEventListener('visibilitychange', aoVoltar);
+        window.addEventListener('focus', aoVoltar);
+        return () => {
+            document.removeEventListener('visibilitychange', aoVoltar);
+            window.removeEventListener('focus', aoVoltar);
+        };
+    }, [carregarTarefas]);
+
     // Repos ligados para o picker da promoção (a key nunca vem; só os nomes).
     useEffect(() => {
         void runClientAction({ area: 'kanban', action: 'lerReposLigados', meta: {} }, () =>
@@ -356,15 +374,6 @@ export function KanbanBoard() {
     function abrirPromover(t: Tarefa) {
         setPromover(t);
         setRepoEscolhido(reposLigados[0] ?? '');
-    }
-
-    function abrirKillSwitch(t: Tarefa) {
-        const repoPath = t.repoGithub ? (repoPaths[t.repoGithub] ?? null) : null;
-        // #M7-C: auto-send — o agente engata logo o diagnóstico do kill-switch (salta o send manual).
-        emitirPrefillChat(promptKillSwitchRelay(t, repoPath), true);
-        setRelayInfo(
-            `Recuperação do kill-switch enviada ao chat: ${t.repoGithub ?? ''} #${t.issueGithub ?? ''}`,
-        );
     }
 
     async function confirmarPromover() {
@@ -539,7 +548,7 @@ export function KanbanBoard() {
                                     repoPaths={repoPaths}
                                     onHoverBloqueio={setMaeDestacada}
                                     onPromover={abrirPromover}
-                                    onAbrirKillSwitch={abrirKillSwitch}
+                                    onAbrirCorrida={onAbrirCorrida}
                                 />
                             ))}
                         </div>

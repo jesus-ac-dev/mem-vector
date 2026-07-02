@@ -42,3 +42,17 @@ export function construirHandoff(h: Handoff): string {
     linhas.push(h.porque.trim());
     return linhas.join('\n');
 }
+
+// Steering a quente (#129): a orientação humana consumida a meio da corrida fica
+// assinada na issue como qualquer handoff — o GitHub continua a verdade auditável.
+// Começa por "—" de propósito: o montarSpec da retoma não a re-injeta (já foi
+// integrada quando foi consumida).
+export function construirSteeringHandoff(fase: Cruzamento, ronda: number, texto: string): string {
+    return [
+        `— Humano · steering · ${CRUZAMENTO_LABEL[fase]} · ronda ${ronda}`,
+        '',
+        'Orientação recebida a meio da corrida (o principal integra-a nesta ronda):',
+        '',
+        texto.trim(),
+    ].join('\n');
+}
